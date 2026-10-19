@@ -39,3 +39,40 @@ export const generatedNamesSchema = z.object({
   names: z.array(generatedNameSchema).min(1).max(30),
 });
 export type GeneratedName = z.infer<typeof generatedNameSchema>;
+
+// ─── Slogans (SIG-01 à SIG-03) ───
+
+export const SLOGAN_TONES = ['INSPIRING', 'INSTITUTIONAL', 'CATCHY', 'COMMITTED'] as const;
+
+export const sloganGenerationInputSchema = z.object({
+  name: z.string().min(1).max(60),
+  entityType: z.nativeEnum(EntityType),
+  brief: z.object({
+    sector: z.string(),
+    mission: z.string(),
+    values: z.array(z.string()),
+    audience: z.string().nullish(),
+  }),
+  tone: z.enum(SLOGAN_TONES),
+  language: z.enum(['fr', 'en']).default('fr'),
+  /** Nombre de mots maximal (SIG-02), 8 par défaut. */
+  maxWords: z.number().int().min(2).max(20).default(8),
+  count: z.number().int().min(1).max(20).default(10),
+  /** Association : devise en trois termes et phrase de mission (SIG-03). */
+  withMotto: z.boolean().default(false),
+  feedback: z.string().max(200).nullish(),
+  exclude: z.array(z.string()).default([]),
+});
+export type SloganGenerationInput = z.infer<typeof sloganGenerationInputSchema>;
+
+export const generatedSlogansSchema = z.object({
+  slogans: z
+    .array(
+      z.object({
+        text: z.string().trim().min(2).max(200),
+        kind: z.enum(['SLOGAN', 'DEVISE', 'MISSION']).default('SLOGAN'),
+      }),
+    )
+    .min(1)
+    .max(40),
+});

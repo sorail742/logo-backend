@@ -24,7 +24,9 @@ import { StorageModule } from './modules/storage/storage.module';
         pinoHttp: {
           level: config.get('NODE_ENV') === 'production' ? 'info' : 'debug',
           transport:
-            config.get('NODE_ENV') === 'development' ? { target: 'pino-pretty', options: { singleLine: true } } : undefined,
+            config.get('NODE_ENV') === 'development'
+              ? { target: 'pino-pretty', options: { singleLine: true } }
+              : undefined,
           redact: ['req.headers.authorization', 'req.headers.cookie', 'res.headers["set-cookie"]'],
           autoLogging: { ignore: (req) => req.url?.includes('/health') ?? false },
         },

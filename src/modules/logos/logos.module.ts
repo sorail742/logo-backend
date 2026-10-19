@@ -7,6 +7,6 @@ import { LogosService } from './logos.service';
 @Module({
   controllers: [LogosController, LibraryController],
   providers: [LogosService, LogoGeneratorService, LogoExportService],
-  exports: [LogoGeneratorService, LogoExportService],
+  exports: [LogosService, LogoGeneratorService, LogoExportService],
 })
 export class LogosModule {}

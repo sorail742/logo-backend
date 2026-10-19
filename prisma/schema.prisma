@@ -377,6 +377,7 @@ model Slogan {
   text       String
   kind       String   @default("SLOGAN") // SLOGAN | DEVISE | MISSION
   tone       String?
+  similarTo  String? // slogan connu trop proche (SIG-04)
   isFavorite Boolean  @default(false)
   isChosen   Boolean  @default(false)
   createdAt  DateTime @default(now())

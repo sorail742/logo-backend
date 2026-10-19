@@ -58,7 +58,8 @@ export class ProjectsService {
     const project = await this.prisma.project.findUniqueOrThrow({ where: { id: projectId } });
     if (!project.deletedAt) return project;
     const limit = Date.now() - TRASH_RETENTION_DAYS * 86_400_000;
-    if (project.deletedAt.getTime() < limit) throw new GoneException('Projet définitivement supprimé');
+    if (project.deletedAt.getTime() < limit)
+      throw new GoneException('Projet définitivement supprimé');
     return this.prisma.project.update({ where: { id: projectId }, data: { deletedAt: null } });
   }
 

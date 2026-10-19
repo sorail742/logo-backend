@@ -108,10 +108,7 @@ describe('variantes (LOGO-20) et mises en situation (LOGO-05)', () => {
 
 describe('exports', () => {
   it('pack icônes : 7 PNG + favicon.ico multi-tailles (LOGO-22)', async () => {
-    const pack = appIconPack(
-      renderVariant({ ...spec(), layout: 'icon' }, 'white'),
-      '#0E7C66',
-    );
+    const pack = appIconPack(renderVariant({ ...spec(), layout: 'icon' }, 'white'), '#0E7C66');
     expect(Object.keys(pack)).toHaveLength(8);
     const ico = pack['favicon.ico'];
     expect(ico.readUInt16LE(2)).toBe(1);
@@ -126,9 +123,21 @@ describe('exports', () => {
   });
 
   it('SVGO optimise sans planter, toutes icônes candidates (régression users-group)', () => {
-    for (const icon of ['users-group', 'leaf', 'heart-handshake', 'school', 'device-mobile', 'building']) {
+    for (const icon of [
+      'users-group',
+      'leaf',
+      'heart-handshake',
+      'school',
+      'device-mobile',
+      'building',
+    ]) {
       for (const font of ['josefin-sans', 'montserrat', 'playfair-display']) {
-        const logo = composeLogo(spec({ font: { id: font, weight: 700 }, icon: { id: icon, container: 'none', scale: 1.4 } }));
+        const logo = composeLogo(
+          spec({
+            font: { id: font, weight: 700 },
+            icon: { id: icon, container: 'none', scale: 1.4 },
+          }),
+        );
         const out = optimizeSvg(logo.svg);
         expect(out).toContain('viewBox');
         expect(out.length).toBeLessThanOrEqual(logo.svg.length);

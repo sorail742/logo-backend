@@ -1,4 +1,4 @@
-import type { NameGenerationInput } from '../../shared/ai-schemas';
+import type { NameGenerationInput, SloganGenerationInput } from '../../shared/ai-schemas';
 import type { LogoGenerationInput } from '../../shared/logo-spec';
 
 export interface AiCallResult {
@@ -16,6 +16,8 @@ export interface AiCallResult {
 export abstract class AiProvider {
   abstract readonly name: string;
   abstract generateNames(input: NameGenerationInput): Promise<AiCallResult>;
+  /** Slogans, devises et phrases de mission ; réponse validée par generatedSlogansSchema. */
+  abstract generateSlogans(input: SloganGenerationInput): Promise<AiCallResult>;
   /**
    * Moteur A (§5.1) : l'IA choisit icône, police, palette et disposition ; le serveur assemble.
    * Réponse attendue : { logos: LogoSpec[] }, validée par generatedLogosSchema.

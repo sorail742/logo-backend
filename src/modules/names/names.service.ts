@@ -86,6 +86,8 @@ export class NamesService {
         { isFavorite: 'desc' },
         { score: { sort: 'desc', nulls: 'last' } },
         { createdAt: 'desc' },
+        // Un lot partage le même horodatage : départage stable pour un ordre reproductible.
+        { value: 'asc' },
       ],
       take: 200,
     });

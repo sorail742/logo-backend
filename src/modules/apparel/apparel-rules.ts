@@ -5,6 +5,7 @@
  */
 import type { DesignElementKind, PrintTechnique, SizeScaling } from '@prisma/client';
 import { contrastRatio, relativeLuminance } from '../../shared/color';
+import { parseCsv } from '../../shared/csv';
 
 // ─── Types ───
 
@@ -578,28 +579,18 @@ const CSV_COLUMNS = ['nom', 'nom_imprime', 'numero', 'taille', 'poste', 'quantit
 
 /** Analyse le CSV d'effectif (séparateur , ou ;, guillemets gérés). */
 export function parseRosterCsv(csv: string): { rows: RosterRow[]; errors: string[] } {
-  const lines = (csv.charCodeAt(0) === 0xfeff ? csv.slice(1) : csv)
-    .split(/\r?\n/)
-    .filter((l) => l.trim());
-  if (!lines.length) return { rows: [], errors: ['Fichier vide'] };
-  const sep = (lines[0].match(/;/g)?.length ?? 0) > (lines[0].match(/,/g)?.length ?? 0) ? ';' : ',';
-  const header = splitCsvLine(lines[0], sep).map((h) => h.trim().toLowerCase());
+  const { header, rows: lines } = parseCsv(csv);
+  if (!header.length) return { rows: [], errors: ['Fichier vide'] };
   const missing = CSV_COLUMNS.filter(
     (c) => c !== 'poste' && c !== 'quantite' && !header.includes(c),
   );
   if (missing.length) return { rows: [], errors: [`Colonnes manquantes : ${missing.join(', ')}`] };
 
-  const idx = Object.fromEntries(CSV_COLUMNS.map((c) => [c, header.indexOf(c)])) as Record<
-    (typeof CSV_COLUMNS)[number],
-    number
-  >;
   const rows: RosterRow[] = [];
   const errors: string[] = [];
-  lines.slice(1).forEach((line, i) => {
-    const cells = splitCsvLine(line, sep).map((c) => c.trim());
-    const get = (k: (typeof CSV_COLUMNS)[number]) => (idx[k] >= 0 ? (cells[idx[k]] ?? '') : '');
-    const quantity = get('quantite') ? Number(get('quantite')) : 1;
-    if (!get('nom')) {
+  lines.forEach((get, i) => {
+    const quantity = get.quantite ? Number(get.quantite) : 1;
+    if (!get.nom) {
       errors.push(`Ligne ${i + 2} : nom manquant`);
       return;
     }
@@ -608,37 +599,15 @@ export function parseRosterCsv(csv: string): { rows: RosterRow[]; errors: string
       return;
     }
     rows.push({
-      playerName: get('nom'),
-      displayName: get('nom_imprime') || get('nom').toUpperCase(),
-      number: get('numero') || null,
-      size: get('taille').toUpperCase(),
+      playerName: get.nom,
+      displayName: get.nom_imprime || get.nom.toUpperCase(),
+      number: get.numero || null,
+      size: (get.taille ?? '').toUpperCase(),
       quantity,
-      role: get('poste') || null,
+      role: get.poste || null,
     });
   });
   return { rows, errors };
-}
-
-function splitCsvLine(line: string, sep: string): string[] {
-  const out: string[] = [];
-  let cur = '';
-  let quoted = false;
-  for (let i = 0; i < line.length; i++) {
-    const ch = line[i];
-    if (quoted) {
-      if (ch === '"' && line[i + 1] === '"') {
-        cur += '"';
-        i++;
-      } else if (ch === '"') quoted = false;
-      else cur += ch;
-    } else if (ch === '"') quoted = true;
-    else if (ch === sep) {
-      out.push(cur);
-      cur = '';
-    } else cur += ch;
-  }
-  out.push(cur);
-  return out;
 }
 
 /** Nom de fichier atelier : NUMERO_NOM_TAILLE (§16.8). */

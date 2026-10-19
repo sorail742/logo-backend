@@ -74,11 +74,19 @@ export class CreditsService {
   async hasPaidAccess(workspaceId: string): Promise<boolean> {
     const [sub, purchase] = await Promise.all([
       this.prisma.subscription.findFirst({
-        where: { workspaceId, status: 'ACTIVE', currentPeriodEnd: { gt: new Date() }, plan: { code: { not: 'FREE' } } },
+        where: {
+          workspaceId,
+          status: 'ACTIVE',
+          currentPeriodEnd: { gt: new Date() },
+          plan: { code: { not: 'FREE' } },
+        },
         select: { id: true },
       }),
       this.prisma.creditLedgerEntry.findFirst({
-        where: { workspaceId, reason: { in: [LedgerReason.PURCHASE, LedgerReason.SUBSCRIPTION_GRANT] } },
+        where: {
+          workspaceId,
+          reason: { in: [LedgerReason.PURCHASE, LedgerReason.SUBSCRIPTION_GRANT] },
+        },
         select: { id: true },
       }),
     ]);

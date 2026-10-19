@@ -3,6 +3,7 @@ import { Module } from '@nestjs/common';
 import { CoreModule } from '../core.module';
 import { LogosModule } from '../modules/logos/logos.module';
 import { NamesModule } from '../modules/names/names.module';
+import { SlogansModule } from '../modules/slogans/slogans.module';
 import { EMAIL_QUEUE, MAINTENANCE_QUEUE } from '../shared/queues';
 import { EmailProcessor } from './email.processor';
 import { GenerationProcessor } from './generation.processor';
@@ -15,6 +16,7 @@ import { MaintenanceProcessor } from './maintenance.processor';
     BullModule.registerQueue({ name: EMAIL_QUEUE }, { name: MAINTENANCE_QUEUE }),
     NamesModule,
     LogosModule,
+    SlogansModule,
   ],
   providers: [GenerationProcessor, EmailProcessor, MaintenanceProcessor],
 })

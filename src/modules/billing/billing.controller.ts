@@ -30,7 +30,10 @@ export class BillingController {
   async credits(@Param('wid', ParseUUIDPipe) wid: string) {
     const ws = await this.prisma.workspace.findUniqueOrThrow({
       where: { id: wid },
-      select: { creditBalance: true, subscription: { include: { plan: { select: { code: true, name: true } } } } },
+      select: {
+        creditBalance: true,
+        subscription: { include: { plan: { select: { code: true, name: true } } } },
+      },
     });
     return { balance: ws.creditBalance, subscription: ws.subscription };
   }

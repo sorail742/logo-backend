@@ -58,6 +58,8 @@ src/
     projects/           projets, brief, corbeille, duplication
     names/              génération de noms, favoris, votes, choix final (ou nom saisi), essai public
     logos/              génération, import, versions, variantes, exports ZIP, bibliothèque
+    slogans/            slogans, devises, phrases de mission, logo avec signature
+    signatures/         signature e-mail, paraphe, cachet, signatures en lot, modération
     storage/            stockage objet S3, URL signées
     availability/       domaines (RDAP), réseaux, marques, comparaison phonétique
     jobs/               file de génération, idempotence, SSE
@@ -96,7 +98,7 @@ Deux niveaux (§3), vérifiés côté API :
 | 1. Socle technique : auth, espaces, projets, back-office minimal | Fait |
 | 2. Générateur de noms : brief, génération, vérifications, favoris, choix | Fait (fournisseur IA factice) |
 | 3. Logos (moteur SVG, éditeur, exports) | Fait pour le moteur A (fournisseur IA factice). Moteur B, formats réseaux sociaux (LOGO-23) et commentaires (LOGO-15) à faire |
-| 4. Signatures (slogans, e-mail, paraphe, cachet) | À faire |
+| 4. Signatures (slogans, e-mail, paraphe, cachet) | Fait (fournisseur IA factice). Bannière e-mail en texte ; détection des armoiries non automatisée |
 | 5. Kit de marque, partage, commentaires | À faire |
 | 6. Paiements (Orange Money, abonnements, factures) | À faire |
 | 8a. Textile : gabarits, éditeur, maquettes, BAT | Partiel : supports, zones, tailles, préréglages, éléments, contrôle, BAT, ateliers, admin. Propositions IA et maquettes 2D à faire |
@@ -121,6 +123,14 @@ Une **LogoSpec** (JSON validé par zod, [src/shared/logo-spec.ts](src/shared/log
 
 Exports asynchrones (`POST /logos/:lid/export` → 202, puis `GET /jobs/:jid` donne un lien signé de 15 min). L'archive reste 7 jours. Offre gratuite : PNG 512 px filigrané uniquement ; offre payante : SVG, PDF vectoriel, PNG 512/1024/2048, JPG, variantes et pack d'icônes d'app (favicon.ico, Apple 180, Android 192/512, iOS 1024).
 
+## Signatures (§6)
+
+- **Slogans** : lot de 10 (1 crédit), ton et nombre de mots réglables, devise en trois termes et phrase de mission pour une association, alerte si proche d'un slogan connu (`similarTo`), ajout au logo en nouvelle version (`POST /slogans/:id/logo-version`).
+- **Signature e-mail** (gratuite) : 6 modèles aux couleurs et police du kit, HTML en tableaux et styles en ligne, images PNG en URL absolues servies par `/public/signature-assets` (seuls fichiers publics, nom immuable), version texte, guide pour Gmail, Outlook, Apple Mail et Thunderbird, essai sans compte, lot par CSV (offres payantes). L'offre gratuite affiche « Signature créée avec … » (`PLATFORM_NAME`).
+- **Paraphe et cachet** (1 crédit) : attestation horodatée obligatoire, fichiers privés (URL signée 15 min) avec rappel qu'il ne s'agit pas d'une signature électronique qualifiée. Un cachet contenant un terme officiel (liste noire `STAMP`) passe en `PENDING_REVIEW` et n'est téléchargeable qu'après validation (`GET /admin/moderation`, `PATCH /admin/signatures/:sid/review`, tracé dans l'audit).
+
+Tests de bout en bout : `npm run test:smoke` (offre gratuite) et `npm run test:smoke:paid` (simule un achat en base et crée un admin 2FA ; développement uniquement).
+
 Points en attente d'une décision (§15.4) : fournisseur IA réel, prestataire SMS (CPT-03, routes renvoyant 501), agrégateur de paiement, prix en GNF (à 0 dans le seed), stockage S3.
 
 ## Scripts
@@ -131,6 +141,7 @@ Points en attente d'une décision (§15.4) : fournisseur IA réel, prestataire S
 | `npm run build` | Compilation dans `dist/` |
 | `npm test` / `npm run test:cov` | Tests unitaires / couverture |
 | `npm run test:smoke` | Parcours complet contre une API locale |
+| `npm run test:smoke:paid` | Parcours payants et modération (développement) |
 | `npm run lint` / `npm run typecheck` | ESLint / TypeScript |
 | `npm run prisma:migrate` | Nouvelle migration |
 | `npm run prisma:deploy` | Migrations en production |

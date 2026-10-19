@@ -4,7 +4,9 @@ const API = process.env.API ?? 'http://localhost:3001/api/v1';
 let failures = 0;
 
 function check(label, cond, extra) {
-  console.log(`${cond ? 'OK  ' : 'FAIL'} ${label}${extra !== undefined ? ' — ' + JSON.stringify(extra) : ''}`);
+  console.log(
+    `${cond ? 'OK  ' : 'FAIL'} ${label}${extra !== undefined ? ' — ' + JSON.stringify(extra) : ''}`,
+  );
   if (!cond) failures++;
 }
 
@@ -20,52 +22,92 @@ async function call(method, path, { token, body, headers = {} } = {}) {
   });
   const text = await res.text();
   let json;
-  try { json = JSON.parse(text); } catch { json = text; }
+  try {
+    json = JSON.parse(text);
+  } catch {
+    json = text;
+  }
   return { status: res.status, json, headers: res.headers };
 }
 
 const email = `e2e-${Date.now()}@example.org`;
 const password = 'Kx9!vQ2#mLp7-unique-' + Date.now();
 
-const reg = await call('POST', '/auth/register', { body: { email, password, fullName: 'Testeur E2E' } });
+const reg = await call('POST', '/auth/register', {
+  body: { email, password, fullName: 'Testeur E2E' },
+});
 check('inscription', reg.status === 201, reg.status);
-check('cookie de rafraîchissement httpOnly', /refresh_token=.*HttpOnly/i.test(reg.headers.get('set-cookie') ?? ''));
+check(
+  'cookie de rafraîchissement httpOnly',
+  /refresh_token=.*HttpOnly/i.test(reg.headers.get('set-cookie') ?? ''),
+);
 const token = reg.json.accessToken;
 const cookie = (reg.headers.get('set-cookie') ?? '').split(';')[0];
 
 const login = await call('POST', '/auth/login', { body: { email, password: 'mauvais' } });
-check('mauvais mot de passe refusé en problem+json', login.status === 401 && login.json.status === 401, login.json.detail);
+check(
+  'mauvais mot de passe refusé en problem+json',
+  login.status === 401 && login.json.status === 401,
+  login.json.detail,
+);
 
 const me = await call('GET', '/me', { token });
-check('profil + espace personnel', me.status === 200 && me.json.workspaces.length === 1, me.json.workspaces?.[0]?.role);
+check(
+  'profil + espace personnel',
+  me.status === 200 && me.json.workspaces.length === 1,
+  me.json.workspaces?.[0]?.role,
+);
 const wid = me.json.workspaces[0].workspace.id;
 
 const anon = await call('GET', '/me');
 check('route protégée sans jeton → 401', anon.status === 401);
 
 const refresh = await call('POST', '/auth/refresh', { headers: { cookie } });
-check('rotation du jeton de rafraîchissement', refresh.status === 200 && !!refresh.json.accessToken, refresh.status);
+check(
+  'rotation du jeton de rafraîchissement',
+  refresh.status === 200 && !!refresh.json.accessToken,
+  refresh.status,
+);
 const reuse = await call('POST', '/auth/refresh', { headers: { cookie } });
 check('réutilisation détectée → 401', reuse.status === 401, reuse.json.detail);
 
 const plans = await call('GET', '/plans');
-check('offres publiques (dont Pack Équipe et Atelier)', plans.status === 200 && plans.json.length === 7, plans.json.length);
+check(
+  'offres publiques (dont Pack Équipe et Atelier)',
+  plans.status === 200 && plans.json.length === 7,
+  plans.json.length,
+);
 
-const proj = await call('POST', `/workspaces/${wid}/projects`, { token, body: { entityType: 'ASSOCIATION', title: 'Asso test' } });
+const proj = await call('POST', `/workspaces/${wid}/projects`, {
+  token,
+  body: { entityType: 'ASSOCIATION', title: 'Asso test' },
+});
 check('création de projet', proj.status === 201, proj.status);
 const pid = proj.json.id;
 
-const extra = await call('POST', `/workspaces/${wid}/projects`, { token, body: { entityType: 'ASSOCIATION', title: 'x', hack: true } });
+const extra = await call('POST', `/workspaces/${wid}/projects`, {
+  token,
+  body: { entityType: 'ASSOCIATION', title: 'x', hack: true },
+});
 check('champ inconnu refusé (forbidNonWhitelisted)', extra.status === 400, extra.json.errors);
 
-const noBrief = await call('POST', `/projects/${pid}/names/generate`, { token, body: {}, headers: { 'idempotency-key': 'k-' + Date.now() } });
+const noBrief = await call('POST', `/projects/${pid}/names/generate`, {
+  token,
+  body: {},
+  headers: { 'idempotency-key': 'k-' + Date.now() },
+});
 check('génération sans brief refusée', noBrief.status === 400, noBrief.json.detail);
 
 const brief = await call('PUT', `/projects/${pid}/brief`, {
   token,
   body: {
-    sector: 'Éducation', mission: 'Accompagner les jeunes vers l’emploi', values: ['solidarité', 'jeunesse', 'avenir'],
-    languages: ['fr'], nameStyles: ['INVENTED', 'COMPOUND', 'ACRONYM'], mustInclude: [], mustAvoid: [],
+    sector: 'Éducation',
+    mission: 'Accompagner les jeunes vers l’emploi',
+    values: ['solidarité', 'jeunesse', 'avenir'],
+    languages: ['fr'],
+    nameStyles: ['INVENTED', 'COMPOUND', 'ACRONYM'],
+    mustInclude: [],
+    mustAvoid: [],
   },
 });
 check('brief enregistré', brief.status === 200, brief.status);
@@ -74,13 +116,23 @@ const noKey = await call('POST', `/projects/${pid}/names/generate`, { token, bod
 check('Idempotency-Key obligatoire', noKey.status === 400);
 
 const key = 'e2e-key-' + Date.now();
-const gen = await call('POST', `/projects/${pid}/names/generate`, { token, body: {}, headers: { 'idempotency-key': key } });
+const gen = await call('POST', `/projects/${pid}/names/generate`, {
+  token,
+  body: {},
+  headers: { 'idempotency-key': key },
+});
 check('génération acceptée (202 + jobId)', gen.status === 202 && !!gen.json.jobId, gen.json);
-const again = await call('POST', `/projects/${pid}/names/generate`, { token, body: {}, headers: { 'idempotency-key': key } });
+const again = await call('POST', `/projects/${pid}/names/generate`, {
+  token,
+  body: {},
+  headers: { 'idempotency-key': key },
+});
 check('même clé → même tâche', again.json.jobId === gen.json.jobId, again.status);
 
 // Suivi SSE jusqu'à l'état final
-const sse = await fetch(`${API}/jobs/${gen.json.jobId}/events`, { headers: { authorization: `Bearer ${token}` } });
+const sse = await fetch(`${API}/jobs/${gen.json.jobId}/events`, {
+  headers: { authorization: `Bearer ${token}` },
+});
 const reader = sse.body.getReader();
 const dec = new TextDecoder();
 let buf = '';
@@ -99,11 +151,19 @@ reader.cancel().catch(() => {});
 check('SSE : tâche terminée', finalStatus === 'SUCCEEDED', finalStatus);
 
 const names = await call('GET', `/projects/${pid}/names`, { token });
-check('noms enregistrés', names.status === 200 && names.json.length > 0, names.json.map?.((n) => `${n.value} (${n.score})`));
+check(
+  'noms enregistrés',
+  names.status === 200 && names.json.length > 0,
+  names.json.map?.((n) => `${n.value} (${n.score})`),
+);
 const nid = names.json[0]?.id;
 
 const checks = await call('POST', `/names/${nid}/checks`, { token, body: {} });
-check('vérifications de disponibilité', checks.status === 200 && checks.json.checks.length >= 10, checks.json.checks?.map((c) => `${c.target}:${c.status}`));
+check(
+  'vérifications de disponibilité',
+  checks.status === 200 && checks.json.checks.length >= 10,
+  checks.json.checks?.map((c) => `${c.target}:${c.status}`),
+);
 const cached = await call('POST', `/names/${nid}/checks`, { token, body: {} });
 check('cache 24 h', cached.json.fromCache === true);
 
@@ -114,7 +174,17 @@ const fav = await call('PATCH', `/names/${nid}`, { token, body: { isFavorite: tr
 check('favori', fav.status === 200 && fav.json.isFavorite === true);
 
 const chosen = await call('POST', `/projects/${pid}/chosen-name`, { token, body: { nameId: nid } });
-check('nom final retenu', chosen.status === 200 && chosen.json.chosenNameId === nid, chosen.json.chosenName?.value);
+check(
+  'nom final retenu',
+  chosen.status === 200 && chosen.json.chosenNameId === nid,
+  chosen.json.chosenName?.value,
+);
+const chosenName = chosen.json.chosenName?.value ?? '';
+const chosenSlug = chosenName
+  .normalize('NFD')
+  .replace(/[^a-zA-Z0-9]+/g, '-')
+  .toLowerCase()
+  .replace(/^-|-$/g, '');
 
 // ─── Phase 3 : logos ───
 async function waitJob(jobId, timeoutMs = 30000) {
@@ -128,103 +198,347 @@ async function waitJob(jobId, timeoutMs = 30000) {
 }
 
 const icons = await call('GET', '/library/icons?q=leaf&limit=5', { token });
-check('bibliothèque : recherche d’icônes avec licence', icons.status === 200 && icons.json.items[0]?.id === 'leaf' && icons.json.license.license === 'MIT', icons.json.items?.map((i) => i.id));
+check(
+  'bibliothèque : recherche d’icônes avec licence',
+  icons.status === 200 &&
+    icons.json.items[0]?.id === 'leaf' &&
+    icons.json.license.license === 'MIT',
+  icons.json.items?.map((i) => i.id),
+);
 const fonts = await call('GET', '/library/fonts', { token });
-check('bibliothèque : 16 polices OFL', fonts.json.length === 16 && fonts.json.every((p) => p.license === 'OFL'));
+check(
+  'bibliothèque : 16 polices OFL',
+  fonts.json.length === 16 && fonts.json.every((p) => p.license === 'OFL'),
+);
 
 const logoGen = await call('POST', `/projects/${pid}/logos/generate`, {
   token,
-  body: { types: ['ICON_TEXT', 'MONOGRAM', 'WORDMARK', 'EMBLEM'], style: 'MODERN', tagline: 'Jeunesse et avenir' },
+  body: {
+    types: ['ICON_TEXT', 'MONOGRAM', 'WORDMARK', 'EMBLEM'],
+    style: 'MODERN',
+    tagline: 'Jeunesse et avenir',
+  },
   headers: { 'idempotency-key': 'logos-' + Date.now() },
 });
-check('génération de logos acceptée (202)', logoGen.status === 202 && !!logoGen.json.jobId, logoGen.json);
+check(
+  'génération de logos acceptée (202)',
+  logoGen.status === 202 && !!logoGen.json.jobId,
+  logoGen.json,
+);
 const t0 = Date.now();
 const logoJob = await waitJob(logoGen.json.jobId);
-check('lot de logos terminé en moins de 15 s (§10)', logoJob.status === 'SUCCEEDED' && Date.now() - t0 < 15000, { status: logoJob.status, ms: Date.now() - t0 });
+check(
+  'lot de logos terminé en moins de 15 s (§10)',
+  logoJob.status === 'SUCCEEDED' && Date.now() - t0 < 15000,
+  { status: logoJob.status, ms: Date.now() - t0 },
+);
 
 const logos = await call('GET', `/projects/${pid}/logos`, { token });
-check('8 propositions (LOGO-04)', logos.json.length === 8, logos.json.map?.((l) => l.type));
+check(
+  '8 propositions (LOGO-04)',
+  logos.json.length === 8,
+  logos.json.map?.((l) => l.type),
+);
 const firstLogo = logos.json[0];
 const firstSvg = firstLogo.versions[0].svg;
-check('SVG sans texte brut (texte en tracés)', !/<text[s>]/.test(firstSvg) && firstSvg.includes('Leso'), firstSvg.length);
+check(
+  'SVG sans texte brut (texte en tracés)',
+  !/<text[\s>]/.test(firstSvg) && firstSvg.includes(chosenName),
+  firstSvg.length,
+);
 
 const variants = await call('POST', `/logos/${firstLogo.id}/variants`, { token, body: {} });
-check('6 variantes et 4 mises en situation (LOGO-05, LOGO-20)', Object.keys(variants.json.variants ?? {}).length === 6 && Object.keys(variants.json.mockups ?? {}).length === 4);
+check(
+  '6 variantes et 4 mises en situation (LOGO-05, LOGO-20)',
+  Object.keys(variants.json.variants ?? {}).length === 6 &&
+    Object.keys(variants.json.mockups ?? {}).length === 4,
+);
 
 const spec = firstLogo.versions[0].spec;
-const v2 = await call('POST', `/logos/${firstLogo.id}/versions`, { token, body: { label: 'Police modifiée', spec: { ...spec, font: { id: 'poppins', weight: 700 }, letterSpacing: 0.05 } } });
-check('version nommée enregistrée (LOGO-13)', v2.status === 201 && v2.json.number === 2, v2.json.detail);
-const badSpec = await call('POST', `/logos/${firstLogo.id}/versions`, { token, body: { spec: { ...spec, font: { id: 'comic-sans', weight: 400 } } } });
+const v2 = await call('POST', `/logos/${firstLogo.id}/versions`, {
+  token,
+  body: {
+    label: 'Police modifiée',
+    spec: { ...spec, font: { id: 'poppins', weight: 700 }, letterSpacing: 0.05 },
+  },
+});
+check(
+  'version nommée enregistrée (LOGO-13)',
+  v2.status === 201 && v2.json.number === 2,
+  v2.json.detail,
+);
+const badSpec = await call('POST', `/logos/${firstLogo.id}/versions`, {
+  token,
+  body: { spec: { ...spec, font: { id: 'comic-sans', weight: 400 } } },
+});
 check('police hors bibliothèque refusée', badSpec.status === 400, badSpec.json.detail);
 const history = await call('GET', `/logos/${firstLogo.id}/versions`, { token });
 check('historique des versions', history.json.length === 2 && history.json[0].number === 2);
 
-const paidExport = await call('POST', `/logos/${firstLogo.id}/export`, { token, body: { formats: ['svg', 'pdf'] }, headers: { 'idempotency-key': 'exp-paid-' + Date.now() } });
+const paidExport = await call('POST', `/logos/${firstLogo.id}/export`, {
+  token,
+  body: { formats: ['svg', 'pdf'] },
+  headers: { 'idempotency-key': 'exp-paid-' + Date.now() },
+});
 check('offre gratuite : SVG/PDF refusés (402)', paidExport.status === 402, paidExport.json.detail);
-const freeExport = await call('POST', `/logos/${firstLogo.id}/export`, { token, body: { formats: ['png'] }, headers: { 'idempotency-key': 'exp-free-' + Date.now() } });
-check('offre gratuite : export PNG accepté avec filigrane', freeExport.status === 202 && freeExport.json.watermarked === true, freeExport.json);
+const freeExport = await call('POST', `/logos/${firstLogo.id}/export`, {
+  token,
+  body: { formats: ['png'] },
+  headers: { 'idempotency-key': 'exp-free-' + Date.now() },
+});
+check(
+  'offre gratuite : export PNG accepté avec filigrane',
+  freeExport.status === 202 && freeExport.json.watermarked === true,
+  freeExport.json,
+);
 const exportJob = await waitJob(freeExport.json.jobId);
-check('export terminé avec lien signé', exportJob.status === 'SUCCEEDED' && !!exportJob.downloadUrl, exportJob.result);
+check(
+  'export terminé avec lien signé',
+  exportJob.status === 'SUCCEEDED' && !!exportJob.downloadUrl,
+  exportJob.result,
+);
 const zip = await fetch(exportJob.downloadUrl);
 const zipBuf = Buffer.from(await zip.arrayBuffer());
-check('archive ZIP téléchargeable : PNG 512 filigrané + LICENCES.txt', zip.status === 200 && zipBuf.subarray(0, 2).toString() === 'PK' && exportJob.result.files.join() === 'LICENCES.txt,logo/png/leso-512-apercu.png', exportJob.result.files);
+check(
+  'archive ZIP téléchargeable : PNG 512 filigrané + LICENCES.txt',
+  zip.status === 200 &&
+    zipBuf.subarray(0, 2).toString() === 'PK' &&
+    exportJob.result.files.join() === `LICENCES.txt,logo/png/${chosenSlug}-512-apercu.png`,
+  exportJob.result.files,
+);
 
-const dirty = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" onload="alert(1)"><script>alert(1)</script><rect fill="#0E7C66" width="10" height="10"/><circle fill="#F2A541" r="3"/></svg>').toString('base64');
-const imported = await call('POST', `/projects/${pid}/logos/import`, { token, body: { fileBase64: dirty, fileName: 'ancien-logo.svg' } });
+const dirty = Buffer.from(
+  '<svg xmlns="http://www.w3.org/2000/svg" onload="alert(1)"><script>alert(1)</script><rect fill="#0E7C66" width="10" height="10"/><circle fill="#F2A541" r="3"/></svg>',
+).toString('base64');
+const imported = await call('POST', `/projects/${pid}/logos/import`, {
+  token,
+  body: { fileBase64: dirty, fileName: 'ancien-logo.svg' },
+});
 const impVersion = imported.json.versions?.[0];
-check('logo importé nettoyé, palette extraite (LOGO-07)', imported.status === 201 && !/script|onload/.test(impVersion.svg) && impVersion.spec.palette.join() === '#0E7C66,#F2A541', impVersion?.spec?.palette);
-const gif = await call('POST', `/projects/${pid}/logos/import`, { token, body: { fileBase64: Buffer.from('GIF89a....').toString('base64') } });
+check(
+  'logo importé nettoyé, palette extraite (LOGO-07)',
+  imported.status === 201 &&
+    !/script|onload/.test(impVersion.svg) &&
+    impVersion.spec.palette.join() === '#0E7C66,#F2A541',
+  impVersion?.spec?.palette,
+);
+const gif = await call('POST', `/projects/${pid}/logos/import`, {
+  token,
+  body: { fileBase64: Buffer.from('GIF89a....').toString('base64') },
+});
 check('type de fichier vérifié par signature', gif.status === 400, gif.json.detail);
 
-const proj2 = await call('POST', `/workspaces/${wid}/projects`, { token, body: { entityType: 'COMPANY', title: 'Déjà un nom' } });
-const typed = await call('POST', `/projects/${proj2.json.id}/chosen-name`, { token, body: { value: 'Kadia Services', acronym: 'ks' } });
-check('parcours « j’ai déjà un nom » (§2.2)', typed.status === 200 && typed.json.chosenName.value === 'Kadia Services' && typed.json.chosenName.acronym === 'KS', typed.json.detail);
-const brandName = await call('POST', `/projects/${proj2.json.id}/chosen-name`, { token, body: { value: 'Google Afrique' } });
-check('nom saisi contenant une marque connue refusé', brandName.status === 400, brandName.json.detail);
+const proj2 = await call('POST', `/workspaces/${wid}/projects`, {
+  token,
+  body: { entityType: 'COMPANY', title: 'Déjà un nom' },
+});
+const typed = await call('POST', `/projects/${proj2.json.id}/chosen-name`, {
+  token,
+  body: { value: 'Kadia Services', acronym: 'ks' },
+});
+check(
+  'parcours « j’ai déjà un nom » (§2.2)',
+  typed.status === 200 &&
+    typed.json.chosenName.value === 'Kadia Services' &&
+    typed.json.chosenName.acronym === 'KS',
+  typed.json.detail,
+);
+const brandName = await call('POST', `/projects/${proj2.json.id}/chosen-name`, {
+  token,
+  body: { value: 'Google Afrique' },
+});
+check(
+  'nom saisi contenant une marque connue refusé',
+  brandName.status === 400,
+  brandName.json.detail,
+);
 
 // Quota gratuit : 3 lots de noms par jour (le 1er est déjà consommé)
 for (let i = 0; i < 2; i++) {
-  await call('POST', `/projects/${pid}/names/generate`, { token, body: { feedback: 'plus court' }, headers: { 'idempotency-key': `q-${i}-${Date.now()}` } });
+  await call('POST', `/projects/${pid}/names/generate`, {
+    token,
+    body: { feedback: 'plus court' },
+    headers: { 'idempotency-key': `q-${i}-${Date.now()}` },
+  });
 }
-const over = await call('POST', `/projects/${pid}/names/generate`, { token, body: {}, headers: { 'idempotency-key': 'over-' + Date.now() } });
+const over = await call('POST', `/projects/${pid}/names/generate`, {
+  token,
+  body: {},
+  headers: { 'idempotency-key': 'over-' + Date.now() },
+});
 check('quota gratuit dépassé → 402', over.status === 402, over.json.detail);
 
 // Un autre utilisateur ne voit pas le projet
-const other = await call('POST', '/auth/register', { body: { email: 'o' + email, password, fullName: 'Autre' } });
+const other = await call('POST', '/auth/register', {
+  body: { email: 'o' + email, password, fullName: 'Autre' },
+});
 const foreign = await call('GET', `/projects/${pid}`, { token: other.json.accessToken });
 check('non-membre → 404', foreign.status === 404, foreign.status);
 
 const admin = await call('GET', '/admin/stats', { token });
 check('back-office interdit à un USER', admin.status === 403, admin.json.detail);
 
+// ─── Phase 4 : signatures ───
+const sloganNoCredit = await call('POST', `/projects/${pid}/slogans/generate`, {
+  token,
+  body: { tone: 'INSPIRING' },
+  headers: { 'idempotency-key': 'slo-' + Date.now() },
+});
+check(
+  'slogans : 1 crédit requis (offre gratuite sans crédits → 402)',
+  sloganNoCredit.status === 402,
+  sloganNoCredit.json.detail,
+);
+
+const emailSig = await call('POST', `/projects/${pid}/signatures`, {
+  token,
+  body: {
+    kind: 'EMAIL',
+    data: {
+      fullName: 'Aïssatou Camara',
+      jobTitle: 'Présidente',
+      organization: 'Leso',
+      phones: ['+224620000000'],
+      email: 'aissatou@exemple.org',
+      website: 'leso.org',
+      socials: { facebook: 'https://facebook.com/leso' },
+      legalNotice: 'Agrément n° 0123',
+    },
+  },
+});
+check(
+  'signature e-mail créée aux couleurs du kit',
+  emailSig.status === 201 &&
+    emailSig.json.html.includes('Aïssatou Camara') &&
+    emailSig.json.html.includes('<img src="http://localhost:3001/api/v1/public/signature-assets/'),
+  emailSig.json.detail,
+);
+check(
+  'offre gratuite : mention de la plateforme',
+  emailSig.json.html.includes('Signature créée avec'),
+);
+const badPhone = await call('POST', `/projects/${pid}/signatures`, {
+  token,
+  body: { kind: 'EMAIL', data: { fullName: 'Test', phones: ['620000000'] } },
+});
+check('téléphone au format international exigé', badPhone.status === 400, badPhone.json.errors);
+
+const assetUrl = /<img src="([^"]+logo-[0-9a-f]{12}.png)"/.exec(emailSig.json.html)?.[1];
+const asset = await fetch(assetUrl);
+check(
+  'image du logo servie publiquement, cache long',
+  asset.status === 200 &&
+    asset.headers.get('content-type') === 'image/png' &&
+    /immutable/.test(asset.headers.get('cache-control') ?? ''),
+  asset.status,
+);
+const sigHtml = await call('GET', `/signatures/${emailSig.json.id}/html`, { token });
+check(
+  'HTML, texte brut et guide d’installation (5 messageries)',
+  sigHtml.json.installGuide?.length === 5 && sigHtml.json.text.includes('+224 620 00 00 00'),
+);
+
+const proposals = await call('POST', `/projects/${pid}/signatures/handwritten/proposals`, {
+  token,
+  body: { fullName: 'Aïssatou Camara', ink: 'violet' },
+});
+check(
+  '9 propositions de paraphe (SIG-20)',
+  proposals.status === 200 && proposals.json.length === 9,
+  proposals.json.length,
+);
+const noAttest = await call('POST', `/projects/${pid}/signatures`, {
+  token,
+  body: { kind: 'HANDWRITTEN', data: { ink: 'blue', spec: proposals.json[0].spec } },
+});
+check('paraphe sans attestation refusé (§6.4)', noAttest.status === 400, noAttest.json.detail);
+const noCredit = await call('POST', `/projects/${pid}/signatures`, {
+  token,
+  body: { kind: 'HANDWRITTEN', attest: true, data: { ink: 'blue', spec: proposals.json[0].spec } },
+});
+check('paraphe : 1 crédit requis (402)', noCredit.status === 402, noCredit.json.detail);
+
+const pubSig = await call('POST', '/public/email-signature', {
+  body: {
+    data: { fullName: 'Visiteur Test', phones: ['+224620000001'] },
+    layout: 'logo-top',
+    color: '#7C3AED',
+  },
+});
+check(
+  'signature e-mail sans compte (ou limite du jour)',
+  (pubSig.status === 200 && pubSig.json.html.includes('Signature créée avec')) ||
+    pubSig.status === 429,
+  pubSig.status,
+);
+const modo = await call('GET', '/admin/moderation', { token });
+check('modération réservée au support et aux admins', modo.status === 403);
+
 // ─── Module 5 : décoration textile ───
 const templates = await call('GET', '/apparel/templates', { token });
 const jersey = templates.json.find?.((t) => t.category === 'FOOTBALL_JERSEY');
-check('supports textiles avec tailles et zones', !!jersey && jersey.sizes.length === 13 && jersey.zones.length === 10, jersey?.zones?.length);
+check(
+  'supports textiles avec tailles et zones',
+  !!jersey && jersey.sizes.length === 13 && jersey.zones.length === 10,
+  jersey?.zones?.length,
+);
 const presets = await call('GET', '/apparel/rule-presets', { token });
 const men = presets.json.presets?.find((p) => p.code === 'FOOTBALL_MEN');
 check('préréglages sportifs + rappel du règlement officiel', !!men && !!presets.json.disclaimer);
 
 const design = await call('POST', `/projects/${pid}/apparel-designs`, {
   token,
-  body: { templateId: jersey.id, rulePresetId: men.id, name: 'Domicile', technique: 'HEAT_TRANSFER_VINYL', garmentColor: '#0B3D91' },
+  body: {
+    templateId: jersey.id,
+    rulePresetId: men.id,
+    name: 'Domicile',
+    technique: 'HEAT_TRANSFER_VINYL',
+    garmentColor: '#0B3D91',
+  },
 });
 check('création d’une tenue', design.status === 201, design.json.detail);
 const did = design.json.id;
 
 const elements = (numberHeight) => ({
   elements: [
-    { zoneKey: 'back_name', kind: 'PLAYER_NAME', widthMm: 200, heightMm: 70, offsetXMm: 40, offsetYMm: 0, content: { colors: ['#FFFFFF'] } },
-    { zoneKey: 'back_number', kind: 'PLAYER_NUMBER', widthMm: numberHeight * 0.6, heightMm: numberHeight, offsetXMm: 60, offsetYMm: 0, content: { colors: ['#FFFFFF'], strokeMm: 30 } },
+    {
+      zoneKey: 'back_name',
+      kind: 'PLAYER_NAME',
+      widthMm: 200,
+      heightMm: 70,
+      offsetXMm: 40,
+      offsetYMm: 0,
+      content: { colors: ['#FFFFFF'] },
+    },
+    {
+      zoneKey: 'back_number',
+      kind: 'PLAYER_NUMBER',
+      widthMm: numberHeight * 0.6,
+      heightMm: numberHeight,
+      offsetXMm: 60,
+      offsetYMm: 0,
+      content: { colors: ['#FFFFFF'], strokeMm: 30 },
+    },
   ],
 });
 await call('PUT', `/apparel-designs/${did}/elements`, { token, body: elements(220) });
 const bad = await call('POST', `/apparel-designs/${did}/check`, { token, body: {} });
-check('numéro dos de 22 cm signalé non conforme (football hommes)', bad.json.ok === false && bad.json.errors.some((e) => e.code === 'NUMBER_HEIGHT'), bad.json.errors?.map((e) => e.message));
+check(
+  'numéro dos de 22 cm signalé non conforme (football hommes)',
+  bad.json.ok === false && bad.json.errors.some((e) => e.code === 'NUMBER_HEIGHT'),
+  bad.json.errors?.map((e) => e.message),
+);
 const earlyProof = await call('POST', `/apparel-designs/${did}/proof`, { token, body: {} });
-check('BAT refusé tant que la tenue n’est pas conforme', earlyProof.status === 422, earlyProof.status);
+check(
+  'BAT refusé tant que la tenue n’est pas conforme',
+  earlyProof.status === 422,
+  earlyProof.status,
+);
 
-const badZone = await call('PUT', `/apparel-designs/${did}/elements`, { token, body: { elements: [{ ...elements(300).elements[1], zoneKey: 'front_full' }] } });
+const badZone = await call('PUT', `/apparel-designs/${did}/elements`, {
+  token,
+  body: { elements: [{ ...elements(300).elements[1], zoneKey: 'front_full' }] },
+});
 check('zone absente du support refusée', badZone.status === 400, badZone.json.detail);
 
 await call('PUT', `/apparel-designs/${did}/elements`, { token, body: elements(300) });
@@ -232,31 +546,75 @@ const good = await call('POST', `/apparel-designs/${did}/check`, { token, body: 
 check('numéro de 30 cm conforme', good.json.ok === true, good.json.errors);
 
 const dupCsv = 'nom,nom_imprime,numero,taille\nMamadou Diallo,DIALLO,10,M\nIbrahima Bah,BAH,10,L';
-const dup = await call('POST', `/apparel-designs/${did}/roster/import`, { token, body: { csv: dupCsv } });
-check('effectif : numéro en double refusé', dup.status === 422 && dup.json.issues?.[0]?.code === 'NUMBER_DUPLICATE', dup.json.issues);
+const dup = await call('POST', `/apparel-designs/${did}/roster/import`, {
+  token,
+  body: { csv: dupCsv },
+});
+check(
+  'effectif : numéro en double refusé',
+  dup.status === 422 && dup.json.issues?.[0]?.code === 'NUMBER_DUPLICATE',
+  dup.json.issues,
+);
 
-const csv = 'nom,nom_imprime,numero,taille,poste,quantite\nMamadou Diallo,DIALLO,10,M,Joueur,1\nIbrahima Bah,I. BAH,1,L,Gardien,1\nAïssatou Camara,CAMARA,7,S,Joueur,2';
-const roster = await call('POST', `/apparel-designs/${did}/roster/import`, { token, body: { csv, name: 'Seniors' } });
-check('effectif importé avec récapitulatif par taille', roster.status === 200 && roster.json.summary.garments === 4 && roster.json.summary.bySize.S === 2, roster.json.summary);
+const csv =
+  'nom,nom_imprime,numero,taille,poste,quantite\nMamadou Diallo,DIALLO,10,M,Joueur,1\nIbrahima Bah,I. BAH,1,L,Gardien,1\nAïssatou Camara,CAMARA,7,S,Joueur,2';
+const roster = await call('POST', `/apparel-designs/${did}/roster/import`, {
+  token,
+  body: { csv, name: 'Seniors' },
+});
+check(
+  'effectif importé avec récapitulatif par taille',
+  roster.status === 200 && roster.json.summary.garments === 4 && roster.json.summary.bySize.S === 2,
+  roster.json.summary,
+);
 
 const proof = await call('POST', `/apparel-designs/${did}/proof`, { token, body: {} });
 check('lien BAT créé', proof.status === 200 && !!proof.json.token, proof.json.url);
 const pubProof = await call('GET', `/public/proofs/${proof.json.token}`);
-check('BAT consultable sans compte', pubProof.status === 200 && pubProof.json.roster.entries.length === 3);
-const approve = await call('POST', `/public/proofs/${proof.json.token}/approve`, { body: { approverName: 'Président du club' } });
-check('BAT approuvé par le client → APPROVED', approve.status === 200 && approve.json.status === 'APPROVED', approve.json);
-const edited = await call('PATCH', `/apparel-designs/${did}`, { token, body: { garmentColor: '#C8102E' } });
-check('modifier une tenue approuvée la repasse en brouillon', edited.json.status === 'DRAFT' && edited.json.approvedAt === null, edited.json.status);
+check(
+  'BAT consultable sans compte',
+  pubProof.status === 200 && pubProof.json.roster.entries.length === 3,
+);
+const approve = await call('POST', `/public/proofs/${proof.json.token}/approve`, {
+  body: { approverName: 'Président du club' },
+});
+check(
+  'BAT approuvé par le client → APPROVED',
+  approve.status === 200 && approve.json.status === 'APPROVED',
+  approve.json,
+);
+const edited = await call('PATCH', `/apparel-designs/${did}`, {
+  token,
+  body: { garmentColor: '#C8102E' },
+});
+check(
+  'modifier une tenue approuvée la repasse en brouillon',
+  edited.json.status === 'DRAFT' && edited.json.approvedAt === null,
+  edited.json.status,
+);
 const oldProof = await call('GET', `/public/proofs/${proof.json.token}`);
 check('l’ancien lien BAT ne fonctionne plus', oldProof.status === 404);
 
 const shop = await call('POST', `/workspaces/${wid}/print-shops`, {
   token,
-  body: { name: 'Atelier Madina', techniques: ['HEAT_TRANSFER_VINYL', 'DTF'], maxPrintWMm: 400, maxPrintHMm: 500, minStrokeMm: { HEAT_TRANSFER_VINYL: 35 } },
+  body: {
+    name: 'Atelier Madina',
+    techniques: ['HEAT_TRANSFER_VINYL', 'DTF'],
+    maxPrintWMm: 400,
+    maxPrintHMm: 500,
+    minStrokeMm: { HEAT_TRANSFER_VINYL: 35 },
+  },
 });
 check('profil atelier créé', shop.status === 201, shop.json.detail);
-const shopCheck = await call('POST', `/apparel-designs/${did}/check`, { token, body: { printShopId: shop.json.id } });
-check('le trait minimal de l’atelier s’applique au contrôle', shopCheck.json.errors?.some((e) => e.code === 'STROKE_TOO_THIN'), shopCheck.json.errors?.map((e) => e.code));
+const shopCheck = await call('POST', `/apparel-designs/${did}/check`, {
+  token,
+  body: { printShopId: shop.json.id },
+});
+check(
+  'le trait minimal de l’atelier s’applique au contrôle',
+  shopCheck.json.errors?.some((e) => e.code === 'STROKE_TOO_THIN'),
+  shopCheck.json.errors?.map((e) => e.code),
+);
 
 const adminTpl = await call('POST', '/admin/apparel/templates', { token, body: {} });
 check('administration des supports réservée aux admins', adminTpl.status === 403);
@@ -264,11 +622,21 @@ check('administration des supports réservée aux admins', adminTpl.status === 4
 const del = await call('DELETE', `/projects/${pid}`, { token });
 const gone = await call('GET', `/projects/${pid}`, { token });
 const restored = await call('POST', `/projects/${pid}/restore`, { token });
-check('corbeille puis restauration', del.status === 204 && gone.status === 404 && restored.status === 201, [del.status, gone.status, restored.status]);
+check(
+  'corbeille puis restauration',
+  del.status === 204 && gone.status === 404 && restored.status === 201,
+  [del.status, gone.status, restored.status],
+);
 
-const pub = await call('POST', '/public/names/try', { body: { entityType: 'APPLICATION', sector: 'Fintech', mission: 'Paiement mobile simple' } });
+const pub = await call('POST', '/public/names/try', {
+  body: { entityType: 'APPLICATION', sector: 'Fintech', mission: 'Paiement mobile simple' },
+});
 // 3 essais par IP et par jour : au-delà, 429 est le comportement attendu.
-check('essai public sans compte (ou limite du jour atteinte)', (pub.status === 200 && pub.json.names.length > 0) || pub.status === 429, pub.status);
+check(
+  'essai public sans compte (ou limite du jour atteinte)',
+  (pub.status === 200 && pub.json.names.length > 0) || pub.status === 429,
+  pub.status,
+);
 
 const ready = await fetch(API + '/health/ready');
 check('sonde ready', ready.status === 200);

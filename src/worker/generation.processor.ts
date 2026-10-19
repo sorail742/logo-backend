@@ -9,6 +9,7 @@ import { JobEventsService } from '../modules/jobs/job-events.service';
 import { LogoExportService } from '../modules/logos/logo-export.service';
 import { LogoGeneratorService } from '../modules/logos/logo-generator.service';
 import { NameGeneratorService } from '../modules/names/name-generator.service';
+import { SloganGeneratorService } from '../modules/slogans/slogan-generator.service';
 
 /**
  * Consommateur de la file de génération (§11.4, étapes 4 à 6) :
@@ -25,6 +26,7 @@ export class GenerationProcessor extends WorkerHost {
     private readonly names: NameGeneratorService,
     private readonly logos: LogoGeneratorService,
     private readonly exports: LogoExportService,
+    private readonly slogans: SloganGeneratorService,
   ) {
     super();
   }
@@ -61,8 +63,10 @@ export class GenerationProcessor extends WorkerHost {
         return { created: await this.logos.runJob(jobId) };
       case JobKind.EXPORT_ZIP:
         return this.exports.runJob(jobId);
+      case JobKind.SLOGANS:
+        return { created: await this.slogans.runJob(jobId) };
       default:
-        // Slogans, signatures, charte, textile : phases suivantes du planning.
+        // Charte PDF, textile : phases suivantes du planning.
         throw new UnrecoverableError(`Type de génération ${kind} pas encore disponible`);
     }
   }

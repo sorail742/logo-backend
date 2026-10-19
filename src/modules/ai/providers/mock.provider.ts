@@ -1,9 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { NameStyle } from '@prisma/client';
-import type { GeneratedName, NameGenerationInput } from '../../../shared/ai-schemas';
+import type {
+  GeneratedName,
+  NameGenerationInput,
+  SloganGenerationInput,
+} from '../../../shared/ai-schemas';
 import type { LogoGenerationInput } from '../../../shared/logo-spec';
 import { AiCallResult, AiProvider } from '../ai-provider';
 import { mockComposeLogos } from './mock-logos';
+import { mockSlogans } from './mock-slogans';
 
 const SUFFIXES = ['ia', 'o', 'ya', 'ka', 'is', 'en', 'ora', 'ix', 'ari', 'ly'];
 const PREFIXES = ['Néo', 'Nova', 'Ka', 'Sira', 'Bara', 'Lumi', 'Teri', 'Dia', 'Fala', 'Woni'];
@@ -49,6 +54,15 @@ export class MockAiProvider extends AiProvider {
     }
 
     return { raw: { names }, provider: this.name, promptVersion: 'mock-1', costUsdMicros: 0 };
+  }
+
+  async generateSlogans(input: SloganGenerationInput): Promise<AiCallResult> {
+    return {
+      raw: { slogans: mockSlogans(input) },
+      provider: this.name,
+      promptVersion: 'mock-slogans-1',
+      costUsdMicros: 0,
+    };
   }
 
   async composeLogos(input: LogoGenerationInput, count: number): Promise<AiCallResult> {

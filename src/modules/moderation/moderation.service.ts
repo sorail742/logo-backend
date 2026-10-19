@@ -5,9 +5,33 @@ export type TermScope = 'NAME' | 'SLOGAN' | 'STAMP';
 
 /** Marques célèbres filtrées dans les briefs et les résultats (§14.2). */
 const FAMOUS_BRANDS = [
-  'google', 'apple', 'microsoft', 'amazon', 'facebook', 'meta', 'instagram', 'tiktok', 'whatsapp',
-  'orange', 'mtn', 'coca cola', 'cocacola', 'pepsi', 'nike', 'adidas', 'samsung', 'netflix',
-  'youtube', 'twitter', 'linkedin', 'uber', 'airbnb', 'visa', 'mastercard', 'disney', 'toyota',
+  'google',
+  'apple',
+  'microsoft',
+  'amazon',
+  'facebook',
+  'meta',
+  'instagram',
+  'tiktok',
+  'whatsapp',
+  'orange',
+  'mtn',
+  'coca cola',
+  'cocacola',
+  'pepsi',
+  'nike',
+  'adidas',
+  'samsung',
+  'netflix',
+  'youtube',
+  'twitter',
+  'linkedin',
+  'uber',
+  'airbnb',
+  'visa',
+  'mastercard',
+  'disney',
+  'toyota',
 ];
 
 const CACHE_TTL_MS = 5 * 60_000;

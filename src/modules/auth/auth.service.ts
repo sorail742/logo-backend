@@ -65,7 +65,10 @@ export class AuthService {
       return created;
     });
 
-    await this.mail.sendEmailVerification(email, await this.actionToken(user, 'verify-email', '2d'));
+    await this.mail.sendEmailVerification(
+      email,
+      await this.actionToken(user, 'verify-email', '2d'),
+    );
     return this.sessions.issue(user, false, meta);
   }
 
@@ -86,11 +89,9 @@ export class AuthService {
     const clientId = this.config.get<string>('GOOGLE_CLIENT_ID');
     if (!clientId) throw new BadRequestException('Connexion Google non configurée');
 
-    const ticket = await this.google
-      .verifyIdToken({ idToken, audience: clientId })
-      .catch(() => {
-        throw new UnauthorizedException('Jeton Google invalide');
-      });
+    const ticket = await this.google.verifyIdToken({ idToken, audience: clientId }).catch(() => {
+      throw new UnauthorizedException('Jeton Google invalide');
+    });
     const p = ticket.getPayload();
     if (!p?.sub || !p.email || !p.email_verified) {
       throw new UnauthorizedException('Adresse Google non vérifiée');
@@ -161,7 +162,10 @@ export class AuthService {
     const user = await this.prisma.user.findUnique({ where: { email: email.toLowerCase() } });
     // Réponse identique que le compte existe ou non (pas d'énumération des comptes).
     if (!user || user.deletedAt || !user.email) return;
-    await this.mail.sendPasswordReset(user.email, await this.actionToken(user, 'reset-password', '30m'));
+    await this.mail.sendPasswordReset(
+      user.email,
+      await this.actionToken(user, 'reset-password', '30m'),
+    );
   }
 
   async resetPassword(token: string, password: string) {
@@ -236,7 +240,10 @@ export class AuthService {
   private checkTotp(user: User, code: string | undefined): boolean {
     if (!user.totpSecret) return false;
     if (!code) {
-      throw new UnauthorizedException({ message: 'Code de double authentification requis', mfaRequired: true });
+      throw new UnauthorizedException({
+        message: 'Code de double authentification requis',
+        mfaRequired: true,
+      });
     }
     const secret = decrypt(user.totpSecret, this.totpKey());
     if (!authenticator.verify({ token: code, secret })) {

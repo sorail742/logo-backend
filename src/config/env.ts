@@ -4,6 +4,8 @@ const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().default(3001),
   APP_URL: z.string().url().default('http://localhost:3000'),
+  /** Nom de la plateforme (à définir, §1.4), affiché dans les mentions de l'offre gratuite. */
+  PLATFORM_NAME: z.string().default('Plateforme'),
   API_URL: z.string().url().default('http://localhost:3001'),
 
   DATABASE_URL: z.string().min(1),
@@ -40,7 +42,9 @@ export type Env = z.infer<typeof envSchema>;
 export function validateEnv(raw: Record<string, unknown>): Env {
   const parsed = envSchema.safeParse(raw);
   if (!parsed.success) {
-    const issues = parsed.error.issues.map((i) => `  - ${i.path.join('.')}: ${i.message}`).join('\n');
+    const issues = parsed.error.issues
+      .map((i) => `  - ${i.path.join('.')}: ${i.message}`)
+      .join('\n');
     throw new Error(`Configuration invalide :\n${issues}`);
   }
   return parsed.data;

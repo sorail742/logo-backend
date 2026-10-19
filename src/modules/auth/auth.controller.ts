@@ -44,21 +44,33 @@ export class AuthController {
 
   @Public()
   @Post('register')
-  async register(@Body() dto: RegisterDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
+  async register(
+    @Body() dto: RegisterDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
     return this.respond(res, await this.auth.register(dto, meta(req)));
   }
 
   @Public()
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  async login(@Body() dto: LoginDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
+  async login(
+    @Body() dto: LoginDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
     return this.respond(res, await this.auth.login(dto, meta(req)));
   }
 
   @Public()
   @Post('google')
   @HttpCode(HttpStatus.OK)
-  async google(@Body() dto: GoogleLoginDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
+  async google(
+    @Body() dto: GoogleLoginDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
     return this.respond(res, await this.auth.loginWithGoogle(dto.idToken, dto.totpCode, meta(req)));
   }
 
