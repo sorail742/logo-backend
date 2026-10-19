@@ -15,6 +15,7 @@ import { REDIS } from '../../common/redis/redis.module';
 import { FREE_DAILY_QUOTAS } from '../../shared/credit-costs';
 import { GENERATION_ATTEMPTS, GENERATION_QUEUE, GenerationJobData } from '../../shared/queues';
 import { CreditsService } from '../credits/credits.service';
+import { StorageService } from '../storage/storage.service';
 
 export interface EnqueueParams {
   workspaceId: string;
@@ -36,6 +37,7 @@ export class JobsService {
     private readonly credits: CreditsService,
     @InjectQueue(GENERATION_QUEUE) private readonly queue: Queue<GenerationJobData>,
     @Inject(REDIS) private readonly redis: Redis,
+    private readonly storage: StorageService,
   ) {}
 
   /**
@@ -128,8 +130,9 @@ export class JobsService {
     );
   }
 
-  get(jobId: string) {
-    return this.prisma.generationJob.findUniqueOrThrow({
+  /** État d'une tâche ; pour un export prêt, lien de téléchargement signé de 15 minutes. */
+  async get(jobId: string) {
+    const job = await this.prisma.generationJob.findUniqueOrThrow({
       where: { id: jobId },
       select: {
         id: true,
@@ -141,8 +144,21 @@ export class JobsService {
         createdAt: true,
         startedAt: true,
         finishedAt: true,
+        output: true,
       },
     });
+    const output = job.output as { key?: string; fileName?: string; expiresAt?: string } | null;
+    const { output: _o, ...rest } = job;
+    if (job.status !== JobStatus.SUCCEEDED || !output?.key) return { ...rest, result: output };
+    const expired = !!output.expiresAt && new Date(output.expiresAt) < new Date();
+    const { key: _k, ...publicOutput } = output;
+    return {
+      ...rest,
+      result: publicOutput,
+      downloadUrl: expired
+        ? null
+        : await this.storage.signedUrl(output.key, { downloadName: output.fileName }),
+    };
   }
 
   isTerminal(status: JobStatus) {

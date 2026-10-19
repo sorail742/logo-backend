@@ -1,4 +1,5 @@
 import type { NameGenerationInput } from '../../shared/ai-schemas';
+import type { LogoGenerationInput } from '../../shared/logo-spec';
 
 export interface AiCallResult {
   /** Réponse brute, non fiable : à valider par schéma zod avant usage. */
@@ -15,4 +16,9 @@ export interface AiCallResult {
 export abstract class AiProvider {
   abstract readonly name: string;
   abstract generateNames(input: NameGenerationInput): Promise<AiCallResult>;
+  /**
+   * Moteur A (§5.1) : l'IA choisit icône, police, palette et disposition ; le serveur assemble.
+   * Réponse attendue : { logos: LogoSpec[] }, validée par generatedLogosSchema.
+   */
+  abstract composeLogos(input: LogoGenerationInput, count: number): Promise<AiCallResult>;
 }

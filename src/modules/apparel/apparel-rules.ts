@@ -4,6 +4,7 @@
  * X positif = côté gauche du porteur (TEX-02).
  */
 import type { DesignElementKind, PrintTechnique, SizeScaling } from '@prisma/client';
+import { contrastRatio, relativeLuminance } from '../../shared/color';
 
 // ─── Types ───
 
@@ -172,21 +173,9 @@ export const MIN_RASTER_DPI = 300;
 export const MIN_EMBROIDERY_TEXT_MM = 5;
 export const MIN_GARMENT_CONTRAST = 3;
 
-// ─── Couleurs ───
+// ─── Couleurs : voir shared/color ───
 
-export function relativeLuminance(hex: string): number {
-  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
-  if (!m) return NaN;
-  const [r, g, b] = [0, 2, 4].map((i) => parseInt(m[1].slice(i, i + 2), 16) / 255);
-  const lin = (c: number) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
-  return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
-}
-
-export function contrastRatio(a: string, b: string): number {
-  const [la, lb] = [relativeLuminance(a), relativeLuminance(b)];
-  if (Number.isNaN(la) || Number.isNaN(lb)) return NaN;
-  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
-}
+export { contrastRatio, relativeLuminance };
 
 // ─── Contrôle de conformité (TEX-10, TEX-34, TEX-35, §16.7, §16.9) ───
 
@@ -656,7 +645,7 @@ function splitCsvLine(line: string, sep: string): string[] {
 export function productionFileName(row: RosterRow): string {
   const name = row.displayName
     .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
+    .replace(/[\u0300-\u036f]/g, '')
     .toUpperCase()
     .replace(/[^A-Z0-9]+/g, '-')
     .replace(/^-|-$/g, '');

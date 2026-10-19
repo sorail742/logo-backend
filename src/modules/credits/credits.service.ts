@@ -67,6 +67,24 @@ export class CreditsService {
     });
   }
 
+  /**
+   * Accès payant : abonnement actif ou au moins un achat confirmé. Décide du filigrane et des
+   * formats d'export (LOGO-24), au moment de l'export (§7.4).
+   */
+  async hasPaidAccess(workspaceId: string): Promise<boolean> {
+    const [sub, purchase] = await Promise.all([
+      this.prisma.subscription.findFirst({
+        where: { workspaceId, status: 'ACTIVE', currentPeriodEnd: { gt: new Date() }, plan: { code: { not: 'FREE' } } },
+        select: { id: true },
+      }),
+      this.prisma.creditLedgerEntry.findFirst({
+        where: { workspaceId, reason: { in: [LedgerReason.PURCHASE, LedgerReason.SUBSCRIPTION_GRANT] } },
+        select: { id: true },
+      }),
+    ]);
+    return !!sub || !!purchase;
+  }
+
   balance(workspaceId: string) {
     return this.prisma.workspace.findUniqueOrThrow({
       where: { id: workspaceId },

@@ -35,5 +35,7 @@ export const generatedNameSchema = z.object({
   style: z.nativeEnum(NameStyle),
   pronunciation: z.string().trim().max(80).nullish(),
 });
-export const generatedNamesSchema = z.object({ names: z.array(generatedNameSchema).min(1).max(30) });
+export const generatedNamesSchema = z.object({
+  names: z.array(generatedNameSchema).min(1).max(30),
+});
 export type GeneratedName = z.infer<typeof generatedNameSchema>;

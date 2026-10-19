@@ -116,6 +116,72 @@ check('favori', fav.status === 200 && fav.json.isFavorite === true);
 const chosen = await call('POST', `/projects/${pid}/chosen-name`, { token, body: { nameId: nid } });
 check('nom final retenu', chosen.status === 200 && chosen.json.chosenNameId === nid, chosen.json.chosenName?.value);
 
+// ─── Phase 3 : logos ───
+async function waitJob(jobId, timeoutMs = 30000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const j = await call('GET', `/jobs/${jobId}`, { token });
+    if (['SUCCEEDED', 'FAILED'].includes(j.json.status)) return j.json;
+    await new Promise((r) => setTimeout(r, 400));
+  }
+  return { status: 'TIMEOUT' };
+}
+
+const icons = await call('GET', '/library/icons?q=leaf&limit=5', { token });
+check('bibliothèque : recherche d’icônes avec licence', icons.status === 200 && icons.json.items[0]?.id === 'leaf' && icons.json.license.license === 'MIT', icons.json.items?.map((i) => i.id));
+const fonts = await call('GET', '/library/fonts', { token });
+check('bibliothèque : 16 polices OFL', fonts.json.length === 16 && fonts.json.every((p) => p.license === 'OFL'));
+
+const logoGen = await call('POST', `/projects/${pid}/logos/generate`, {
+  token,
+  body: { types: ['ICON_TEXT', 'MONOGRAM', 'WORDMARK', 'EMBLEM'], style: 'MODERN', tagline: 'Jeunesse et avenir' },
+  headers: { 'idempotency-key': 'logos-' + Date.now() },
+});
+check('génération de logos acceptée (202)', logoGen.status === 202 && !!logoGen.json.jobId, logoGen.json);
+const t0 = Date.now();
+const logoJob = await waitJob(logoGen.json.jobId);
+check('lot de logos terminé en moins de 15 s (§10)', logoJob.status === 'SUCCEEDED' && Date.now() - t0 < 15000, { status: logoJob.status, ms: Date.now() - t0 });
+
+const logos = await call('GET', `/projects/${pid}/logos`, { token });
+check('8 propositions (LOGO-04)', logos.json.length === 8, logos.json.map?.((l) => l.type));
+const firstLogo = logos.json[0];
+const firstSvg = firstLogo.versions[0].svg;
+check('SVG sans texte brut (texte en tracés)', !/<text[s>]/.test(firstSvg) && firstSvg.includes('Leso'), firstSvg.length);
+
+const variants = await call('POST', `/logos/${firstLogo.id}/variants`, { token, body: {} });
+check('6 variantes et 4 mises en situation (LOGO-05, LOGO-20)', Object.keys(variants.json.variants ?? {}).length === 6 && Object.keys(variants.json.mockups ?? {}).length === 4);
+
+const spec = firstLogo.versions[0].spec;
+const v2 = await call('POST', `/logos/${firstLogo.id}/versions`, { token, body: { label: 'Police modifiée', spec: { ...spec, font: { id: 'poppins', weight: 700 }, letterSpacing: 0.05 } } });
+check('version nommée enregistrée (LOGO-13)', v2.status === 201 && v2.json.number === 2, v2.json.detail);
+const badSpec = await call('POST', `/logos/${firstLogo.id}/versions`, { token, body: { spec: { ...spec, font: { id: 'comic-sans', weight: 400 } } } });
+check('police hors bibliothèque refusée', badSpec.status === 400, badSpec.json.detail);
+const history = await call('GET', `/logos/${firstLogo.id}/versions`, { token });
+check('historique des versions', history.json.length === 2 && history.json[0].number === 2);
+
+const paidExport = await call('POST', `/logos/${firstLogo.id}/export`, { token, body: { formats: ['svg', 'pdf'] }, headers: { 'idempotency-key': 'exp-paid-' + Date.now() } });
+check('offre gratuite : SVG/PDF refusés (402)', paidExport.status === 402, paidExport.json.detail);
+const freeExport = await call('POST', `/logos/${firstLogo.id}/export`, { token, body: { formats: ['png'] }, headers: { 'idempotency-key': 'exp-free-' + Date.now() } });
+check('offre gratuite : export PNG accepté avec filigrane', freeExport.status === 202 && freeExport.json.watermarked === true, freeExport.json);
+const exportJob = await waitJob(freeExport.json.jobId);
+check('export terminé avec lien signé', exportJob.status === 'SUCCEEDED' && !!exportJob.downloadUrl, exportJob.result);
+const zip = await fetch(exportJob.downloadUrl);
+const zipBuf = Buffer.from(await zip.arrayBuffer());
+check('archive ZIP téléchargeable : PNG 512 filigrané + LICENCES.txt', zip.status === 200 && zipBuf.subarray(0, 2).toString() === 'PK' && exportJob.result.files.join() === 'LICENCES.txt,logo/png/leso-512-apercu.png', exportJob.result.files);
+
+const dirty = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" onload="alert(1)"><script>alert(1)</script><rect fill="#0E7C66" width="10" height="10"/><circle fill="#F2A541" r="3"/></svg>').toString('base64');
+const imported = await call('POST', `/projects/${pid}/logos/import`, { token, body: { fileBase64: dirty, fileName: 'ancien-logo.svg' } });
+const impVersion = imported.json.versions?.[0];
+check('logo importé nettoyé, palette extraite (LOGO-07)', imported.status === 201 && !/script|onload/.test(impVersion.svg) && impVersion.spec.palette.join() === '#0E7C66,#F2A541', impVersion?.spec?.palette);
+const gif = await call('POST', `/projects/${pid}/logos/import`, { token, body: { fileBase64: Buffer.from('GIF89a....').toString('base64') } });
+check('type de fichier vérifié par signature', gif.status === 400, gif.json.detail);
+
+const proj2 = await call('POST', `/workspaces/${wid}/projects`, { token, body: { entityType: 'COMPANY', title: 'Déjà un nom' } });
+const typed = await call('POST', `/projects/${proj2.json.id}/chosen-name`, { token, body: { value: 'Kadia Services', acronym: 'ks' } });
+check('parcours « j’ai déjà un nom » (§2.2)', typed.status === 200 && typed.json.chosenName.value === 'Kadia Services' && typed.json.chosenName.acronym === 'KS', typed.json.detail);
+const brandName = await call('POST', `/projects/${proj2.json.id}/chosen-name`, { token, body: { value: 'Google Afrique' } });
+check('nom saisi contenant une marque connue refusé', brandName.status === 400, brandName.json.detail);
+
 // Quota gratuit : 3 lots de noms par jour (le 1er est déjà consommé)
 for (let i = 0; i < 2; i++) {
   await call('POST', `/projects/${pid}/names/generate`, { token, body: { feedback: 'plus court' }, headers: { 'idempotency-key': `q-${i}-${Date.now()}` } });

@@ -1,7 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { NameStyle } from '@prisma/client';
 import type { GeneratedName, NameGenerationInput } from '../../../shared/ai-schemas';
+import type { LogoGenerationInput } from '../../../shared/logo-spec';
 import { AiCallResult, AiProvider } from '../ai-provider';
+import { mockComposeLogos } from './mock-logos';
 
 const SUFFIXES = ['ia', 'o', 'ya', 'ka', 'is', 'en', 'ora', 'ix', 'ari', 'ly'];
 const PREFIXES = ['Néo', 'Nova', 'Ka', 'Sira', 'Bara', 'Lumi', 'Teri', 'Dia', 'Fala', 'Woni'];
@@ -17,13 +19,20 @@ export class MockAiProvider extends AiProvider {
 
   async generateNames(input: NameGenerationInput): Promise<AiCallResult> {
     const { brief } = input;
-    const words = [...brief.mustInclude, ...brief.values, brief.sector, ...brief.mission.split(/\s+/)]
+    const words = [
+      ...brief.mustInclude,
+      ...brief.values,
+      brief.sector,
+      ...brief.mission.split(/\s+/),
+    ]
       .map(clean)
       .filter((w) => w.length >= 3);
     const roots = [...new Set(words.map((w) => cap(w.slice(0, Math.min(5, w.length)))))];
     if (roots.length === 0) roots.push('Kalo');
 
-    const styles = brief.nameStyles.length ? brief.nameStyles : [NameStyle.INVENTED, NameStyle.COMPOUND];
+    const styles = brief.nameStyles.length
+      ? brief.nameStyles
+      : [NameStyle.INVENTED, NameStyle.COMPOUND];
     const seed = hash(JSON.stringify(input));
     const exclude = new Set(input.exclude.map((n) => n.toLowerCase()));
     const maxLen = brief.maxLength ?? (input.feedback?.includes('court') ? 7 : 14);
@@ -42,6 +51,15 @@ export class MockAiProvider extends AiProvider {
     return { raw: { names }, provider: this.name, promptVersion: 'mock-1', costUsdMicros: 0 };
   }
 
+  async composeLogos(input: LogoGenerationInput, count: number): Promise<AiCallResult> {
+    return {
+      raw: { logos: mockComposeLogos(input, count) },
+      provider: this.name,
+      promptVersion: 'mock-logos-1',
+      costUsdMicros: 0,
+    };
+  }
+
   private build(
     style: NameStyle,
     root: string,
@@ -53,28 +71,61 @@ export class MockAiProvider extends AiProvider {
     switch (style) {
       case NameStyle.INVENTED: {
         const value = cap(root.slice(0, 4).toLowerCase() + pick(SUFFIXES));
-        return { value, meaning: `Nom inventé à partir de « ${root.toLowerCase()} »`, style, pronunciation: value.toLowerCase() };
+        return {
+          value,
+          meaning: `Nom inventé à partir de « ${root.toLowerCase()} »`,
+          style,
+          pronunciation: value.toLowerCase(),
+        };
       }
       case NameStyle.COMPOUND: {
         const value = `${pick(PREFIXES)}${root.toLowerCase()}`;
-        return { value, meaning: `Composé de « ${pick(PREFIXES)} » et « ${root.toLowerCase()} »`, style };
+        return {
+          value,
+          meaning: `Composé de « ${pick(PREFIXES)} » et « ${root.toLowerCase()} »`,
+          style,
+        };
       }
       case NameStyle.METAPHORICAL: {
         const value = pick(METAPHORS);
-        return { value: `${value} ${root}`, meaning: `Image de « ${value.toLowerCase()} » appliquée au projet`, style };
+        return {
+          value: `${value} ${root}`,
+          meaning: `Image de « ${value.toLowerCase()} » appliquée au projet`,
+          style,
+        };
       }
       case NameStyle.DESCRIPTIVE: {
         const sector = cap(clean(input.brief.sector)) || root;
-        return { value: `${sector} ${pick(['Plus', 'Action', 'Avenir', 'Solidaire', 'Connect'])}`, meaning: `Décrit directement l'activité : ${input.brief.sector}`, style };
+        return {
+          value: `${sector} ${pick(['Plus', 'Action', 'Avenir', 'Solidaire', 'Connect'])}`,
+          meaning: `Décrit directement l'activité : ${input.brief.sector}`,
+          style,
+        };
       }
       case NameStyle.ACRONYM: {
-        const words = [pick(['Association', 'Alliance', 'Collectif', 'Réseau']), 'pour', ...roots.slice(0, 3)];
-        const acronym = words.filter((w) => w.length > 3).map((w) => w[0].toUpperCase()).join('');
+        const words = [
+          pick(['Association', 'Alliance', 'Collectif', 'Réseau']),
+          'pour',
+          ...roots.slice(0, 3),
+        ];
+        const acronym = words
+          .filter((w) => w.length > 3)
+          .map((w) => w[0].toUpperCase())
+          .join('');
         if (acronym.length < 2) return null;
-        return { value: acronym, acronym, expandedForm: words.join(' '), meaning: `Sigle de « ${words.join(' ')} »`, style };
+        return {
+          value: acronym,
+          acronym,
+          expandedForm: words.join(' '),
+          meaning: `Sigle de « ${words.join(' ')} »`,
+          style,
+        };
       }
       case NameStyle.PROPER: {
-        const value = pick(['Maison', 'Atelier', 'Studio', 'Cercle']) + ' ' + pick(['Kadia', 'Fanta', 'Sékou', 'Mariama', 'Alpha']);
+        const value =
+          pick(['Maison', 'Atelier', 'Studio', 'Cercle']) +
+          ' ' +
+          pick(['Kadia', 'Fanta', 'Sékou', 'Mariama', 'Alpha']);
         return { value, meaning: 'Nom propre évocateur, chaleureux et personnel', style };
       }
       default:
@@ -84,7 +135,10 @@ export class MockAiProvider extends AiProvider {
 }
 
 function clean(w: string) {
-  return w.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-zA-Z]/g, '');
+  return w
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z]/g, '');
 }
 
 function cap(w: string) {

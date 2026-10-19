@@ -6,6 +6,7 @@ import { REDIS } from '../../common/redis/redis.module';
 import type { NameGenerationInput } from '../../shared/ai-schemas';
 import { CREDIT_COSTS, PUBLIC_TRIES_PER_DAY } from '../../shared/credit-costs';
 import { JobsService } from '../jobs/jobs.service';
+import { ModerationService } from '../moderation/moderation.service';
 import { NameGeneratorService } from './name-generator.service';
 import { GenerateNamesDto, ListNamesDto, PublicNameTryDto, UpdateNameDto } from './names.dto';
 
@@ -15,6 +16,7 @@ export class NamesService {
     private readonly prisma: PrismaService,
     private readonly jobs: JobsService,
     private readonly generator: NameGeneratorService,
+    private readonly moderation: ModerationService,
     @Inject(REDIS) private readonly redis: Redis,
   ) {}
 
@@ -28,7 +30,8 @@ export class NamesService {
       where: { id: ctx.projectId },
       include: { brief: true },
     });
-    if (!project.brief) throw new BadRequestException('Complétez le brief avant de générer des noms');
+    if (!project.brief)
+      throw new BadRequestException('Complétez le brief avant de générer des noms');
 
     let likeName: string | undefined;
     if (dto.likeNameId) {
@@ -79,7 +82,11 @@ export class NamesService {
         checks: { orderBy: { kind: 'asc' } },
         votes: true,
       },
-      orderBy: [{ isFavorite: 'desc' }, { score: { sort: 'desc', nulls: 'last' } }, { createdAt: 'desc' }],
+      orderBy: [
+        { isFavorite: 'desc' },
+        { score: { sort: 'desc', nulls: 'last' } },
+        { createdAt: 'desc' },
+      ],
       take: 200,
     });
   }
@@ -102,12 +109,19 @@ export class NamesService {
       create: { nameId, userId, value },
       update: { value },
     });
-    const agg = await this.prisma.nameVote.aggregate({ where: { nameId }, _sum: { value: true }, _count: true });
+    const agg = await this.prisma.nameVote.aggregate({
+      where: { nameId },
+      _sum: { value: true },
+      _count: true,
+    });
     return { nameId, total: agg._sum.value ?? 0, voters: agg._count };
   }
 
   /** NOM-32 : le nom retenu devient le nom du projet. */
-  async choose(projectId: string, nameId: string) {
+  async choose(projectId: string, dto: { nameId?: string; value?: string; acronym?: string }) {
+    if (!dto.nameId && !dto.value) throw new BadRequestException('Indiquez nameId ou value');
+    const nameId =
+      dto.nameId ?? (await this.registerExistingName(projectId, dto.value!, dto.acronym)).id;
     const name = await this.prisma.nameSuggestion.findFirst({ where: { id: nameId, projectId } });
     if (!name) throw new BadRequestException('Ce nom n’appartient pas au projet');
     if (name.isRejected) throw new BadRequestException('Ce nom a été rejeté');
@@ -115,6 +129,25 @@ export class NamesService {
       where: { id: projectId },
       data: { chosenNameId: nameId, status: ProjectStatus.IN_PROGRESS },
       include: { chosenName: true },
+    });
+  }
+
+  /** Nom déjà existant saisi par l'utilisateur : enregistré comme suggestion pour garder un seul modèle. */
+  private async registerExistingName(projectId: string, value: string, acronym?: string) {
+    const clean = value.trim();
+    if (!(await this.moderation.isAllowed(clean, 'NAME'))) {
+      throw new BadRequestException('Ce nom contient un terme interdit ou une marque connue');
+    }
+    return this.prisma.nameSuggestion.upsert({
+      where: { projectId_value: { projectId, value: clean } },
+      create: {
+        projectId,
+        value: clean,
+        acronym: acronym?.trim().toUpperCase() || null,
+        meaning: 'Nom existant saisi par l’utilisateur',
+        style: NameStyle.PROPER,
+      },
+      update: { isRejected: false, ...(acronym && { acronym: acronym.trim().toUpperCase() }) },
     });
   }
 

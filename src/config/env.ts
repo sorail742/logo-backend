@@ -23,6 +23,16 @@ const envSchema = z.object({
   MAIL_FROM: z.string().default('Plateforme <no-reply@example.com>'),
 
   AI_PROVIDER: z.enum(['mock']).default('mock'),
+
+  S3_ENDPOINT: z.string().optional(), // vide = AWS S3
+  S3_REGION: z.string().default('us-east-1'),
+  S3_BUCKET: z.string().default('logo-platform'),
+  S3_ACCESS_KEY: z.string().min(1),
+  S3_SECRET_KEY: z.string().min(1),
+  S3_FORCE_PATH_STYLE: z
+    .enum(['true', 'false'])
+    .default('true')
+    .transform((v) => v === 'true'),
 });
 
 export type Env = z.infer<typeof envSchema>;

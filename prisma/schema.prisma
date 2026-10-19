@@ -429,6 +429,7 @@ model GenerationJob {
   promptVersion String?
   costCredits   Int
   costUsdMicros Int? // coût IA réel
+  output        Json? // résultat (ex. clé de l'archive d'export)
   error         String?
   startedAt     DateTime?
   finishedAt    DateTime?

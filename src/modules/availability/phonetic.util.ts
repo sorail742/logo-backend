@@ -33,7 +33,7 @@ const RULES: [RegExp, string][] = [
 export function phoneticKey(input: string): string {
   let s = input
     .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
+    .replace(/[\u0300-\u036f]/g, '')
     .toUpperCase()
     .replace(/[^A-Z]/g, '');
   if (!s) return '';
