@@ -24,7 +24,7 @@ export class GenerateNamesDto {
   @ApiPropertyOptional({ description: '« Plus proche de celui-ci » : identifiant d’un nom du projet' })
   @IsOptional()
   @IsUUID()
-  likeNameId?: string;
+  referenceNameId?: string;
 }
 
 export class ListNamesDto {
@@ -84,10 +84,11 @@ export class PublicNameTryDto {
   @Length(1, 120)
   sector: string;
 
-  @ApiProperty()
+  @ApiPropertyOptional({ description: 'Mission en une phrase ; à défaut, les mots-clés' })
+  @IsOptional()
   @IsString()
   @MaxLength(500)
-  mission: string;
+  mission?: string;
 
   @ApiPropertyOptional({ type: [String] })
   @IsOptional()
@@ -96,6 +97,14 @@ export class PublicNameTryDto {
   @IsString({ each: true })
   @MaxLength(40, { each: true })
   values?: string[];
+
+  @ApiPropertyOptional({ type: [String], description: 'Mots-clés du formulaire d’essai' })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(10)
+  @IsString({ each: true })
+  @MaxLength(40, { each: true })
+  keywords?: string[];
 
   @ApiPropertyOptional({ enum: NameStyle, isArray: true })
   @IsOptional()

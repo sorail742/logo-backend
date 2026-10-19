@@ -172,6 +172,7 @@ model User {
   role            PlatformRole @default(USER)
   emailVerifiedAt DateTime?
   totpSecret      String? // chiffré (AES-256-GCM)
+  totpBackupCodes String[]     @default([]) // empreintes SHA-256 des codes de secours non utilisés
   suspendedAt     DateTime?
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt

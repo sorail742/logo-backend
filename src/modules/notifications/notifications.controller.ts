@@ -4,6 +4,13 @@ import type { AuthUser } from '../../common/auth-user';
 import { CurrentUser } from '../../common/decorators';
 import { cursorArgs, CursorPaginationDto, toPage } from '../../common/dto/pagination.dto';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import type { Notification } from '@prisma/client';
+
+/** Notification (type AppNotification du front) : titre, texte et lien tirés de la charge utile. */
+function toNotificationDto({ payload, userId: _userId, ...notification }: Notification) {
+  const data = (payload ?? {}) as { title?: string; body?: string; href?: string };
+  return { ...notification, title: data.title ?? '', body: data.body ?? '', href: data.href ?? null };
+}
 
 @ApiTags('notifications')
 @ApiBearerAuth()
@@ -21,7 +28,8 @@ export class NotificationsController {
       }),
       this.prisma.notification.count({ where: { userId: user.id, readAt: null } }),
     ]);
-    return { ...toPage(rows, q.limit), unread };
+    const page = toPage(rows, q.limit);
+    return { ...page, items: page.items.map(toNotificationDto), unread };
   }
 
   @Patch(':id/read')

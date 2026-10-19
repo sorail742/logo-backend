@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { WorkspaceRole } from '@prisma/client';
-import { IsEmail, IsIn, IsOptional, IsString, Length } from 'class-validator';
+import { Transform } from 'class-transformer';
+import { IsBoolean, IsEmail, IsIn, IsOptional, IsString, Length } from 'class-validator';
 
 export class CreateWorkspaceDto {
   @ApiProperty({ example: 'Association Jeunesse Verte' })
@@ -22,8 +23,14 @@ const INVITABLE_ROLES = [WorkspaceRole.EDITOR, WorkspaceRole.VIEWER] as const;
 export class CreateInvitationDto {
   @ApiPropertyOptional({ description: 'Absent : crée un lien d’invitation réutilisable jusqu’à expiration' })
   @IsOptional()
+  @Transform(({ value }: { value: unknown }) => (value === '' ? undefined : value))
   @IsEmail()
   email?: string;
+
+  @ApiPropertyOptional({ description: 'Créer un lien d’invitation même si une adresse est fournie' })
+  @IsOptional()
+  @IsBoolean()
+  asLink?: boolean;
 
   @ApiProperty({ enum: INVITABLE_ROLES })
   @IsIn(INVITABLE_ROLES)

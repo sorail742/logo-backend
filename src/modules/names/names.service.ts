@@ -7,6 +7,8 @@ import type { NameGenerationInput } from '../../shared/ai-schemas';
 import { CREDIT_COSTS, PUBLIC_TRIES_PER_DAY } from '../../shared/credit-costs';
 import { JobsService } from '../jobs/jobs.service';
 import { NameGeneratorService } from './name-generator.service';
+import { NAME_INCLUDE, toNameDto } from './name.presenter';
+import { PROJECT_INCLUDE, toProjectDto } from '../projects/project.presenter';
 import { GenerateNamesDto, ListNamesDto, PublicNameTryDto, UpdateNameDto } from './names.dto';
 
 @Injectable()
@@ -31,9 +33,9 @@ export class NamesService {
     if (!project.brief) throw new BadRequestException('Complétez le brief avant de générer des noms');
 
     let likeName: string | undefined;
-    if (dto.likeNameId) {
+    if (dto.referenceNameId) {
       const n = await this.prisma.nameSuggestion.findFirst({
-        where: { id: dto.likeNameId, projectId: ctx.projectId },
+        where: { id: dto.referenceNameId, projectId: ctx.projectId },
       });
       if (!n) throw new BadRequestException('Nom de référence introuvable dans ce projet');
       likeName = n.value;
@@ -68,54 +70,55 @@ export class NamesService {
     });
   }
 
-  list(projectId: string, q: ListNamesDto) {
-    return this.prisma.nameSuggestion.findMany({
+  async list(projectId: string, userId: string, q: ListNamesDto) {
+    const names = await this.prisma.nameSuggestion.findMany({
       where: {
         projectId,
         ...(q.favorites && { isFavorite: true }),
         ...(!q.rejected && { isRejected: false }),
       },
-      include: {
-        checks: { orderBy: { kind: 'asc' } },
-        votes: true,
-      },
+      include: NAME_INCLUDE,
       orderBy: [{ isFavorite: 'desc' }, { score: { sort: 'desc', nulls: 'last' } }, { createdAt: 'desc' }],
       take: 200,
     });
+    return names.map((n) => toNameDto(n, userId));
   }
 
-  update(nameId: string, dto: UpdateNameDto) {
-    return this.prisma.nameSuggestion.update({
+  async update(nameId: string, userId: string, dto: UpdateNameDto) {
+    const name = await this.prisma.nameSuggestion.update({
       where: { id: nameId },
       data: {
         ...dto,
         // Un nom rejeté sort des favoris.
         ...(dto.isRejected && { isFavorite: false }),
       },
+      include: NAME_INCLUDE,
     });
+    return toNameDto(name, userId);
   }
 
-  /** NOM-31 : un vote par membre, modifiable. */
+  /** NOM-31 : un vote par membre, modifiable ; renvoie le nom avec le total à jour. */
   async vote(nameId: string, userId: string, value: 1 | -1) {
     await this.prisma.nameVote.upsert({
       where: { nameId_userId: { nameId, userId } },
       create: { nameId, userId, value },
       update: { value },
     });
-    const agg = await this.prisma.nameVote.aggregate({ where: { nameId }, _sum: { value: true }, _count: true });
-    return { nameId, total: agg._sum.value ?? 0, voters: agg._count };
+    const name = await this.prisma.nameSuggestion.findUniqueOrThrow({ where: { id: nameId }, include: NAME_INCLUDE });
+    return toNameDto(name, userId);
   }
 
   /** NOM-32 : le nom retenu devient le nom du projet. */
-  async choose(projectId: string, nameId: string) {
+  async choose(projectId: string, nameId: string, userId: string) {
     const name = await this.prisma.nameSuggestion.findFirst({ where: { id: nameId, projectId } });
     if (!name) throw new BadRequestException('Ce nom n’appartient pas au projet');
     if (name.isRejected) throw new BadRequestException('Ce nom a été rejeté');
-    return this.prisma.project.update({
+    const project = await this.prisma.project.update({
       where: { id: projectId },
       data: { chosenNameId: nameId, status: ProjectStatus.IN_PROGRESS },
-      include: { chosenName: true },
+      include: PROJECT_INCLUDE,
     });
+    return toProjectDto(project, userId);
   }
 
   /** Essai sans compte : 3 par jour et par IP, génération synchrone non enregistrée. */
@@ -131,12 +134,13 @@ export class NamesService {
       );
     }
 
+    const keywords = dto.keywords ?? [];
     const outcome = await this.generator.generate({
       entityType: dto.entityType,
       brief: {
         sector: dto.sector,
-        mission: dto.mission,
-        values: dto.values ?? [],
+        mission: dto.mission ?? keywords.join(' '),
+        values: [...(dto.values ?? []), ...keywords],
         languages: [dto.language ?? 'fr'],
         nameStyles: dto.nameStyles ?? [NameStyle.INVENTED, NameStyle.COMPOUND],
         mustInclude: [],
@@ -146,6 +150,6 @@ export class NamesService {
       exclude: [],
     } satisfies NameGenerationInput);
 
-    return { names: outcome.names, triesLeft: Math.max(0, PUBLIC_TRIES_PER_DAY - count) };
+    return { names: outcome.names, remaining: Math.max(0, PUBLIC_TRIES_PER_DAY - count) };
   }
 }

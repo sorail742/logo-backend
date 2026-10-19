@@ -1,5 +1,8 @@
 // Test de fumée de bout en bout (phases 1 à 3, module 5) contre une API et un worker lancés localement.
 // Usage : npm run test:smoke   (API=http://hote/api/v1 pour une autre cible)
+import { PrismaClient } from '@prisma/client';
+import otplib from 'otplib';
+
 const API = process.env.API ?? 'http://localhost:3001/api/v1';
 let failures = 0;
 
@@ -64,6 +67,7 @@ const password = 'Kx9!vQ2#mLp7-unique-' + Date.now();
 
 const reg = await call('POST', '/auth/register', { body: { email, password, fullName: 'Testeur E2E' } });
 check('inscription', reg.status === 201, reg.status);
+check('session avec le profil (type Session du front)', reg.json.user?.email === email && reg.json.user.totpEnabled === false && !('totpSecret' in reg.json.user));
 check('cookie de rafraîchissement httpOnly', /refresh_token=.*HttpOnly/i.test(reg.headers.get('set-cookie') ?? ''));
 const token = reg.json.accessToken;
 const cookie = (reg.headers.get('set-cookie') ?? '').split(';')[0];
@@ -83,11 +87,17 @@ check('rotation du jeton de rafraîchissement', refresh.status === 200 && !!refr
 const reuse = await call('POST', '/auth/refresh', { headers: { cookie } });
 check('réutilisation détectée → 401', reuse.status === 401, reuse.json.detail);
 
+const wsList = await call('GET', '/workspaces', { token });
+check('espaces : rôle et offre de l’utilisateur', wsList.json[0]?.role === 'OWNER' && wsList.json[0].planCode === 'FREE', wsList.json[0]);
+const credits = await call('GET', `/workspaces/${wid}/credits`, { token });
+check('crédits : solde et offre', credits.json.balance === 0 && credits.json.planCode === 'FREE', credits.json);
+
 const plans = await call('GET', '/plans');
 check('offres publiques (dont Pack Équipe et Atelier)', plans.status === 200 && plans.json.length === 7, plans.json.length);
 
 const proj = await call('POST', `/workspaces/${wid}/projects`, { token, body: { entityType: 'ASSOCIATION', title: 'Asso test' } });
 check('création de projet', proj.status === 201, proj.status);
+check('projet : avancement du parcours', proj.json.progress?.brief === false && proj.json.chosenName === null, proj.json.progress);
 const pid = proj.json.id;
 
 const extra = await call('POST', `/workspaces/${wid}/projects`, { token, body: { entityType: 'ASSOCIATION', title: 'x', hack: true } });
@@ -103,7 +113,7 @@ const brief = await call('PUT', `/projects/${pid}/brief`, {
     languages: ['fr'], nameStyles: ['INVENTED', 'COMPOUND', 'ACRONYM'], mustInclude: [], mustAvoid: [],
   },
 });
-check('brief enregistré', brief.status === 200, brief.status);
+check('brief enregistré, projet renvoyé', brief.status === 200 && brief.json.progress.brief === true && brief.json.brief.audience === '', brief.json.progress);
 
 const noKey = await call('POST', `/projects/${pid}/names/generate`, { token, body: {} });
 check('Idempotency-Key obligatoire', noKey.status === 400);
@@ -128,20 +138,20 @@ const cached = await call('POST', `/names/${nid}/checks`, { token, body: {} });
 check('cache 24 h', cached.json.fromCache === true);
 
 const vote = await call('POST', `/names/${nid}/votes`, { token, body: { value: 1 } });
-check('vote', vote.status === 200 && vote.json.total === 1, vote.json);
+check('vote : total et vote de l’utilisateur', vote.status === 200 && vote.json.votes === 1 && vote.json.myVote === 1, { votes: vote.json.votes, myVote: vote.json.myVote });
 
 const fav = await call('PATCH', `/names/${nid}`, { token, body: { isFavorite: true } });
 check('favori', fav.status === 200 && fav.json.isFavorite === true);
 
 const chosen = await call('POST', `/projects/${pid}/chosen-name`, { token, body: { nameId: nid } });
-check('nom final retenu', chosen.status === 200 && chosen.json.chosenNameId === nid, chosen.json.chosenName?.value);
+check('nom final retenu', chosen.status === 200 && chosen.json.chosenNameId === nid && chosen.json.progress.name === true, chosen.json.chosenName?.value);
 
 // Quota gratuit : 3 lots de noms par jour (le 1er est déjà consommé)
 for (let i = 0; i < 2; i++) {
   await call('POST', `/projects/${pid}/names/generate`, { token, body: { feedback: 'plus court' }, headers: { 'idempotency-key': `q-${i}-${Date.now()}` } });
 }
 const over = await call('POST', `/projects/${pid}/names/generate`, { token, body: {}, headers: { 'idempotency-key': 'over-' + Date.now() } });
-check('quota gratuit dépassé → 402', over.status === 402, over.json.detail);
+check('quota gratuit dépassé → 402 INSUFFICIENT_CREDITS', over.status === 402 && over.json.code === 'INSUFFICIENT_CREDITS', over.json.detail);
 
 // Un autre utilisateur ne voit pas le projet
 const other = await call('POST', '/auth/register', { body: { email: 'o' + email, password, fullName: 'Autre' } });
@@ -224,6 +234,52 @@ const quotaLogos = await call('POST', `/projects/${pid}/logos/generate`, { token
 check('quota gratuit : 1 lot de logos par jour → 402', quotaLogos.status === 402, quotaLogos.json.detail);
 const foreignLogo = await call('GET', `/logos/${lid}`, { token: other.json.accessToken });
 check('logo d’un autre espace → 404', foreignLogo.status === 404);
+
+const activity = await call('GET', `/projects/${pid}/activity`, { token });
+check('historique d’activité du projet (COL-04)', activity.status === 200 && activity.json.some((a) => a.code === 'names.choose') && activity.json.some((a) => a.code === 'logos.version') && activity.json.every((a) => a.actor === 'Testeur E2E'), activity.json.slice?.(0, 3).map((a) => a.action));
+const withPreview = await call('GET', `/projects/${pid}`, { token });
+check('projet : aperçu du logo favori', withPreview.json.progress.logo === true && !!withPreview.json.previewSpec?.colors, withPreview.json.previewSpec?.text);
+
+// ─── Espace d'organisation, invitations ───
+const org = await call('POST', '/workspaces', { token, body: { name: 'Association Kaloum' } });
+check('espace d’organisation créé', org.status === 201 && org.json.role === 'OWNER' && org.json.planCode === 'FREE');
+const seat = await call('POST', `/workspaces/${org.json.id}/invitations`, { token, body: { role: 'EDITOR', asLink: true } });
+check('offre gratuite : 1 membre, invitation refusée', seat.status === 403, seat.json.detail);
+// Les paiements arrivent en phase 6 : l'abonnement Association est posé directement en base.
+const prisma = new PrismaClient();
+await prisma.subscription.create({
+  data: {
+    workspaceId: org.json.id,
+    planId: (await prisma.plan.findUniqueOrThrow({ where: { code: 'ASSOCIATION' } })).id,
+    status: 'ACTIVE',
+    currentPeriodEnd: new Date(Date.now() + 30 * 86_400_000),
+  },
+});
+await prisma.$disconnect();
+const link = await call('POST', `/workspaces/${org.json.id}/invitations`, { token, body: { role: 'EDITOR', asLink: true } });
+check('invitation par lien', link.status === 201 && link.json.isLink === true && link.json.link?.startsWith('/invitation/'), link.json.link);
+const pending = await call('GET', `/workspaces/${org.json.id}/invitations`, { token });
+check('invitations en attente', pending.status === 200 && pending.json.length === 1 && !pending.json[0].link);
+const accepted = await call('POST', `/invitations/${link.json.token}/accept`, { token: other.json.accessToken });
+check('invitation acceptée → espace avec rôle', accepted.status === 200 && accepted.json.id === org.json.id && accepted.json.role === 'EDITOR', accepted.json.role);
+const members = await call('GET', `/workspaces/${org.json.id}/members`, { token });
+check('membres (type Member du front)', members.json.length === 2 && members.json.every((m) => m.userId && m.joinedAt && m.role), members.json.map?.((m) => m.role));
+
+// ─── Double authentification et codes de secours ───
+const mfaEmail = `mfa-${Date.now()}@example.org`;
+const mfaUser = await call('POST', '/auth/register', { body: { email: mfaEmail, password, fullName: 'Double Facteur' } });
+const setup = await call('POST', '/auth/2fa/setup', { token: mfaUser.json.accessToken });
+const confirm = await call('POST', '/auth/2fa/verify', { token: mfaUser.json.accessToken, body: { code: otplib.authenticator.generate(setup.json.secret) } });
+check('2FA activée : 10 codes de secours', confirm.status === 200 && confirm.json.backupCodes?.length === 10 && confirm.json.user.totpEnabled === true, confirm.json.backupCodes?.[0]);
+const noCode = await call('POST', '/auth/login', { body: { email: mfaEmail, password } });
+check('connexion sans code → MFA_REQUIRED', noCode.status === 401 && noCode.json.code === 'MFA_REQUIRED', noCode.json.code);
+const withTotp = await call('POST', '/auth/login', { body: { email: mfaEmail, password, totpCode: otplib.authenticator.generate(setup.json.secret) } });
+check('connexion avec le code TOTP', withTotp.status === 200 && !!withTotp.json.accessToken);
+const backup = confirm.json.backupCodes[0];
+const withBackup = await call('POST', '/auth/login', { body: { email: mfaEmail, password, totpCode: backup.toUpperCase() } });
+check('connexion avec un code de secours', withBackup.status === 200, withBackup.json.detail);
+const reused = await call('POST', '/auth/login', { body: { email: mfaEmail, password, totpCode: backup } });
+check('code de secours à usage unique', reused.status === 401 && reused.json.code === 'MFA_INVALID', reused.json.detail);
 
 // ─── Module 5 : décoration textile ───
 const templates = await call('GET', '/apparel/templates', { token });

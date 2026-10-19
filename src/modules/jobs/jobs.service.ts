@@ -125,7 +125,12 @@ export class JobsService {
     if (usedToday < quota) return 0;
 
     throw new HttpException(
-      { message: 'Crédits insuffisants et quota gratuit du jour atteint', quota, usedToday },
+      {
+        message: 'Crédits insuffisants et quota gratuit du jour atteint',
+        code: 'INSUFFICIENT_CREDITS',
+        quota,
+        usedToday,
+      },
       HttpStatus.PAYMENT_REQUIRED,
     );
   }

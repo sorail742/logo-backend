@@ -35,7 +35,7 @@ export class MailService {
   }
 
   sendPasswordReset(to: string, token: string) {
-    const url = this.link(`/mot-de-passe/reinitialiser?token=${encodeURIComponent(token)}`);
+    const url = this.link(`/reinitialiser-mot-de-passe?token=${encodeURIComponent(token)}`);
     return this.send({
       to,
       subject: 'Réinitialisation de votre mot de passe',
@@ -45,7 +45,7 @@ export class MailService {
   }
 
   sendInvitation(to: string, workspaceName: string, token: string) {
-    const url = this.link(`/invitations/${encodeURIComponent(token)}`);
+    const url = this.link(`/invitation/${encodeURIComponent(token)}`);
     return this.send({
       to,
       subject: `Invitation à rejoindre « ${workspaceName} »`,

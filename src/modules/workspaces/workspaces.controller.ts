@@ -45,8 +45,12 @@ export class WorkspacesController {
 
   @Patch('workspaces/:wid')
   @WorkspaceAccess('OWNER')
-  update(@Param('wid', ParseUUIDPipe) wid: string, @Body() dto: UpdateWorkspaceDto) {
-    return this.workspaces.update(wid, dto);
+  update(
+    @Param('wid', ParseUUIDPipe) wid: string,
+    @Body() dto: UpdateWorkspaceDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.workspaces.update(wid, user.id, dto);
   }
 
   @Get('workspaces/:wid/members')
@@ -70,6 +74,12 @@ export class WorkspacesController {
   @HttpCode(HttpStatus.NO_CONTENT)
   removeMember(@Param('wid', ParseUUIDPipe) wid: string, @Param('uid', ParseUUIDPipe) uid: string) {
     return this.workspaces.removeMember(wid, uid);
+  }
+
+  @Get('workspaces/:wid/invitations')
+  @WorkspaceAccess('OWNER')
+  invitations(@Param('wid', ParseUUIDPipe) wid: string) {
+    return this.workspaces.invitations(wid);
   }
 
   @Post('workspaces/:wid/invitations')

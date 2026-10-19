@@ -15,7 +15,9 @@ import { ApiBearerAuth, ApiHeader, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import type { AuthUser, WorkspaceContext } from '../../common/auth-user';
 import { ClientIp, CurrentUser, CurrentWorkspace, Public, WorkspaceAccess } from '../../common/decorators';
+import { AuditService } from '../audit/audit.service';
 import { AvailabilityService } from '../availability/availability.service';
+import { projectEvent } from '../projects/project-activity';
 import {
   ChooseNameDto,
   GenerateNamesDto,
@@ -34,36 +36,39 @@ export class NamesController {
   constructor(
     private readonly names: NamesService,
     private readonly availability: AvailabilityService,
+    private readonly audit: AuditService,
   ) {}
 
   @Post('projects/:pid/names/generate')
   @WorkspaceAccess('EDITOR')
   @HttpCode(HttpStatus.ACCEPTED)
   @ApiHeader({ name: 'Idempotency-Key', required: true })
-  generate(
+  async generate(
     @Param('pid', ParseUUIDPipe) pid: string,
     @Body() dto: GenerateNamesDto,
     @CurrentUser() user: AuthUser,
     @CurrentWorkspace() ws: WorkspaceContext,
     @Headers('idempotency-key') idempotencyKey?: string,
   ) {
-    return this.names.generate(
+    const job = await this.names.generate(
       { projectId: pid, workspaceId: ws.workspaceId, actorId: user.id },
       dto,
       idempotencyKey,
     );
+    await this.audit.log(projectEvent(pid, user.id, 'names.generate', { jobId: job.jobId }));
+    return job;
   }
 
   @Get('projects/:pid/names')
   @WorkspaceAccess('VIEWER')
-  list(@Param('pid', ParseUUIDPipe) pid: string, @Query() q: ListNamesDto) {
-    return this.names.list(pid, q);
+  list(@Param('pid', ParseUUIDPipe) pid: string, @Query() q: ListNamesDto, @CurrentUser() user: AuthUser) {
+    return this.names.list(pid, user.id, q);
   }
 
   @Patch('names/:nid')
   @WorkspaceAccess('EDITOR')
-  update(@Param('nid', ParseUUIDPipe) nid: string, @Body() dto: UpdateNameDto) {
-    return this.names.update(nid, dto);
+  update(@Param('nid', ParseUUIDPipe) nid: string, @Body() dto: UpdateNameDto, @CurrentUser() user: AuthUser) {
+    return this.names.update(nid, user.id, dto);
   }
 
   @Post('names/:nid/checks')
@@ -83,8 +88,10 @@ export class NamesController {
   @Post('projects/:pid/chosen-name')
   @WorkspaceAccess('EDITOR')
   @HttpCode(HttpStatus.OK)
-  choose(@Param('pid', ParseUUIDPipe) pid: string, @Body() dto: ChooseNameDto) {
-    return this.names.choose(pid, dto.nameId);
+  async choose(@Param('pid', ParseUUIDPipe) pid: string, @Body() dto: ChooseNameDto, @CurrentUser() user: AuthUser) {
+    const project = await this.names.choose(pid, dto.nameId, user.id);
+    await this.audit.log(projectEvent(pid, user.id, 'names.choose', { value: project.chosenName?.value }));
+    return project;
   }
 
   @Public()

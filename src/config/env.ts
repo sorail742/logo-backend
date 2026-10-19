@@ -13,6 +13,8 @@ const envSchema = z.object({
   JWT_ACCESS_TTL: z.string().default('15m'),
   JWT_ACTION_SECRET: z.string().min(32),
   REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().positive().default(30),
+  // « none » si le front et l'API sont sur deux domaines distincts (cookie alors sécurisé).
+  REFRESH_COOKIE_SAMESITE: z.enum(['strict', 'lax', 'none']).default('strict'),
   TOTP_ENCRYPTION_KEY: z.string().regex(/^[0-9a-fA-F]{64}$/, '32 octets encodés en hexadécimal'),
   GOOGLE_CLIENT_ID: z.string().optional(),
 

@@ -11,11 +11,15 @@ import { PrismaService } from '../../common/prisma/prisma.service';
 import { randomToken, sha256 } from '../../common/utils/crypto.util';
 import { uniqueSlug } from '../../common/utils/slug.util';
 import { MailService } from '../mail/mail.service';
+import {
+  LINK_INVITATION_EMAIL,
+  toInvitationDto,
+  toWorkspaceDto,
+  workspaceSelect,
+} from './workspace.presenter';
 import { CreateInvitationDto, CreateWorkspaceDto, UpdateWorkspaceDto } from './workspaces.dto';
 
 const INVITATION_TTL_DAYS = 7;
-/** Invitation par lien : pas d'adresse cible, réutilisable jusqu'à expiration. */
-const LINK_INVITATION_EMAIL = '*';
 
 @Injectable()
 export class WorkspacesService {
@@ -24,31 +28,29 @@ export class WorkspacesService {
     private readonly mail: MailService,
   ) {}
 
-  list(userId: string) {
-    return this.prisma.workspace.findMany({
+  async list(userId: string) {
+    const rows = await this.prisma.workspace.findMany({
       where: { members: { some: { userId } } },
       select: {
-        id: true,
-        name: true,
-        slug: true,
-        kind: true,
-        creditBalance: true,
-        members: { where: { userId }, select: { role: true } },
+        ...workspaceSelect(userId),
         _count: { select: { projects: { where: { deletedAt: null } } } },
       },
       orderBy: { createdAt: 'asc' },
     });
+    return rows.map(({ _count, ...ws }) => ({ ...toWorkspaceDto(ws), projectCount: _count.projects }));
   }
 
-  create(userId: string, dto: CreateWorkspaceDto) {
-    return this.prisma.workspace.create({
+  async create(userId: string, dto: CreateWorkspaceDto) {
+    const ws = await this.prisma.workspace.create({
       data: {
         name: dto.name,
         slug: uniqueSlug(dto.name),
         kind: WorkspaceKind.ORGANIZATION,
         members: { create: { userId, role: WorkspaceRole.OWNER } },
       },
+      select: workspaceSelect(userId),
     });
+    return toWorkspaceDto(ws);
   }
 
   async get(workspaceId: string) {
@@ -58,12 +60,18 @@ export class WorkspacesService {
     });
   }
 
-  update(workspaceId: string, dto: UpdateWorkspaceDto) {
-    return this.prisma.workspace.update({ where: { id: workspaceId }, data: dto });
+  async update(workspaceId: string, userId: string, dto: UpdateWorkspaceDto) {
+    const ws = await this.prisma.workspace.update({
+      where: { id: workspaceId },
+      data: dto,
+      select: workspaceSelect(userId),
+    });
+    return toWorkspaceDto(ws);
   }
 
-  members(workspaceId: string) {
-    return this.prisma.membership.findMany({
+  /** Membres (type Member du front). */
+  async members(workspaceId: string) {
+    const rows = await this.prisma.membership.findMany({
       where: { workspaceId },
       select: {
         role: true,
@@ -72,6 +80,23 @@ export class WorkspacesService {
       },
       orderBy: { createdAt: 'asc' },
     });
+    return rows.map(({ role, createdAt, user }) => ({
+      userId: user.id,
+      fullName: user.fullName,
+      email: user.email,
+      avatarUrl: user.avatarUrl,
+      role,
+      joinedAt: createdAt,
+    }));
+  }
+
+  /** Invitations en attente (ni acceptées ni expirées). */
+  async invitations(workspaceId: string) {
+    const rows = await this.prisma.invitation.findMany({
+      where: { workspaceId, acceptedAt: null, expiresAt: { gt: new Date() } },
+      orderBy: { expiresAt: 'desc' },
+    });
+    return rows.map((invitation) => toInvitationDto(invitation));
   }
 
   async updateMember(workspaceId: string, userId: string, role: WorkspaceRole) {
@@ -98,7 +123,7 @@ export class WorkspacesService {
     await this.assertSeatAvailable(workspaceId);
 
     const token = randomToken(24);
-    const email = dto.email?.toLowerCase() ?? LINK_INVITATION_EMAIL;
+    const email = dto.asLink || !dto.email ? LINK_INVITATION_EMAIL : dto.email.toLowerCase();
     const invitation = await this.prisma.invitation.create({
       data: {
         workspaceId,
@@ -108,15 +133,14 @@ export class WorkspacesService {
         expiresAt: new Date(Date.now() + INVITATION_TTL_DAYS * 86_400_000),
       },
     });
-    if (dto.email) await this.mail.sendInvitation(dto.email, ws.name, token);
+    if (email !== LINK_INVITATION_EMAIL) await this.mail.sendInvitation(email, ws.name, token);
 
-    return { id: invitation.id, role: invitation.role, expiresAt: invitation.expiresAt, token };
+    return toInvitationDto(invitation, token);
   }
 
   async accept(token: string, user: { id: string }) {
     const invitation = await this.prisma.invitation.findUnique({
       where: { tokenHash: sha256(token) },
-      include: { workspace: { select: { id: true, name: true } } },
     });
     if (!invitation) throw new NotFoundException('Invitation introuvable');
     if (invitation.expiresAt < new Date()) throw new GoneException('Invitation expirée');
@@ -133,7 +157,7 @@ export class WorkspacesService {
     const existing = await this.prisma.membership.findUnique({
       where: { userId_workspaceId: { userId: user.id, workspaceId: invitation.workspaceId } },
     });
-    if (existing) return { workspace: invitation.workspace, role: existing.role };
+    if (existing) return this.forMember(invitation.workspaceId, user.id);
 
     await this.assertSeatAvailable(invitation.workspaceId);
     await this.prisma.$transaction([
@@ -149,7 +173,15 @@ export class WorkspacesService {
             }),
           ]),
     ]);
-    return { workspace: invitation.workspace, role: invitation.role };
+    return this.forMember(invitation.workspaceId, user.id);
+  }
+
+  private async forMember(workspaceId: string, userId: string) {
+    const ws = await this.prisma.workspace.findUniqueOrThrow({
+      where: { id: workspaceId },
+      select: workspaceSelect(userId),
+    });
+    return toWorkspaceDto(ws);
   }
 
   // ─── Règles ───

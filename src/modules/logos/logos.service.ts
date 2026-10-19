@@ -179,7 +179,7 @@ export class LogosService {
       orderBy: [{ isFavorite: 'desc' }, { createdAt: 'desc' }],
       take: 200,
     });
-    return logos.map(toLogoDto);
+    return logos.map((logo) => toLogoDto(logo));
   }
 
   /** Détail : version courante avec son SVG. */
@@ -194,7 +194,7 @@ export class LogosService {
         },
       },
     });
-    return toLogoDto(logo);
+    return toLogoDto(logo, true);
   }
 
   async update(logoId: string, dto: UpdateLogoDto) {

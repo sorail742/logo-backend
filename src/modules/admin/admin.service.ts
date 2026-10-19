@@ -1,5 +1,5 @@
 import { ForbiddenException, Injectable } from '@nestjs/common';
-import { LedgerReason, PlatformRole, Prisma } from '@prisma/client';
+import { JobKind, LedgerReason, PaymentStatus, PlatformRole, Prisma } from '@prisma/client';
 import { AuthUser } from '../../common/auth-user';
 import { cursorArgs, toPage } from '../../common/dto/pagination.dto';
 import { PrismaService } from '../../common/prisma/prisma.service';
@@ -22,6 +22,24 @@ const USER_SELECT = {
   createdAt: true,
 } satisfies Prisma.UserSelect;
 
+/** Ligne de la liste des utilisateurs du back-office (type AdminUser du front). */
+const ADMIN_USER_SELECT = {
+  ...USER_SELECT,
+  totpSecret: true,
+  _count: { select: { memberships: true } },
+} satisfies Prisma.UserSelect;
+
+function toAdminUser({
+  totpSecret,
+  _count,
+  ...user
+}: Prisma.UserGetPayload<{ select: typeof ADMIN_USER_SELECT }>) {
+  return { ...user, totpEnabled: !!totpSecret, workspaces: _count.memberships };
+}
+
+/** Période des indicateurs du tableau de bord (§9, ADM-01). */
+const STATS_DAYS = 14;
+
 @Injectable()
 export class AdminService {
   constructor(
@@ -32,30 +50,62 @@ export class AdminService {
     private readonly moderation: ModerationService,
   ) {}
 
-  /** ADM-01 (indicateurs de base ; revenus et coût IA arriveront avec les paiements). */
+  /** ADM-01 : indicateurs des 14 derniers jours (type AdminStats du front). */
   async stats() {
-    const since = new Date(Date.now() - 30 * 86_400_000);
-    const [users, newUsers, projects, jobsByKind, aiCost] = await Promise.all([
-      this.prisma.user.count({ where: { deletedAt: null } }),
-      this.prisma.user.count({ where: { createdAt: { gte: since } } }),
-      this.prisma.project.count({ where: { deletedAt: null } }),
-      this.prisma.generationJob.groupBy({
-        by: ['kind', 'status'],
-        where: { createdAt: { gte: since } },
-        _count: true,
-      }),
-      this.prisma.generationJob.aggregate({
-        where: { createdAt: { gte: since } },
-        _sum: { costUsdMicros: true },
-      }),
-    ]);
+    const since = new Date(Date.now() - STATS_DAYS * 86_400_000);
+    since.setUTCHours(0, 0, 0, 0);
+    const [users, signups, activeUsers, projects, jobsByKind, aiCost, revenue, workspaces, paying, jobsDaily, revenueDaily] =
+      await Promise.all([
+        this.prisma.user.count({ where: { deletedAt: null } }),
+        this.prisma.user.count({ where: { createdAt: { gte: since } } }),
+        // Actif : au moins une session ouverte ou renouvelée sur la période.
+        this.prisma.user.count({ where: { refreshTokens: { some: { createdAt: { gte: since } } } } }),
+        this.prisma.project.count({ where: { deletedAt: null } }),
+        this.prisma.generationJob.groupBy({ by: ['kind'], where: { createdAt: { gte: since } }, _count: true }),
+        this.prisma.generationJob.aggregate({ where: { createdAt: { gte: since } }, _sum: { costUsdMicros: true } }),
+        this.prisma.payment.aggregate({
+          where: { status: PaymentStatus.SUCCEEDED, createdAt: { gte: since } },
+          _sum: { amountGnf: true },
+        }),
+        this.prisma.workspace.count(),
+        this.prisma.payment.groupBy({ by: ['workspaceId'], where: { status: PaymentStatus.SUCCEEDED } }),
+        this.prisma.$queryRaw<{ day: Date; generations: bigint; cost: bigint | null }[]>`
+          SELECT date_trunc('day', "createdAt") AS day, count(*) AS generations, sum("costUsdMicros") AS cost
+          FROM "GenerationJob" WHERE "createdAt" >= ${since} GROUP BY 1`,
+        this.prisma.$queryRaw<{ day: Date; amount: bigint | null }[]>`
+          SELECT date_trunc('day', "createdAt") AS day, sum("amountGnf") AS amount
+          FROM "Payment" WHERE status = 'SUCCEEDED' AND "createdAt" >= ${since} GROUP BY 1`,
+      ]);
+
+    const generations = Object.fromEntries(Object.values(JobKind).map((kind) => [kind, 0])) as Record<JobKind, number>;
+    for (const g of jobsByKind) generations[g.kind] = g._count;
+
+    const key = (d: Date) => d.toISOString().slice(0, 10);
+    const jobsByDay = new Map(jobsDaily.map((r) => [key(r.day), r]));
+    const revenueByDay = new Map(revenueDaily.map((r) => [key(r.day), Number(r.amount ?? 0)]));
+    const daily = Array.from({ length: STATS_DAYS + 1 }, (_, i) => {
+      const date = key(new Date(since.getTime() + i * 86_400_000));
+      const jobs = jobsByDay.get(date);
+      return {
+        date,
+        revenueGnf: revenueByDay.get(date) ?? 0,
+        aiCostUsd: Number(jobs?.cost ?? 0) / 1_000_000,
+        generations: Number(jobs?.generations ?? 0),
+      };
+    });
+
     return {
       period: { from: since, to: new Date() },
       users,
-      newUsers,
       projects,
-      generations: jobsByKind.map((g) => ({ kind: g.kind, status: g.status, count: g._count })),
+      signups,
+      activeUsers,
+      generations,
+      // Part des espaces ayant déjà payé (§9) ; nulle tant que les paiements ne sont pas ouverts.
+      conversionRate: workspaces ? paying.length / workspaces : 0,
+      revenueGnf: Number(revenue._sum.amountGnf ?? 0),
       aiCostUsd: (aiCost._sum.costUsdMicros ?? 0) / 1_000_000,
+      daily,
     };
   }
 
@@ -72,11 +122,12 @@ export class AdminService {
           ],
         }),
       },
-      select: USER_SELECT,
+      select: ADMIN_USER_SELECT,
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       ...cursorArgs(q),
     });
-    return toPage(rows, q.limit);
+    const page = toPage(rows, q.limit);
+    return { ...page, items: page.items.map(toAdminUser) };
   }
 
   async getUser(userId: string) {
@@ -103,7 +154,10 @@ export class AdminService {
     const before = await this.prisma.user.findUniqueOrThrow({ where: { id: userId }, select: USER_SELECT });
     const data: Prisma.UserUpdateInput = {};
     if (dto.suspended !== undefined) data.suspendedAt = dto.suspended ? new Date() : null;
-    if (dto.resetTwoFactor) data.totpSecret = null;
+    if (dto.resetTwoFactor) {
+      data.totpSecret = null;
+      data.totpBackupCodes = [];
+    }
     if (dto.role !== undefined) data.role = dto.role;
 
     const after = await this.prisma.user.update({ where: { id: userId }, data, select: USER_SELECT });
@@ -118,7 +172,9 @@ export class AdminService {
       after: { ...after, resetTwoFactor: dto.resetTwoFactor ?? false },
       ip,
     });
-    return after;
+    return toAdminUser(
+      await this.prisma.user.findUniqueOrThrow({ where: { id: userId }, select: ADMIN_USER_SELECT }),
+    );
   }
 
   /** ADM-06 : ajustement manuel avec motif obligatoire, tracé. */
@@ -166,7 +222,9 @@ export class AdminService {
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       ...cursorArgs(q),
     });
-    return toPage(rows, q.limit);
+    const page = toPage(rows, q.limit);
+    // Type AuditEntry du front : nom de l'auteur à plat, détails avant / après conservés.
+    return { ...page, items: page.items.map((row) => ({ ...row, actorName: row.actor?.fullName ?? 'Système' })) };
   }
 
   // ─── Liste noire (ADM-12) ───

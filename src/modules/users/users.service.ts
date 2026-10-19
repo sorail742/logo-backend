@@ -2,21 +2,8 @@ import { ConflictException, Injectable } from '@nestjs/common';
 import { WorkspaceRole } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { SessionService } from '../auth/session.service';
+import { toUserDto, USER_SELECT } from './user.presenter';
 import type { UpdateMeDto } from './users.controller';
-
-const PROFILE_SELECT = {
-  id: true,
-  email: true,
-  phone: true,
-  fullName: true,
-  avatarUrl: true,
-  locale: true,
-  country: true,
-  role: true,
-  emailVerifiedAt: true,
-  totpSecret: true,
-  createdAt: true,
-} as const;
 
 @Injectable()
 export class UsersService {
@@ -26,15 +13,15 @@ export class UsersService {
   ) {}
 
   async profile(userId: string) {
-    const { totpSecret, ...user } = await this.prisma.user.findUniqueOrThrow({
+    const user = await this.prisma.user.findUniqueOrThrow({
       where: { id: userId },
-      select: PROFILE_SELECT,
+      select: USER_SELECT,
     });
     const workspaces = await this.prisma.membership.findMany({
       where: { userId },
       select: { role: true, workspace: { select: { id: true, name: true, slug: true, kind: true } } },
     });
-    return { ...user, twoFactorEnabled: !!totpSecret, workspaces };
+    return { ...toUserDto(user), workspaces };
   }
 
   async update(userId: string, dto: UpdateMeDto) {
@@ -70,7 +57,7 @@ export class UsersService {
     const user = await this.prisma.user.findUniqueOrThrow({
       where: { id: userId },
       select: {
-        ...PROFILE_SELECT,
+        ...USER_SELECT,
         totpSecret: false,
         memberships: { include: { workspace: { select: { id: true, name: true } } } },
         comments: true,

@@ -15,6 +15,8 @@ import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 import type { AuthUser } from '../../common/auth-user';
 import { CurrentUser, Public } from '../../common/decorators';
+import { PrismaService } from '../../common/prisma/prisma.service';
+import { toUserDto, USER_SELECT } from '../users/user.presenter';
 import { AuthService } from './auth.service';
 import {
   ForgotPasswordDto,
@@ -40,6 +42,7 @@ export class AuthController {
     private readonly auth: AuthService,
     private readonly sessions: SessionService,
     private readonly config: ConfigService,
+    private readonly prisma: PrismaService,
   ) {}
 
   @Public()
@@ -62,7 +65,10 @@ export class AuthController {
     return this.respond(res, await this.auth.loginWithGoogle(dto.idToken, dto.totpCode, meta(req)));
   }
 
+  // Appelée à chaque ouverture de page du front : limite générale (60/min) plutôt que 10/min.
+  // Le jeton de rafraîchissement (256 bits, à usage unique) ne se devine pas par essais.
   @Public()
+  @Throttle({ default: { limit: 60, ttl: 60_000 } })
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
   async refresh(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
@@ -117,7 +123,8 @@ export class AuthController {
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
-    return this.respond(res, await this.auth.confirmTotp(user.id, dto.code, meta(req)));
+    const { session, backupCodes } = await this.auth.confirmTotp(user.id, dto.code, meta(req));
+    return { ...(await this.respond(res, session)), backupCodes };
   }
 
   /** CPT-03 (Devrait) : en attente du choix du prestataire SMS. */
@@ -133,15 +140,19 @@ export class AuthController {
     throw new NotImplementedException('Connexion par SMS pas encore disponible');
   }
 
-  private respond(res: Response, session: IssuedSession) {
+  /** Pose le cookie de rafraîchissement et renvoie le jeton d'accès avec le profil (type Session du front). */
+  private async respond(res: Response, session: IssuedSession) {
+    const sameSite = this.config.getOrThrow<'strict' | 'lax' | 'none'>('REFRESH_COOKIE_SAMESITE');
     res.cookie(REFRESH_COOKIE, session.refreshToken, {
       httpOnly: true,
-      secure: this.config.get('NODE_ENV') === 'production',
-      sameSite: 'strict',
+      // SameSite=None (front et API sur deux sites distincts) impose un cookie sécurisé.
+      secure: this.config.get('NODE_ENV') === 'production' || sameSite === 'none',
+      sameSite,
       path: REFRESH_COOKIE_PATH,
       expires: session.refreshExpiresAt,
     });
-    return { accessToken: session.accessToken, tokenType: 'Bearer' };
+    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: session.userId }, select: USER_SELECT });
+    return { accessToken: session.accessToken, tokenType: 'Bearer', user: toUserDto(user) };
   }
 }
 

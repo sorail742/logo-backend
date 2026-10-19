@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
-import { CheckKind, CheckStatus, Prisma } from '@prisma/client';
+import { AvailabilityCheck, CheckKind, CheckStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { toCheckDto } from '../names/name.presenter';
 import { scoreName } from '../names/name-score.util';
 import { soundsSimilar } from './phonetic.util';
 import { RdapClient } from './rdap.client';
@@ -81,7 +82,7 @@ export class AvailabilityService {
     return this.present(checks, false);
   }
 
-  private present(checks: { checkedAt: Date }[], fromCache: boolean) {
+  private present(checks: AvailabilityCheck[], fromCache: boolean) {
     const lastCheckedAt = checks.reduce<Date | null>(
       (max, c) => (!max || c.checkedAt > max ? c.checkedAt : max),
       null,
@@ -91,7 +92,7 @@ export class AvailabilityService {
       lastCheckedAt,
       notice:
         'Les résultats réseaux sociaux et marques sont indicatifs : vérifiez auprès des services officiels avant tout dépôt.',
-      checks,
+      checks: checks.map(toCheckDto),
     };
   }
 

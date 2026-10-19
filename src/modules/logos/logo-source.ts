@@ -5,21 +5,32 @@ import { renderLogoSvg } from '../../render/logo';
 import { logoSpecSchema, type LogoSpec } from '../../render/logo-spec';
 import { optimizeSvg } from '../../render/svg';
 
-/** Dernière version d'un logo, sans le SVG (listes). */
+/** Dernière version d'un logo (listes) ; son SVG n'est renvoyé que pour un logo importé. */
 export const CURRENT_VERSION = {
   versions: {
     orderBy: { number: 'desc' },
     take: 1,
-    select: { id: true, number: true, label: true, spec: true, createdAt: true },
+    select: { id: true, number: true, label: true, spec: true, svg: true, createdAt: true },
   },
 } satisfies Prisma.LogoInclude;
 
-type LogoWithVersions<V> = { versions: V[] } & Record<string, unknown>;
+type VersionRow = { number: number; svg?: string };
 
-/** Forme exposée par l'API : le logo et sa version courante (type Logo du front). */
-export function toLogoDto<V>(logo: LogoWithVersions<V>) {
+/**
+ * Forme exposée par l'API : le logo et sa version courante (type Logo du front). Le front
+ * recompose l'aperçu depuis la spec ; seul un logo importé non retravaillé (version 1) a
+ * besoin de son SVG d'origine, sauf dans le détail (`withSvg`).
+ */
+export function toLogoDto<T extends { engine: LogoEngine; versions: VersionRow[]; phash?: string | null }>(
+  logo: T,
+  withSvg = false,
+) {
   const { versions, phash: _phash, ...rest } = logo;
-  return { ...rest, current: versions[0] ?? null };
+  const version = versions[0] ?? null;
+  if (!version) return { ...rest, current: null };
+  const original = logo.engine === LogoEngine.UPLOAD && version.number === 1;
+  const { svg, ...light } = version;
+  return { ...rest, current: withSvg || original ? { ...light, svg } : light };
 }
 
 /** Valide une spec reçue (éditeur) ou relue en base ; erreurs au format problem+json. */

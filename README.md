@@ -35,7 +35,7 @@ E-mails de développement : http://localhost:8025 (Mailpit).
 
 Sous Windows, Hyper-V réserve souvent des plages de ports (`netsh interface ipv4 show excludedportrange protocol=tcp`). Si 6379 ou 5432 est refusé, définissez `REDIS_PORT` / `POSTGRES_PORT` dans `.env` (par ex. `REDIS_PORT=16379` et `REDIS_URL=redis://localhost:16379`).
 
-Test de bout en bout, API et worker lancés : `npm run test:smoke` (inscription, rotation de session, brief, génération + SSE, disponibilité, vote, choix du nom, quota gratuit, droits, logos : génération, édition, variantes, export, import nettoyé ; textile, corbeille, essai public).
+Test de bout en bout, API et worker lancés : `npm run test:smoke` (inscription, rotation de session, brief, génération + SSE, disponibilité, vote, choix du nom, quota gratuit, droits, logos : génération, édition, variantes, export, import nettoyé ; historique, espaces et invitations, 2FA et codes de secours, textile, corbeille, essai public). Il lit la base (`DATABASE_URL`) pour poser un abonnement, les paiements n'existant pas encore.
 
 Fichiers générés : par défaut sur disque (`STORAGE_DIR`, servis par URL signée `/api/v1/files`) ; `STORAGE_DRIVER=s3` utilise le MinIO de docker-compose ou tout stockage S3 (URL présignées).
 
@@ -79,6 +79,19 @@ src/
     health/             sondes live/ready
   worker/               processeurs BullMQ
 ```
+
+## Contrat avec le front
+
+Les réponses suivent les types du front ([logo-frontend](https://github.com/sorail742/logo-frontend), `src/lib/types.ts`), appelés à devenir `packages/shared` (§11.2). Les présentateurs (`*.presenter.ts`) les produisent à partir des modèles Prisma :
+
+- **Session** : `register`, `login`, `refresh`, `google` et `2fa/verify` renvoient `{ accessToken, user }` ; l'activation de la 2FA renvoie aussi 10 codes de secours à usage unique (§14.1), acceptés à la place du code TOTP.
+- **Erreurs** : `code` explicite quand le front doit réagir (`MFA_REQUIRED`, `MFA_INVALID`, `INSUFFICIENT_CREDITS`).
+- **Espaces** : rôle de l'utilisateur et offre en vigueur (`planCode`) ; membres et invitations en attente ; invitation par lien (`asLink`).
+- **Projets** : brief, nom retenu, avancement du parcours (`progress`), aperçu du logo favori (`previewSpec`), historique d'activité (`GET /projects/:pid/activity`, COL-04, tiré du journal d'audit) ; parcours « J'ai déjà un nom » (`existingName`).
+- **Noms** : total des votes et vote de l'utilisateur (`votes`, `myVote`), vérifications avec lien de contrôle manuel.
+- **Listes paginées** (`items`, `nextCursor`) : projets, grand livre, notifications, utilisateurs et journal du back-office.
+
+Les liens des e-mails pointent vers les pages du front (`/verifier-email`, `/reinitialiser-mot-de-passe`, `/invitation/:token`). Si le front et l'API sont servis sur deux domaines distincts, `REFRESH_COOKIE_SAMESITE=none` rend le cookie de rafraîchissement utilisable (il est alors sécurisé).
 
 ## Permissions
 
