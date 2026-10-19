@@ -49,7 +49,7 @@ const reuse = await call('POST', '/auth/refresh', { headers: { cookie } });
 check('réutilisation détectée → 401', reuse.status === 401, reuse.json.detail);
 
 const plans = await call('GET', '/plans');
-check('offres publiques', plans.status === 200 && plans.json.length === 5, plans.json.length);
+check('offres publiques (dont Pack Équipe et Atelier)', plans.status === 200 && plans.json.length === 7, plans.json.length);
 
 const proj = await call('POST', `/workspaces/${wid}/projects`, { token, body: { entityType: 'ASSOCIATION', title: 'Asso test' } });
 check('création de projet', proj.status === 201, proj.status);
@@ -131,13 +131,78 @@ check('non-membre → 404', foreign.status === 404, foreign.status);
 const admin = await call('GET', '/admin/stats', { token });
 check('back-office interdit à un USER', admin.status === 403, admin.json.detail);
 
+// ─── Module 5 : décoration textile ───
+const templates = await call('GET', '/apparel/templates', { token });
+const jersey = templates.json.find?.((t) => t.category === 'FOOTBALL_JERSEY');
+check('supports textiles avec tailles et zones', !!jersey && jersey.sizes.length === 13 && jersey.zones.length === 10, jersey?.zones?.length);
+const presets = await call('GET', '/apparel/rule-presets', { token });
+const men = presets.json.presets?.find((p) => p.code === 'FOOTBALL_MEN');
+check('préréglages sportifs + rappel du règlement officiel', !!men && !!presets.json.disclaimer);
+
+const design = await call('POST', `/projects/${pid}/apparel-designs`, {
+  token,
+  body: { templateId: jersey.id, rulePresetId: men.id, name: 'Domicile', technique: 'HEAT_TRANSFER_VINYL', garmentColor: '#0B3D91' },
+});
+check('création d’une tenue', design.status === 201, design.json.detail);
+const did = design.json.id;
+
+const elements = (numberHeight) => ({
+  elements: [
+    { zoneKey: 'back_name', kind: 'PLAYER_NAME', widthMm: 200, heightMm: 70, offsetXMm: 40, offsetYMm: 0, content: { colors: ['#FFFFFF'] } },
+    { zoneKey: 'back_number', kind: 'PLAYER_NUMBER', widthMm: numberHeight * 0.6, heightMm: numberHeight, offsetXMm: 60, offsetYMm: 0, content: { colors: ['#FFFFFF'], strokeMm: 30 } },
+  ],
+});
+await call('PUT', `/apparel-designs/${did}/elements`, { token, body: elements(220) });
+const bad = await call('POST', `/apparel-designs/${did}/check`, { token, body: {} });
+check('numéro dos de 22 cm signalé non conforme (football hommes)', bad.json.ok === false && bad.json.errors.some((e) => e.code === 'NUMBER_HEIGHT'), bad.json.errors?.map((e) => e.message));
+const earlyProof = await call('POST', `/apparel-designs/${did}/proof`, { token, body: {} });
+check('BAT refusé tant que la tenue n’est pas conforme', earlyProof.status === 422, earlyProof.status);
+
+const badZone = await call('PUT', `/apparel-designs/${did}/elements`, { token, body: { elements: [{ ...elements(300).elements[1], zoneKey: 'front_full' }] } });
+check('zone absente du support refusée', badZone.status === 400, badZone.json.detail);
+
+await call('PUT', `/apparel-designs/${did}/elements`, { token, body: elements(300) });
+const good = await call('POST', `/apparel-designs/${did}/check`, { token, body: {} });
+check('numéro de 30 cm conforme', good.json.ok === true, good.json.errors);
+
+const dupCsv = 'nom,nom_imprime,numero,taille\nMamadou Diallo,DIALLO,10,M\nIbrahima Bah,BAH,10,L';
+const dup = await call('POST', `/apparel-designs/${did}/roster/import`, { token, body: { csv: dupCsv } });
+check('effectif : numéro en double refusé', dup.status === 422 && dup.json.issues?.[0]?.code === 'NUMBER_DUPLICATE', dup.json.issues);
+
+const csv = 'nom,nom_imprime,numero,taille,poste,quantite\nMamadou Diallo,DIALLO,10,M,Joueur,1\nIbrahima Bah,I. BAH,1,L,Gardien,1\nAïssatou Camara,CAMARA,7,S,Joueur,2';
+const roster = await call('POST', `/apparel-designs/${did}/roster/import`, { token, body: { csv, name: 'Seniors' } });
+check('effectif importé avec récapitulatif par taille', roster.status === 200 && roster.json.summary.garments === 4 && roster.json.summary.bySize.S === 2, roster.json.summary);
+
+const proof = await call('POST', `/apparel-designs/${did}/proof`, { token, body: {} });
+check('lien BAT créé', proof.status === 200 && !!proof.json.token, proof.json.url);
+const pubProof = await call('GET', `/public/proofs/${proof.json.token}`);
+check('BAT consultable sans compte', pubProof.status === 200 && pubProof.json.roster.entries.length === 3);
+const approve = await call('POST', `/public/proofs/${proof.json.token}/approve`, { body: { approverName: 'Président du club' } });
+check('BAT approuvé par le client → APPROVED', approve.status === 200 && approve.json.status === 'APPROVED', approve.json);
+const edited = await call('PATCH', `/apparel-designs/${did}`, { token, body: { garmentColor: '#C8102E' } });
+check('modifier une tenue approuvée la repasse en brouillon', edited.json.status === 'DRAFT' && edited.json.approvedAt === null, edited.json.status);
+const oldProof = await call('GET', `/public/proofs/${proof.json.token}`);
+check('l’ancien lien BAT ne fonctionne plus', oldProof.status === 404);
+
+const shop = await call('POST', `/workspaces/${wid}/print-shops`, {
+  token,
+  body: { name: 'Atelier Madina', techniques: ['HEAT_TRANSFER_VINYL', 'DTF'], maxPrintWMm: 400, maxPrintHMm: 500, minStrokeMm: { HEAT_TRANSFER_VINYL: 35 } },
+});
+check('profil atelier créé', shop.status === 201, shop.json.detail);
+const shopCheck = await call('POST', `/apparel-designs/${did}/check`, { token, body: { printShopId: shop.json.id } });
+check('le trait minimal de l’atelier s’applique au contrôle', shopCheck.json.errors?.some((e) => e.code === 'STROKE_TOO_THIN'), shopCheck.json.errors?.map((e) => e.code));
+
+const adminTpl = await call('POST', '/admin/apparel/templates', { token, body: {} });
+check('administration des supports réservée aux admins', adminTpl.status === 403);
+
 const del = await call('DELETE', `/projects/${pid}`, { token });
 const gone = await call('GET', `/projects/${pid}`, { token });
 const restored = await call('POST', `/projects/${pid}/restore`, { token });
 check('corbeille puis restauration', del.status === 204 && gone.status === 404 && restored.status === 201, [del.status, gone.status, restored.status]);
 
 const pub = await call('POST', '/public/names/try', { body: { entityType: 'APPLICATION', sector: 'Fintech', mission: 'Paiement mobile simple' } });
-check('essai public sans compte', pub.status === 200 && pub.json.names.length > 0, pub.json.triesLeft);
+// 3 essais par IP et par jour : au-delà, 429 est le comportement attendu.
+check('essai public sans compte (ou limite du jour atteinte)', (pub.status === 200 && pub.json.names.length > 0) || pub.status === 429, pub.status);
 
 const ready = await fetch(API + '/health/ready');
 check('sonde ready', ready.status === 200);

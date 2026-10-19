@@ -62,6 +62,7 @@ src/
     moderation/         liste noire, marques célèbres
     billing/            offres, solde, historique
     notifications/      notifications in-app
+    apparel/            module textile : supports, tenues, contrôle de conformité, effectifs, BAT, ateliers
     admin/              back-office : stats, utilisateurs, crédits, liste noire, audit
     audit/              journal d'audit
     mail/               e-mails transactionnels (via file)
@@ -84,7 +85,7 @@ Deux niveaux (§3), vérifiés côté API :
 4. Le worker appelle l'IA, valide la sortie (zod), filtre les termes interdits, enregistre.
 5. Après 3 échecs, la tâche passe en `FAILED` et les crédits sont remboursés automatiquement.
 
-## Avancement par rapport au planning (§15)
+## Avancement par rapport au planning (§15, §16.13)
 
 | Phase | Statut |
 | --- | --- |
@@ -94,6 +95,16 @@ Deux niveaux (§3), vérifiés côté API :
 | 4. Signatures (slogans, e-mail, paraphe, cachet) | À faire |
 | 5. Kit de marque, partage, commentaires | À faire |
 | 6. Paiements (Orange Money, abonnements, factures) | À faire |
+| 8a. Textile : gabarits, éditeur, maquettes, BAT | Partiel : supports, zones, tailles, préréglages, éléments, contrôle, BAT, ateliers, admin. Propositions IA et maquettes 2D à faire |
+| 8b. Textile : numéros, effectifs, pack atelier | Partiel : import et contrôle d'effectif, ajustement des noms. Polices de numéros et exports par technique à faire |
+
+## Module 5 — décoration textile (§16)
+
+Le moteur de règles est dans [src/modules/apparel/apparel-rules.ts](src/modules/apparel/apparel-rules.ts) (fonctions pures, testées) : éléments dans leur zone, zones « plein » exclusives, règlements FIFA/UEFA/FIBA (hauteurs, traits, écart nom-numéro, publicités), technique (trait minimal, flex sans image ni dégradé, style compatible, broderie, sublimation sur tissu clair), contraste avec le tissu, 300 dpi, attestation de droits, effectif (doublons, numéros interdits, tailles), ajustement des noms longs (condensation à 80 % puis réduction jusqu'au minimum).
+
+Repère : bas du col au milieu, X positif = gauche du porteur. Les zones par défaut (adulte M) et les mesures des tailles du seed sont **indicatives** et doivent être validées sur un vêtement réel ([apparel-defaults.ts](src/modules/apparel/apparel-defaults.ts)).
+
+Non exposées pour l'instant, car elles dépendent du moteur de rendu SVG de la phase 3 : `POST /apparel-designs/:did/generate`, `/mockups`, `/production-export` et `/number-fonts`. Les types de tâche et les coûts en crédits sont déjà en place.
 
 Points en attente d'une décision (§15.4) : fournisseur IA réel, prestataire SMS (CPT-03, routes renvoyant 501), agrégateur de paiement, prix en GNF (à 0 dans le seed), stockage S3.
 

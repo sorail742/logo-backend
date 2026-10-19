@@ -10,6 +10,12 @@ export const CREDIT_COSTS = {
   EMAIL_SIGNATURE: 0,
   HANDWRITTEN_OR_STAMP: 1,
   BRAND_GUIDE_PDF: 3,
+  // Module textile (§16.12)
+  APPAREL_PROPOSALS: 2,
+  APPAREL_MOCKUP: 1,
+  NUMBER_FONT: 3,
+  PRODUCTION_PACK: 2,
+  APPAREL_CHECK_OR_PROOF: 0,
 } as const;
 
 /** Quotas quotidiens de l'offre gratuite (§8.2), consommés quand le solde ne suffit pas. */

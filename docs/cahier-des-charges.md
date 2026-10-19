@@ -1,6 +1,6 @@
 # Cahier des charges — Plateforme de création d'identité de marque
 
-Oct 15, 2026 · @bonjour
+Oct 15, 2026 · @Sory KEITA
 
 ## 1. Présentation du projet
 
@@ -1271,3 +1271,651 @@ Les phases jusqu'aux signatures forment le MVP testé en bêta ; le kit complet,
 - Fournisseurs IA principaux (texte et image) et budget mensuel alloué.
 - Hébergement : option managée ou VPS.
 - Structure juridique éditrice (facturation, taxe applicable).
+
+
+16. Module 5 — Décoration textile (maillots, t-shirts, tenues)
+Le module conçoit la décoration complète d'un vêtement — logos, sponsors, textes, noms et numéros de joueurs — à la bonne taille et au bon endroit, puis livre des fichiers prêts pour l'atelier. Un club, une association ou un organisateur d'événement n'a plus besoin de Photoshop ni d'un graphiste pour préparer ses tenues.
+Cette section est autonome : elle se colle à la suite des sections 1 à 15 sans les modifier. Elle lève, pour le textile, l'exclusion « maquettes produits » de la section 1.3 ; l'impression physique reste hors périmètre (la plateforme livre les fichiers, l'atelier imprime).
+16.1 Supports pris en charge
+Support
+Exemples d'usage
+Zones habituelles
+T-shirt
+Événement, forum, campagne, association
+Cœur, poitrine droite, devant plein, dos plein, nuque, manches
+Polo
+Tenue de staff, entreprise
+Cœur, manches, dos
+Maillot de football
+Club, école, tournoi
+Écusson, sponsor, numéro devant, nom et numéro dos, manches
+Maillot de basket
+Club, championnat scolaire
+Nom d'équipe et numéro devant, nom et numéro dos
+Short
+Tenue de match
+Numéro, logo
+Sweat, veste
+Supporters, promotion
+Cœur, dos plein, manches
+Casquette, sac
+Objets d'événement
+Face avant, côté
+Tout autre support
+Ajouté par un admin, sans développement
+Définies dans son gabarit
+16.2 Gabarits et mesures
+Chaque support est décrit par un gabarit : ses vues en SVG, ses tailles avec leurs mesures réelles et ses zones d'impression en millimètres. Toutes les positions partent du même repère : le bas du col, au milieu.
+ID
+Exigence
+Priorité
+TEX-01
+Gabarit par support : vues SVG (devant, dos, manches), tailles de 4 ans à adulte 3XL avec largeur de poitrine et longueur réelles en mm
+Doit
+TEX-02
+Zones en mm : distance sous le col, décalage depuis l'axe central (positif = côté gauche du porteur), largeur et hauteur maximales
+Doit
+TEX-03
+Règle d'adaptation par zone : FIXE (même taille pour toutes les tailles adultes) ou PROPORTIONNELLE (suit la largeur de poitrine)
+Doit
+TEX-04
+Ajout d'un nouveau support par un admin : import du gabarit SVG, saisie des tailles et des zones
+Doit
+TEX-05
+Profil atelier : mesures réelles des vêtements du fournisseur, format maximal de la presse, techniques et couleurs de flex disponibles
+Devrait
+TEX-06
+Éditeur gradué en cm et mm, repères magnétiques sur les zones et l'axe central
+Doit
+Valeurs par défaut proposées pour un adulte M, à valider sur un vêtement réel avant la première production :
+Zone
+Code
+Vue
+Taille max (L × H)
+Haut de zone sous le col
+Adaptation
+Poitrine droite du porteur
+right_chest
+Devant
+90 × 90 mm
+70 mm, axe à 90 mm à droite
+Fixe
+Cœur (poitrine gauche)
+left_chest
+Devant
+90 × 90 mm
+70 mm, axe à 90 mm à gauche
+Fixe
+Sponsor ou logo principal
+front_sponsor
+Devant
+250 × 100 mm
+180 mm
+Proportionnelle
+Numéro devant
+front_number
+Devant
+200 × 150 mm
+300 mm
+Fixe
+Devant plein (t-shirt)
+front_full
+Devant
+300 × 380 mm
+80 mm
+Proportionnelle
+Nuque
+nape
+Dos
+80 × 40 mm
+20 mm
+Fixe
+Nom du joueur
+back_name
+Dos
+280 × 75 mm
+70 mm
+Fixe
+Numéro dos
+back_number
+Dos
+300 × 350 mm
+185 mm
+Fixe
+Sponsor dos
+back_sponsor
+Dos
+200 × 80 mm
+560 mm
+Proportionnelle
+Dos plein (t-shirt)
+back_full
+Dos
+300 × 380 mm
+60 mm
+Proportionnelle
+Manche
+sleeve_left, sleeve_right
+Manche
+80 × 80 mm (120 × 80 mm en football)
+80 mm sous la couture d'épaule
+Fixe
+Numéro de short
+shorts_number
+Short
+150 × 150 mm
+Jambe avant, 60 mm sous la ceinture
+Fixe
+Les zones « plein » remplacent les zones de poitrine et de sponsor sur un t-shirt d'événement ; l'éditeur empêche de les superposer.
+Les repères 1 à 8 reprennent les lignes du tableau ; les zones de manche et de short ne sont pas dessinées.
+16.3 Règlements sportifs intégrés
+Les numéros et les noms des maillots de compétition sont réglementés : la plateforme applique ces règles par des préréglages et alerte avant tout export non conforme. Les préréglages restent modifiables pour les compétitions locales.
+Préréglage
+Élément
+Règle appliquée
+Football (FIFA, UEFA)
+Numéro dos
+25 à 35 cm de haut (hommes), 20 à 35 cm (femmes), centré, trait de 2 à 5 cm
+Football (FIFA, UEFA)
+Numéro devant et numéro de short
+10 à 15 cm de haut
+Football (FIFA)
+Nom au dos
+Lettres de 5 à 7,5 cm, au moins 4 cm au-dessus du numéro
+Football (UEFA)
+Couleur du numéro
+Une seule couleur contrastée ; contours et ombres non comptés dans la hauteur
+Basket (FIBA)
+Numéros
+Au moins 20 cm au dos et 10 cm devant, trait d'au moins 2 cm ; numéros 0, 00 et 1 à 99
+Basket (FIBA)
+Publicités et logos
+Au moins 5 cm d'écart avec les numéros
+Libre (t-shirt, loisir)
+Tous les éléments
+Aucune règle sportive, seulement les zones du gabarit
+ID
+Exigence
+Priorité
+TEX-10
+Contrôler chaque élément contre le préréglage : hauteur, épaisseur de trait, écarts, couleurs ; alerte bloquante ou simple avertissement selon le réglage
+Doit
+TEX-11
+Interdire deux joueurs avec le même numéro dans un effectif
+Doit
+TEX-12
+Créer des préréglages locaux (championnat scolaire, universitaire, régional, tournoi de quartier)
+Devrait
+TEX-13
+Rappeler dans l'interface que le règlement officiel de la compétition fait foi
+Doit
+16.4 Polices de numéros et lettrage
+La plateforme fournit une bibliothèque de polices de numéros et peut générer un jeu complet (0–9 et A–Z) dans un style choisi, identique pour tous les joueurs. Quatre familles de style sont proposées au départ, d'après les références visuelles fournies par le porteur du projet.
+Famille de style
+Description
+Techniques compatibles
+Classique à contour
+Chiffre plein, double contour et ombre décalée
+Flex 2 à 3 couleurs, sérigraphie, DTF, sublimation
+Géométrique à filets
+Formes anguleuses traversées de filets intérieurs
+Flex 1 couleur (filets d'au moins 2 mm), sérigraphie, DTF, sublimation
+Crantée
+Bord dentelé, style sportif marqué
+Flex 1 couleur, sérigraphie, DTF, sublimation
+Ruban 3D multicolore
+Volumes et rubans de couleurs en dégradé
+Sublimation, DTF, DTG uniquement
+ID
+Exigence
+Priorité
+TEX-20
+Bibliothèque de polices de numéros sous licence, filtrable par style et par technique compatible
+Doit
+TEX-21
+Générer un jeu 0–9 et A–Z avec accents dans un style, à partir de réglages : graisse, contour, ombre, filets, couleurs
+Devrait
+TEX-22
+Exporter un jeu généré en police OTF/TTF et en SVG par caractère
+Devrait
+TEX-23
+Ajuster les noms longs : condensation jusqu'à 80 %, puis réduction sans descendre sous le minimum du préréglage
+Doit
+TEX-24
+Contrôler l'épaisseur minimale du trait selon la technique (par défaut 2 mm en flex, 1 mm en DTF, réglable dans le profil atelier)
+Doit
+TEX-25
+Signaler un style incompatible avec la technique ou le règlement (ex. ruban multicolore en compétition UEFA)
+Doit
+TEX-26
+Exiger une attestation de licence pour toute police importée par un utilisateur
+Doit
+16.5 Conception et édition
+ID
+Exigence
+Priorité
+TEX-30
+Créer une tenue depuis le kit de marque du projet : logo, couleurs et polices repris automatiquement
+Doit
+TEX-31
+Générer 4 propositions complètes (devant, dos, manches) selon le support, l'usage (match, événement, staff) et le style
+Doit
+TEX-32
+Modèle « t-shirt d'événement » : logo principal, logos partenaires, titre, édition, date, liste des partenaires au dos
+Doit
+TEX-33
+Mur de sponsors : alignement automatique de plusieurs logos à poids visuel égal, version monochrome automatique
+Doit
+TEX-34
+Éditeur à l'échelle réelle : déplacer, redimensionner, aligner dans les zones ; alerte si un élément sort de sa zone
+Doit
+TEX-35
+Choisir la couleur du vêtement et vérifier le contraste de chaque élément avec le tissu
+Doit
+TEX-36
+Maquettes réalistes 2D (devant, dos) sur la couleur choisie, consultables taille par taille
+Doit
+TEX-37
+Lien BAT (bon à tirer) : le client consulte, commente et approuve ; l'approbation est horodatée
+Devrait
+TEX-38
+Motifs de fond pour maillots sublimés (rayures, dégradés, motifs africains) aux couleurs du kit
+Devrait
+TEX-39
+Aperçu 3D tournant du vêtement
+Pourrait
+16.6 Équipes et personnalisation en lot
+Un seul design sert à tout l'effectif : la plateforme produit automatiquement le maillot de chaque joueur avec son nom, son numéro et sa taille.
+ID
+Exigence
+Priorité
+TEX-40
+Importer l'effectif par CSV ou saisie : nom, nom imprimé, numéro, taille, poste, quantité
+Doit
+TEX-41
+Détecter numéros en double, numéros interdits par le préréglage et tailles manquantes
+Doit
+TEX-42
+Aperçu du maillot de chaque joueur avant export
+Doit
+TEX-43
+Récapitulatif de commande par taille et par couleur, pour l'atelier et le fournisseur de vêtements
+Doit
+TEX-44
+Ajouter un joueur plus tard et exporter ce seul joueur, sans refaire le design
+Doit
+TEX-45
+Décliner domicile, extérieur et gardien à partir d'un même design
+Devrait
+Format d'import attendu :
+nom,nom_imprime,numero,taille,poste,quantite
+Mamadou Diallo,DIALLO,10,M,Joueur,1
+Ibrahima Bah,I. BAH,1,L,Gardien,1
+Aïssatou Camara,CAMARA,7,S,Joueur,1
+16.7 Préparation à l'impression
+L'utilisateur choisit la technique ; la plateforme applique d'elle-même les règles de fichier attendues par l'atelier.
+Technique
+Fichiers livrés
+Règles appliquées automatiquement
+Sérigraphie
+PDF ou SVG vectoriel, un calque par couleur, films de séparation
+Nombre de couleurs limité (réglable), références Pantone, trame si dégradé
+Flex thermocollant
+SVG, PDF ou DXF pour plotter de découpe
+Contours fermés, ni image ni dégradé, un fichier par couleur de flex, miroir activable, trait minimal respecté
+Flocage velours
+SVG ou DXF de découpe
+Mêmes règles que le flex, détails plus épais
+DTF
+PNG transparent 300 dpi à taille réelle, planche optimisée (imbrication des éléments)
+Fond supprimé, sous-couche blanche signalée, miroir selon l'atelier
+DTG (impression directe)
+PNG transparent 300 dpi à taille réelle
+Profil couleur, alerte sur vêtement foncé
+Sublimation
+PDF ou PNG 300 dpi par panneau (devant, dos, manches) avec fond perdu
+Polyester clair uniquement, miroir pour papier transfert, motifs continus d'un panneau à l'autre
+Broderie
+SVG simplifié + fiche ; fichier machine (DST, PES) via un partenaire de numérisation
+Texte d'au moins 5 mm de haut, nombre de couleurs de fil limité
+16.8 Pack atelier et fiche technique
+Chaque export produit une archive prête à envoyer à l'atelier, sans retouche.
+• Un dossier par technique, un fichier par joueur nommé NUMERO_NOM_TAILLE (ex. 10_DIALLO_M).
+• Une fiche technique PDF : maquettes devant, dos et manches ; plan de placement coté en mm pour chaque taille ; couleurs (HEX, Pantone, référence de flex) ; technique, polices et licences ; tableau des joueurs ; récapitulatif par taille ; QR code vers le BAT approuvé.
+• Un gabarit de positionnement imprimable à l'échelle 1:1 (feuilles A4 ou A3 assemblées) pour poser les transferts sur la presse.
+• Un repère de 10 cm sur chaque PDF pour vérifier l'échelle à l'impression.
+16.9 Règles de qualité et de droits
+• Toute dimension exportée est exacte au millimètre à l'échelle 1:1.
+• Une image matricielle sous 300 dpi à taille réelle déclenche une alerte avant export.
+• Les couleurs à l'écran diffèrent du tissu imprimé : la fiche donne les références Pantone et recommande un essai sur une pièce.
+• Écussons de clubs, logos d'équipementiers et de marques connues : bloqués à l'import sauf attestation de droits ; la plateforme ne fournit aucun logo de marque tierce.
+• Les logos de sponsors et de partenaires importés restent à leurs titulaires ; l'utilisateur atteste avoir leur autorisation.
+16.10 Données — ajouts au schéma Prisma
+Le module ajoute 11 modèles et 6 énumérations, plus quelques lignes dans des modèles existants de la section 12.
+Lignes à ajouter dans les modèles existants :
+// Dans model Project
+  apparelDesigns ApparelDesign[]
+
+// Dans model Workspace
+  printShops  PrintShopProfile[]
+  numberFonts NumberFontSet[]
+
+// Dans enum JobKind
+  APPAREL_PROPOSALS
+  APPAREL_MOCKUP
+  PRODUCTION_PACK
+  NUMBER_FONT
+Nouveaux modèles :
+// ─── Module 5 : décoration textile ───
+enum ProductCategory {
+  TSHIRT
+  POLO
+  FOOTBALL_JERSEY
+  BASKETBALL_JERSEY
+  SHORTS
+  HOODIE
+  CAP
+  BAG
+  OTHER
+}
+
+enum GarmentView {
+  FRONT
+  BACK
+  LEFT_SLEEVE
+  RIGHT_SLEEVE
+  SHORTS_FRONT
+  OTHER
+}
+
+enum PrintTechnique {
+  SCREEN_PRINT
+  HEAT_TRANSFER_VINYL
+  FLOCK
+  DTF
+  DTG
+  SUBLIMATION
+  EMBROIDERY
+}
+
+enum SizeScaling {
+  FIXED
+  PROPORTIONAL
+}
+
+enum DesignElementKind {
+  LOGO
+  SPONSOR
+  TEXT
+  PLAYER_NAME
+  PLAYER_NUMBER
+  IMAGE
+  PATTERN
+}
+
+enum ApparelDesignStatus {
+  DRAFT
+  PROOF_SENT
+  APPROVED
+  IN_PRODUCTION
+}
+
+model ProductTemplate {
+  id        String          @id @default(uuid())
+  category  ProductCategory
+  name      String
+  views     Json            // { FRONT: clé du SVG, BACK: … }
+  isActive  Boolean         @default(true)
+  createdAt DateTime        @default(now())
+  sizes     ProductSize[]
+  zones     PrintZone[]
+  designs   ApparelDesign[]
+}
+
+model ProductSize {
+  id           String          @id @default(uuid())
+  templateId   String
+  label        String          // 4 ans … 3XL
+  chestWidthMm Int             // largeur de poitrine à plat
+  bodyLengthMm Int
+  sortOrder    Int
+  template     ProductTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@unique([templateId, label])
+}
+
+model PrintZone {
+  id          String          @id @default(uuid())
+  templateId  String
+  key         String          // left_chest, back_number…
+  view        GarmentView
+  label       String
+  offsetXMm   Int             // depuis l'axe ; positif = gauche du porteur
+  offsetYMm   Int             // depuis le bas du col
+  maxWidthMm  Int
+  maxHeightMm Int
+  scaling     SizeScaling     @default(PROPORTIONAL)
+  rules       Json?           // ex. { minStrokeMm: 20 }
+  template    ProductTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@unique([templateId, key])
+}
+
+model RulePreset {
+  id      String          @id @default(uuid())
+  code    String          @unique // FOOTBALL_MEN, FOOTBALL_WOMEN, FIBA, LOCAL_…
+  name    String
+  rules   Json            // hauteurs, traits, écarts, numéros autorisés, couleurs
+  designs ApparelDesign[]
+}
+
+model PrintShopProfile {
+  id            String           @id @default(uuid())
+  workspaceId   String
+  name          String
+  techniques    PrintTechnique[]
+  maxPrintWMm   Int
+  maxPrintHMm   Int
+  minStrokeMm   Json?            // par technique
+  vinylColors   Json?            // couleurs de flex en stock
+  garmentSizes  Json?            // mesures réelles du fournisseur
+  mirrorDefault Boolean          @default(false)
+  workspace     Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+model ApparelDesign {
+  id           String              @id @default(uuid())
+  projectId    String
+  templateId   String
+  rulePresetId String?
+  name         String
+  technique    PrintTechnique
+  garmentColor String              // HEX
+  status       ApparelDesignStatus @default(DRAFT)
+  proofToken   String?             @unique // lien BAT
+  approvedAt   DateTime?
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+  project      Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  template     ProductTemplate     @relation(fields: [templateId], references: [id])
+  rulePreset   RulePreset?         @relation(fields: [rulePresetId], references: [id])
+  elements     DesignElement[]
+  roster       TeamRoster?
+  exports      ProductionExport[]
+}
+
+model DesignElement {
+  id          String            @id @default(uuid())
+  designId    String
+  zoneKey     String
+  kind        DesignElementKind
+  content     Json              // SVG, texte, police, couleurs, assetId
+  widthMm     Float
+  heightMm    Float
+  offsetXMm   Float             @default(0) // dans la zone
+  offsetYMm   Float             @default(0)
+  rotationDeg Float             @default(0)
+  zIndex      Int               @default(0)
+  design      ApparelDesign     @relation(fields: [designId], references: [id], onDelete: Cascade)
+}
+
+model TeamRoster {
+  id       String        @id @default(uuid())
+  designId String        @unique
+  name     String
+  design   ApparelDesign @relation(fields: [designId], references: [id], onDelete: Cascade)
+  entries  RosterEntry[]
+}
+
+model RosterEntry {
+  id          String     @id @default(uuid())
+  rosterId    String
+  playerName  String
+  displayName String     // nom imprimé au dos
+  number      String?    // texte pour accepter "0" et "00"
+  size        String
+  quantity    Int        @default(1)
+  role        String?    // joueur, gardien, staff
+  roster      TeamRoster @relation(fields: [rosterId], references: [id], onDelete: Cascade)
+
+  @@unique([rosterId, number])
+}
+
+model NumberFontSet {
+  id          String       @id @default(uuid())
+  workspaceId String?      // null = bibliothèque de la plateforme
+  name        String
+  style       String       // CLASSIC_OUTLINE, GEOMETRIC_INLINE, NOTCHED, RIBBON_3D…
+  glyphs      Json         // tracés SVG 0-9 et A-Z
+  colorCount  Int          @default(1)
+  minStrokeMm Float
+  license     LicenseKind?
+  fontFileKey String?      // OTF généré
+  createdAt   DateTime     @default(now())
+  workspace   Workspace?   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+model ProductionExport {
+  id          String         @id @default(uuid())
+  designId    String
+  technique   PrintTechnique
+  mirrored    Boolean        @default(false)
+  status      JobStatus      @default(QUEUED)
+  zipKey      String?
+  techPackKey String?
+  createdAt   DateTime       @default(now())
+  design      ApparelDesign  @relation(fields: [designId], references: [id], onDelete: Cascade)
+}
+16.11 API — routes ajoutées
+Méthode et route
+Accès
+Rôle
+GET /apparel/templates · GET /apparel/templates/:tid
+Connecté
+Supports disponibles, avec tailles et zones
+GET /apparel/rule-presets
+Connecté
+Préréglages sportifs
+POST /projects/:pid/apparel-designs · GET …
+Éditeur · Lecteur
+Créer, lister les tenues du projet
+GET /apparel-designs/:did · PATCH … · DELETE …
+Lecteur · Éditeur
+Détail, modification, suppression
+POST /apparel-designs/:did/generate
+Éditeur
+4 propositions de décoration (202 + jobId)
+PUT /apparel-designs/:did/elements
+Éditeur
+Enregistrer l'état de l'éditeur
+POST /apparel-designs/:did/check
+Éditeur
+Contrôle zones, règlement, technique, résolution
+POST /apparel-designs/:did/roster/import · GET …/roster · PUT …/roster
+Éditeur
+Effectif : import CSV, lecture, modification
+POST /apparel-designs/:did/mockups
+Éditeur
+Maquettes réalistes (202 + jobId)
+POST /apparel-designs/:did/proof
+Éditeur
+Créer ou révoquer le lien BAT
+GET /public/proofs/:token · POST /public/proofs/:token/approve
+Public
+Consultation et approbation du BAT par le client
+POST /apparel-designs/:did/production-export
+Éditeur
+Pack atelier : technique, miroir, tailles, joueurs (202 + jobId)
+GET /number-fonts · POST /number-fonts/generate
+Connecté · Éditeur
+Bibliothèque, génération d'un jeu de numéros
+GET /number-fonts/:fid/download
+Éditeur
+Télécharger le jeu en OTF ou SVG
+GET /workspaces/:wid/print-shops · POST … · PATCH …/:id
+Propriétaire
+Profils atelier
+/admin/apparel/templates · /admin/apparel/rule-presets · /admin/number-fonts (CRUD)
+Admin
+Supports, zones, tailles, préréglages, polices
+16.12 Crédits et offres
+Action
+Crédits (à calibrer)
+Lot de 4 propositions de décoration (devant, dos, manches)
+2
+Maquettes réalistes supplémentaires
+1
+Jeu de numéros et de lettres généré (0–9, A–Z)
+3
+Pack atelier (tous les joueurs, toutes les tailles)
+2
+Contrôle de conformité, lien BAT
+0
+Deux offres s'ajoutent à la section 8.2 : Pack Équipe (paiement unique : un design de tenue, effectif jusqu'à 30 joueurs, pack atelier) et Atelier (abonnement pour les imprimeurs : profils atelier, espaces clients illimités, exports en lot). Les offres Pro et Agence incluent le module.
+16.13 Planning, recette et risques
+Le module est livré en V1.1, juste après le lancement public : 5 semaines, de la semaine 20 à la semaine 24.
+Phase
+Semaines
+Contenu
+8a. Gabarits, éditeur et maquettes
+S20 à S22
+Supports, tailles, zones, préréglages, éditeur à l'échelle, propositions IA, maquettes 2D, BAT
+8b. Numéros, effectifs et pack atelier
+S23 à S24
+Bibliothèque et génération de polices, import d'effectif, exports par technique, fiche technique
+Critères de recette du module :
+[ ] Un numéro de 300 mm mesure 300 mm (à 1 mm près) dans le PDF et le SVG exportés à l'échelle 1:1.
+[ ] Un effectif de 25 joueurs importé en CSV produit 25 fichiers NUMERO_NOM_TAILLE et un récapitulatif par taille.
+[ ] Avec le préréglage football hommes, un numéro dos de 22 cm est signalé non conforme.
+[ ] Le nom le plus long de l'effectif tient dans sa zone sans descendre sous 5 cm de haut.
+[ ] L'export flex ne contient que des contours fermés, sans dégradé, et en miroir si demandé.
+[ ] L'export sublimation fournit chaque panneau en 300 dpi à taille réelle avec fond perdu.
+[ ] Le client approuve le BAT depuis le lien public ; la tenue passe au statut APPROVED.
+[ ] Un écusson de club importé sans attestation de droits est bloqué.
+[ ] Un nouveau support (ex. casquette) ajouté par un admin est utilisable sans déploiement.
+Risque
+Impact
+Parade
+Mesures différentes selon les fournisseurs de vêtements
+Placement décalé
+Profil atelier avec mesures réelles, essai sur une pièce
+Couleurs écran différentes du tissu imprimé
+Client déçu
+Références Pantone, BAT, essai recommandé
+Reproduction de maillots officiels de clubs
+Contrefaçon
+Blocage des écussons et marques connus, attestation de droits
+Noms longs ou caractères spéciaux
+Lettrage illisible
+Condensation automatique, accents dans chaque police
+Ateliers équipés différemment
+Fichiers inutilisables
+Profil atelier, export adapté à chaque technique
+Questions ouvertes du module :
+• Règlements des compétitions locales à intégrer en priorité.
+• Ateliers d'impression partenaires pour tester les exports avant le lancement.
+• Broderie : partenaire de numérisation ou développement interne en V2.
+16.14 Sources du module
+• UEFA Equipment Regulations, article 10 — numéros
+• Résumé des FIFA Equipment Regulations 2025 — Footy Headlines
+• Règles d'uniforme FIBA reprises par Basketball Victoria

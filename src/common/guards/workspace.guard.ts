@@ -13,7 +13,7 @@ import { PrismaService } from '../prisma/prisma.service';
 
 /**
  * Vérifie le rôle de l'utilisateur dans l'espace de travail (§3).
- * L'espace est déduit des paramètres de route : :wid, :pid, :nid, :jid.
+ * L'espace est déduit des paramètres de route : :wid, :pid, :nid, :did, :jid.
  */
 @Injectable()
 export class WorkspaceGuard implements CanActivate {
@@ -79,6 +79,13 @@ export class WorkspaceGuard implements CanActivate {
         select: { projectId: true },
       });
       projectId = name?.projectId;
+    }
+    if (!projectId && params.did) {
+      const design = await this.prisma.apparelDesign.findUnique({
+        where: { id: params.did },
+        select: { projectId: true },
+      });
+      projectId = design?.projectId;
     }
     if (!projectId && params.jid) {
       const job = await this.prisma.generationJob.findUnique({

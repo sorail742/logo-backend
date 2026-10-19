@@ -9,6 +9,7 @@ import { RolesGuard } from './common/guards/roles.guard';
 import { WorkspaceGuard } from './common/guards/workspace.guard';
 import { CoreModule } from './core.module';
 import { AdminModule } from './modules/admin/admin.module';
+import { ApparelModule } from './modules/apparel/apparel.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { BillingModule } from './modules/billing/billing.module';
 import { HealthModule } from './modules/health/health.module';
@@ -40,6 +41,7 @@ import { WorkspacesModule } from './modules/workspaces/workspaces.module';
     BillingModule,
     NotificationsModule,
     AdminModule,
+    ApparelModule,
   ],
   providers: [
     // Ordre d'exécution : limitation de débit, authentification, rôle plateforme, rôle d'espace.
