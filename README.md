@@ -31,6 +31,10 @@ npm run dev:worker                 # worker (autre terminal)
 
 E-mails de développement : http://localhost:8025 (Mailpit).
 
+Sous Windows, Hyper-V réserve souvent des plages de ports (`netsh interface ipv4 show excludedportrange protocol=tcp`). Si 6379 ou 5432 est refusé, définissez `REDIS_PORT` / `POSTGRES_PORT` dans `.env` (par ex. `REDIS_PORT=16379` et `REDIS_URL=redis://localhost:16379`).
+
+Test de bout en bout, API et worker lancés : `npm run test:smoke` (inscription, rotation de session, brief, génération + SSE, disponibilité, vote, choix du nom, quota gratuit, droits, corbeille, essai public).
+
 ## Structure
 
 ```text
@@ -100,6 +104,7 @@ Points en attente d'une décision (§15.4) : fournisseur IA réel, prestataire S
 | `npm run dev` / `npm run dev:worker` | API / worker en mode watch |
 | `npm run build` | Compilation dans `dist/` |
 | `npm test` / `npm run test:cov` | Tests unitaires / couverture |
+| `npm run test:smoke` | Parcours complet contre une API locale |
 | `npm run lint` / `npm run typecheck` | ESLint / TypeScript |
 | `npm run prisma:migrate` | Nouvelle migration |
 | `npm run prisma:deploy` | Migrations en production |

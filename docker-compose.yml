@@ -6,7 +6,7 @@ services:
       POSTGRES_USER: logo
       POSTGRES_PASSWORD: logo
       POSTGRES_DB: logo
-    ports: ["5432:5432"]
+    ports: ["${POSTGRES_PORT:-5432}:5432"]
     volumes: [pgdata:/var/lib/postgresql/data]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U logo"]
@@ -15,7 +15,7 @@ services:
 
   redis:
     image: redis:7-alpine
-    ports: ["6379:6379"]
+    ports: ["${REDIS_PORT:-6379}:6379"]
 
   minio:
     image: minio/minio:latest

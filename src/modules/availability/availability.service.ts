@@ -1,8 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { CheckKind, CheckStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { scoreName } from '../names/name-score.util';
 import { soundsSimilar } from './phonetic.util';
+import { RdapClient } from './rdap.client';
 
 /** Domaines vérifiés (NOM-20). */
 export const CHECKED_TLDS = ['com', 'org', 'net', 'app', 'africa', 'gn'] as const;
@@ -36,9 +37,10 @@ export function toHandle(name: string): string {
 
 @Injectable()
 export class AvailabilityService {
-  private readonly logger = new Logger(AvailabilityService.name);
-
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly rdap: RdapClient,
+  ) {}
 
   /** Lance (ou relit depuis le cache) toutes les vérifications d'un nom. */
   async check(nameId: string, force = false) {
@@ -99,25 +101,16 @@ export class AvailabilityService {
     return Promise.all(
       CHECKED_TLDS.map(async (tld): Promise<CheckResult> => {
         const domain = `${handle}.${tld}`;
-        try {
-          // rdap.org redirige vers le serveur RDAP du registre (bootstrap IANA).
-          const res = await fetch(`https://rdap.org/domain/${domain}`, {
-            headers: { Accept: 'application/rdap+json' },
-            redirect: 'follow',
-            signal: AbortSignal.timeout(4000),
-          });
-          if (res.status === 404) return { kind: 'DOMAIN', target: domain, status: 'AVAILABLE' };
-          if (res.ok) return { kind: 'DOMAIN', target: domain, status: 'TAKEN' };
-          return { kind: 'DOMAIN', target: domain, status: 'UNKNOWN', details: { httpStatus: res.status } };
-        } catch (err) {
-          this.logger.debug(`RDAP ${domain} : ${String(err)}`);
-          return {
-            kind: 'DOMAIN',
-            target: domain,
-            status: 'UNKNOWN',
-            details: { reason: 'Registre injoignable', manualCheck: `https://who.is/whois/${domain}` },
-          };
+        const result = await this.rdap.lookup(domain);
+        if (result.status !== 'UNKNOWN') {
+          return { kind: 'DOMAIN', target: domain, status: result.status, details: { source: result.server } };
         }
+        return {
+          kind: 'DOMAIN',
+          target: domain,
+          status: 'UNKNOWN',
+          details: { reason: result.reason, manualCheck: `https://who.is/whois/${domain}` },
+        };
       }),
     );
   }
