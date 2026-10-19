@@ -12,6 +12,7 @@ import { Queue } from 'bullmq';
 import Redis from 'ioredis';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { REDIS } from '../../common/redis/redis.module';
+import { StorageService } from '../../common/storage/storage.service';
 import { FREE_DAILY_QUOTAS } from '../../shared/credit-costs';
 import { GENERATION_ATTEMPTS, GENERATION_QUEUE, GenerationJobData } from '../../shared/queues';
 import { CreditsService } from '../credits/credits.service';
@@ -36,6 +37,7 @@ export class JobsService {
     private readonly credits: CreditsService,
     @InjectQueue(GENERATION_QUEUE) private readonly queue: Queue<GenerationJobData>,
     @Inject(REDIS) private readonly redis: Redis,
+    private readonly storage: StorageService,
   ) {}
 
   /**
@@ -128,8 +130,8 @@ export class JobsService {
     );
   }
 
-  get(jobId: string) {
-    return this.prisma.generationJob.findUniqueOrThrow({
+  async get(jobId: string) {
+    const job = await this.prisma.generationJob.findUniqueOrThrow({
       where: { id: jobId },
       select: {
         id: true,
@@ -138,11 +140,27 @@ export class JobsService {
         status: true,
         costCredits: true,
         error: true,
+        result: true,
         createdAt: true,
         startedAt: true,
         finishedAt: true,
       },
     });
+    return { ...job, result: await this.publicResult(job.result) };
+  }
+
+  /** Résultat exposé : un fichier produit est servi par une URL signée tant qu'il existe. */
+  private async publicResult(result: Prisma.JsonValue) {
+    if (!result || typeof result !== 'object' || Array.isArray(result)) return result;
+    const { storageKey, assetId, ...rest } = result as Record<string, Prisma.JsonValue>;
+    if (typeof storageKey !== 'string' || typeof assetId !== 'string') return result;
+    const asset = await this.prisma.asset.findUnique({
+      where: { id: assetId },
+      select: { name: true },
+    });
+    if (!asset) return { ...rest, expired: true };
+    const downloadUrl = await this.storage.signedUrl(storageKey, { fileName: asset.name });
+    return { ...rest, downloadUrl };
   }
 
   isTerminal(status: JobStatus) {

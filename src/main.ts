@@ -16,6 +16,8 @@ async function bootstrap() {
   app.set('trust proxy', 1);
   app.use(helmet());
   app.use(cookieParser());
+  // Import de logos : SVG jusqu'à 1 Mo, PNG jusqu'à 2 Mo en data URL (LOGO-07).
+  app.useBodyParser('json', { limit: '3mb' });
   app.enableCors({ origin: config.getOrThrow<string>('APP_URL'), credentials: true });
   app.enableShutdownHooks();
 

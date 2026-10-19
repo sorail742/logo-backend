@@ -1,0 +1,356 @@
+[
+  {
+    "id": "montserrat",
+    "name": "Montserrat",
+    "category": "sans",
+    "weights": [
+      400,
+      600,
+      700,
+      800
+    ],
+    "license": "OFL",
+    "source": "@fontsource/montserrat@5.3.0",
+    "files": {
+      "400": [
+        "montserrat-latin-400-normal.woff",
+        "montserrat-latin-ext-400-normal.woff"
+      ],
+      "600": [
+        "montserrat-latin-600-normal.woff",
+        "montserrat-latin-ext-600-normal.woff"
+      ],
+      "700": [
+        "montserrat-latin-700-normal.woff",
+        "montserrat-latin-ext-700-normal.woff"
+      ],
+      "800": [
+        "montserrat-latin-800-normal.woff",
+        "montserrat-latin-ext-800-normal.woff"
+      ]
+    }
+  },
+  {
+    "id": "poppins",
+    "name": "Poppins",
+    "category": "sans",
+    "weights": [
+      400,
+      600,
+      700,
+      800
+    ],
+    "license": "OFL",
+    "source": "@fontsource/poppins@5.3.0",
+    "files": {
+      "400": [
+        "poppins-latin-400-normal.woff",
+        "poppins-latin-ext-400-normal.woff"
+      ],
+      "600": [
+        "poppins-latin-600-normal.woff",
+        "poppins-latin-ext-600-normal.woff"
+      ],
+      "700": [
+        "poppins-latin-700-normal.woff",
+        "poppins-latin-ext-700-normal.woff"
+      ],
+      "800": [
+        "poppins-latin-800-normal.woff",
+        "poppins-latin-ext-800-normal.woff"
+      ]
+    }
+  },
+  {
+    "id": "space-grotesk",
+    "name": "Space Grotesk",
+    "category": "sans",
+    "weights": [
+      400,
+      600,
+      700
+    ],
+    "license": "OFL",
+    "source": "@fontsource/space-grotesk@5.3.0",
+    "files": {
+      "400": [
+        "space-grotesk-latin-400-normal.woff",
+        "space-grotesk-latin-ext-400-normal.woff"
+      ],
+      "600": [
+        "space-grotesk-latin-600-normal.woff",
+        "space-grotesk-latin-ext-600-normal.woff"
+      ],
+      "700": [
+        "space-grotesk-latin-700-normal.woff",
+        "space-grotesk-latin-ext-700-normal.woff"
+      ]
+    }
+  },
+  {
+    "id": "nunito",
+    "name": "Nunito",
+    "category": "sans",
+    "weights": [
+      400,
+      700,
+      800
+    ],
+    "license": "OFL",
+    "source": "@fontsource/nunito@5.3.0",
+    "files": {
+      "400": [
+        "nunito-latin-400-normal.woff",
+        "nunito-latin-ext-400-normal.woff"
+      ],
+      "700": [
+        "nunito-latin-700-normal.woff",
+        "nunito-latin-ext-700-normal.woff"
+      ],
+      "800": [
+        "nunito-latin-800-normal.woff",
+        "nunito-latin-ext-800-normal.woff"
+      ]
+    }
+  },
+  {
+    "id": "raleway",
+    "name": "Raleway",
+    "category": "sans",
+    "weights": [
+      400,
+      600,
+      700,
+      800
+    ],
+    "license": "OFL",
+    "source": "@fontsource/raleway@5.3.0",
+    "files": {
+      "400": [
+        "raleway-latin-400-normal.woff",
+        "raleway-latin-ext-400-normal.woff"
+      ],
+      "600": [
+        "raleway-latin-600-normal.woff",
+        "raleway-latin-ext-600-normal.woff"
+      ],
+      "700": [
+        "raleway-latin-700-normal.woff",
+        "raleway-latin-ext-700-normal.woff"
+      ],
+      "800": [
+        "raleway-latin-800-normal.woff",
+        "raleway-latin-ext-800-normal.woff"
+      ]
+    }
+  },
+  {
+    "id": "oswald",
+    "name": "Oswald",
+    "category": "display",
+    "weights": [
+      400,
+      600,
+      700
+    ],
+    "license": "OFL",
+    "source": "@fontsource/oswald@5.3.0",
+    "files": {
+      "400": [
+        "oswald-latin-400-normal.woff",
+        "oswald-latin-ext-400-normal.woff"
+      ],
+      "600": [
+        "oswald-latin-600-normal.woff",
+        "oswald-latin-ext-600-normal.woff"
+      ],
+      "700": [
+        "oswald-latin-700-normal.woff",
+        "oswald-latin-ext-700-normal.woff"
+      ]
+    }
+  },
+  {
+    "id": "bebas-neue",
+    "name": "Bebas Neue",
+    "category": "display",
+    "weights": [
+      400
+    ],
+    "license": "OFL",
+    "source": "@fontsource/bebas-neue@5.3.0",
+    "files": {
+      "400": [
+        "bebas-neue-latin-400-normal.woff",
+        "bebas-neue-latin-ext-400-normal.woff"
+      ]
+    }
+  },
+  {
+    "id": "playfair",
+    "name": "Playfair Display",
+    "category": "serif",
+    "weights": [
+      400,
+      600,
+      700,
+      800
+    ],
+    "license": "OFL",
+    "source": "@fontsource/playfair-display@5.3.0",
+    "files": {
+      "400": [
+        "playfair-display-latin-400-normal.woff",
+        "playfair-display-latin-ext-400-normal.woff"
+      ],
+      "600": [
+        "playfair-display-latin-600-normal.woff",
+        "playfair-display-latin-ext-600-normal.woff"
+      ],
+      "700": [
+        "playfair-display-latin-700-normal.woff",
+        "playfair-display-latin-ext-700-normal.woff"
+      ],
+      "800": [
+        "playfair-display-latin-800-normal.woff",
+        "playfair-display-latin-ext-800-normal.woff"
+      ]
+    }
+  },
+  {
+    "id": "lora",
+    "name": "Lora",
+    "category": "serif",
+    "weights": [
+      400,
+      600,
+      700
+    ],
+    "license": "OFL",
+    "source": "@fontsource/lora@5.3.0",
+    "files": {
+      "400": [
+        "lora-latin-400-normal.woff",
+        "lora-latin-ext-400-normal.woff"
+      ],
+      "600": [
+        "lora-latin-600-normal.woff",
+        "lora-latin-ext-600-normal.woff"
+      ],
+      "700": [
+        "lora-latin-700-normal.woff",
+        "lora-latin-ext-700-normal.woff"
+      ]
+    }
+  },
+  {
+    "id": "merriweather",
+    "name": "Merriweather",
+    "category": "serif",
+    "weights": [
+      400,
+      700,
+      900
+    ],
+    "license": "OFL",
+    "source": "@fontsource/merriweather@5.3.0",
+    "files": {
+      "400": [
+        "merriweather-latin-400-normal.woff",
+        "merriweather-latin-ext-400-normal.woff"
+      ],
+      "700": [
+        "merriweather-latin-700-normal.woff",
+        "merriweather-latin-ext-700-normal.woff"
+      ],
+      "900": [
+        "merriweather-latin-900-normal.woff",
+        "merriweather-latin-ext-900-normal.woff"
+      ]
+    }
+  },
+  {
+    "id": "great-vibes",
+    "name": "Great Vibes",
+    "category": "script",
+    "weights": [
+      400
+    ],
+    "license": "OFL",
+    "source": "@fontsource/great-vibes@5.3.0",
+    "files": {
+      "400": [
+        "great-vibes-latin-400-normal.woff",
+        "great-vibes-latin-ext-400-normal.woff"
+      ]
+    }
+  },
+  {
+    "id": "dancing-script",
+    "name": "Dancing Script",
+    "category": "script",
+    "weights": [
+      400,
+      700
+    ],
+    "license": "OFL",
+    "source": "@fontsource/dancing-script@5.3.0",
+    "files": {
+      "400": [
+        "dancing-script-latin-400-normal.woff",
+        "dancing-script-latin-ext-400-normal.woff"
+      ],
+      "700": [
+        "dancing-script-latin-700-normal.woff",
+        "dancing-script-latin-ext-700-normal.woff"
+      ]
+    }
+  },
+  {
+    "id": "allura",
+    "name": "Allura",
+    "category": "script",
+    "weights": [
+      400
+    ],
+    "license": "OFL",
+    "source": "@fontsource/allura@5.3.0",
+    "files": {
+      "400": [
+        "allura-latin-400-normal.woff",
+        "allura-latin-ext-400-normal.woff"
+      ]
+    }
+  },
+  {
+    "id": "satisfy",
+    "name": "Satisfy",
+    "category": "script",
+    "weights": [
+      400
+    ],
+    "license": "OFL",
+    "source": "@fontsource/satisfy@5.3.0",
+    "files": {
+      "400": [
+        "satisfy-latin-400-normal.woff"
+      ]
+    }
+  },
+  {
+    "id": "sacramento",
+    "name": "Sacramento",
+    "category": "script",
+    "weights": [
+      400
+    ],
+    "license": "OFL",
+    "source": "@fontsource/sacramento@5.3.0",
+    "files": {
+      "400": [
+        "sacramento-latin-400-normal.woff",
+        "sacramento-latin-ext-400-normal.woff"
+      ]
+    }
+  }
+]

@@ -6,6 +6,8 @@ import { PrismaService } from '../common/prisma/prisma.service';
 import { GENERATION_QUEUE, GenerationJobData } from '../shared/queues';
 import { CreditsService } from '../modules/credits/credits.service';
 import { JobEventsService } from '../modules/jobs/job-events.service';
+import { LogoExportService } from '../modules/logos/logo-export.service';
+import { LogoGeneratorService } from '../modules/logos/logo-generator.service';
 import { NameGeneratorService } from '../modules/names/name-generator.service';
 
 /**
@@ -21,6 +23,8 @@ export class GenerationProcessor extends WorkerHost {
     private readonly credits: CreditsService,
     private readonly events: JobEventsService,
     private readonly names: NameGeneratorService,
+    private readonly logos: LogoGeneratorService,
+    private readonly logoExports: LogoExportService,
   ) {
     super();
   }
@@ -53,8 +57,14 @@ export class GenerationProcessor extends WorkerHost {
     switch (kind) {
       case JobKind.NAMES:
         return { created: await this.names.runJob(jobId) };
+      case JobKind.LOGOS:
+        return { created: await this.logos.runJob(jobId) };
+      case JobKind.LOGO_EXPORT: {
+        const { fileName, files } = await this.logoExports.runJob(jobId);
+        return { fileName, files };
+      }
       default:
-        // Logos, slogans, signatures, charte et ZIP : phases 3 à 5 du planning.
+        // Slogans, signatures, charte et ZIP du kit : phases 4 et 5 du planning.
         throw new UnrecoverableError(`Type de génération ${kind} pas encore disponible`);
     }
   }

@@ -1,4 +1,4 @@
-// Test de fumée de bout en bout (phases 1 et 2) contre une API et un worker lancés localement.
+// Test de fumée de bout en bout (phases 1 à 3, module 5) contre une API et un worker lancés localement.
 // Usage : npm run test:smoke   (API=http://hote/api/v1 pour une autre cible)
 const API = process.env.API ?? 'http://localhost:3001/api/v1';
 let failures = 0;
@@ -22,6 +22,41 @@ async function call(method, path, { token, body, headers = {} } = {}) {
   let json;
   try { json = JSON.parse(text); } catch { json = text; }
   return { status: res.status, json, headers: res.headers };
+}
+
+/** Suit le flux SSE d'une tâche jusqu'à son état final. */
+async function waitJob(jobId, token, timeoutMs = 30000) {
+  const sse = await fetch(`${API}/jobs/${jobId}/events`, { headers: { authorization: `Bearer ${token}` } });
+  const reader = sse.body.getReader();
+  const dec = new TextDecoder();
+  let buf = '';
+  let finalStatus;
+  const deadline = Date.now() + timeoutMs;
+  while (!finalStatus && Date.now() < deadline) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buf += dec.decode(value);
+    for (const m of buf.matchAll(/data: (.*)/g)) {
+      const e = JSON.parse(m[1]);
+      if (['SUCCEEDED', 'FAILED'].includes(e.status)) finalStatus = e.status;
+    }
+  }
+  reader.cancel().catch(() => {});
+  return finalStatus;
+}
+
+/** Noms des fichiers d'une archive ZIP (en-têtes locaux). */
+function zipEntries(buffer) {
+  const names = [];
+  for (let i = 0; i + 30 <= buffer.length; ) {
+    if (buffer.readUInt32LE(i) !== 0x04034b50) break;
+    const size = buffer.readUInt32LE(i + 18);
+    const nameLength = buffer.readUInt16LE(i + 26);
+    const extra = buffer.readUInt16LE(i + 28);
+    names.push(buffer.subarray(i + 30, i + 30 + nameLength).toString('utf8'));
+    i += 30 + nameLength + extra + size;
+  }
+  return names;
 }
 
 const email = `e2e-${Date.now()}@example.org`;
@@ -80,22 +115,7 @@ const again = await call('POST', `/projects/${pid}/names/generate`, { token, bod
 check('même clé → même tâche', again.json.jobId === gen.json.jobId, again.status);
 
 // Suivi SSE jusqu'à l'état final
-const sse = await fetch(`${API}/jobs/${gen.json.jobId}/events`, { headers: { authorization: `Bearer ${token}` } });
-const reader = sse.body.getReader();
-const dec = new TextDecoder();
-let buf = '';
-let finalStatus;
-const deadline = Date.now() + 20000;
-while (!finalStatus && Date.now() < deadline) {
-  const { value, done } = await reader.read();
-  if (done) break;
-  buf += dec.decode(value);
-  for (const m of buf.matchAll(/data: (.*)/g)) {
-    const e = JSON.parse(m[1]);
-    if (['SUCCEEDED', 'FAILED'].includes(e.status)) finalStatus = e.status;
-  }
-}
-reader.cancel().catch(() => {});
+const finalStatus = await waitJob(gen.json.jobId, token);
 check('SSE : tâche terminée', finalStatus === 'SUCCEEDED', finalStatus);
 
 const names = await call('GET', `/projects/${pid}/names`, { token });
@@ -130,6 +150,80 @@ check('non-membre → 404', foreign.status === 404, foreign.status);
 
 const admin = await call('GET', '/admin/stats', { token });
 check('back-office interdit à un USER', admin.status === 403, admin.json.detail);
+
+// ─── Phase 3 : logos ───
+const icons = await call('GET', '/library/icons?q=ecole', { token });
+check('bibliothèque : recherche d’icônes sans accents', icons.status === 200 && icons.json.some((i) => i.id === 'graduation-cap'), icons.json.map?.((i) => i.id));
+const fonts = await call('GET', '/library/fonts', { token });
+check('bibliothèque : polices OFL', fonts.status === 200 && fonts.json.length === 15 && fonts.json.every((f) => f.license === 'OFL'));
+
+const engineB = await call('POST', `/projects/${pid}/logos/generate`, { token, body: { type: 'ICON_TEXT', style: 'MODERN', engine: 'IMAGE_VECTORIZE' }, headers: { 'idempotency-key': 'b-' + Date.now() } });
+check('moteur B pas encore disponible → 501', engineB.status === 501, engineB.json.detail);
+const badPalette = await call('POST', `/projects/${pid}/logos/generate`, { token, body: { type: 'ICON_TEXT', style: 'MODERN', palette: ['rouge'] }, headers: { 'idempotency-key': 'p-' + Date.now() } });
+check('palette invalide refusée', badPalette.status === 400, badPalette.json.errors);
+
+const logoGen = await call('POST', `/projects/${pid}/logos/generate`, {
+  token,
+  body: { type: 'ICON_TEXT', style: 'AFRICAN', palette: ['#CE1126', '#FCD116', '#14532D'] },
+  headers: { 'idempotency-key': 'logos-' + Date.now() },
+});
+check('lot de logos accepté (quota gratuit du jour)', logoGen.status === 202 && logoGen.json.costCredits === 0, logoGen.json);
+const t0 = Date.now();
+const logoStatus = await waitJob(logoGen.json.jobId, token);
+check('lot de logos terminé', logoStatus === 'SUCCEEDED', { status: logoStatus, ms: Date.now() - t0 });
+
+const logos = await call('GET', `/projects/${pid}/logos`, { token });
+const first = logos.json[0];
+check('8 propositions avec le nom retenu', logos.status === 200 && logos.json.length === 8 && logos.json.every((l) => l.current.spec.text === chosen.json.chosenName.value), logos.json.length);
+check('palette imposée respectée', logos.json.every((l) => l.current.spec.colors.primary === '#ce1126'));
+const lid = first.id;
+
+const detail = await call('GET', `/logos/${lid}`, { token });
+check('détail : SVG avec texte en tracés', detail.status === 200 && detail.json.current.svg.startsWith('<svg') && !detail.json.current.svg.includes('<text'), detail.json.current?.svg?.length);
+
+const editedSpec = { ...first.current.spec, text: 'Kalossa', fontId: 'playfair', layout: 'vertical', letterSpacing: 0.02 };
+const v2 = await call('POST', `/logos/${lid}/versions`, { token, body: { spec: editedSpec, label: 'Version du bureau' } });
+check('édition enregistrée en version 2', v2.status === 201 && v2.json.number === 2 && v2.json.label === 'Version du bureau', v2.json.detail ?? v2.json.number);
+const badSpec = await call('POST', `/logos/${lid}/versions`, { token, body: { spec: { ...editedSpec, fontId: 'comic-sans', colors: { ...editedSpec.colors, text: 'noir' } } } });
+check('spec invalide refusée (police hors bibliothèque, couleur)', badSpec.status === 400 && badSpec.json.errors?.length === 2, badSpec.json.errors);
+const brand = await call('POST', `/logos/${lid}/versions`, { token, body: { spec: { ...editedSpec, text: 'Google Guinée' } } });
+check('marque célèbre refusée dans l’éditeur', brand.status === 422, brand.json.terms);
+const versions = await call('GET', `/logos/${lid}/versions`, { token });
+check('historique des versions', versions.json.length === 2 && versions.json[0].number === 2);
+
+const variants = await call('POST', `/logos/${lid}/variants`, { token, body: {} });
+check('6 variantes automatiques', variants.status === 200 && variants.json.variants.map((v) => v.id).join() === 'color,black,white,icon,horizontal,vertical', variants.json.variants?.map((v) => v.id));
+
+const favLogo = await call('PATCH', `/logos/${lid}`, { token, body: { isFavorite: true } });
+check('logo favori', favLogo.status === 200 && favLogo.json.isFavorite === true && favLogo.json.current.number === 2);
+
+const exp = await call('POST', `/logos/${lid}/export`, { token, body: { formats: ['svg', 'pdf', 'png'], sizes: [1024, 2048], iconPack: true } });
+check('export demandé, réduit en offre gratuite', exp.status === 202 && exp.json.restricted === true, exp.json);
+check('export terminé', (await waitJob(exp.json.jobId, token)) === 'SUCCEEDED');
+const expJob = await call('GET', `/jobs/${exp.json.jobId}`, { token });
+check('lien de téléchargement signé', !!expJob.json.result?.downloadUrl && !('storageKey' in expJob.json.result), expJob.json.result);
+const zipRes = await fetch(expJob.json.result.downloadUrl);
+const zipFiles = zipEntries(Buffer.from(await zipRes.arrayBuffer()));
+check('offre gratuite : PNG 512 px filigrané uniquement', zipRes.status === 200 && zipFiles.every((f) => /-512\.png$|LICENCES\.txt$/.test(f)) && zipFiles.some((f) => f.endsWith('-couleur-512.png')), zipFiles);
+const forged = await fetch(expJob.json.result.downloadUrl.replace(/sig=[^&]+/, 'sig=faux'));
+check('lien falsifié refusé', forged.status === 404, forged.status);
+
+const evilSvg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" onload="alert(1)"><script>alert(1)</script><a href="javascript:x()"><circle cx="32" cy="32" r="30" fill="#0B3D91"/></a><rect width="10" height="10" fill="#F4B400"/></svg>';
+const imported = await call('POST', `/projects/${pid}/logos/import`, { token, body: { svg: evilSvg } });
+const importedSvg = (await call('GET', `/logos/${imported.json.id}`, { token })).json.current?.svg ?? '';
+check('import SVG nettoyé (ni script ni événement), palette extraite', imported.status === 201 && imported.json.engine === 'UPLOAD' && !/script|onload|javascript/i.test(importedSvg) && importedSvg.includes('circle') && imported.json.palette.length >= 2, { palette: imported.json.palette });
+const notSvg = await call('POST', `/projects/${pid}/logos/import`, { token, body: { svg: '<!DOCTYPE svg [<!ENTITY x "y">]><svg/>' } });
+check('import avec DTD refusé', notSvg.status === 422, notSvg.json.detail);
+const png1x1 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+const importedPng = await call('POST', `/projects/${pid}/logos/import`, { token, body: { pngDataUrl: png1x1, palette: ['#123456', '#abcdef'] } });
+check('import PNG encapsulé', importedPng.status === 201 && importedPng.json.palette[0] === '#123456', importedPng.json.detail);
+const importedVariants = await call('POST', `/logos/${imported.json.id}/variants`, { token, body: {} });
+check('logo importé : variantes couleur, noir, blanc', importedVariants.json.variants?.map((v) => v.id).join() === 'color,black,white');
+
+const quotaLogos = await call('POST', `/projects/${pid}/logos/generate`, { token, body: { type: 'MONOGRAM', style: 'CLASSIC' }, headers: { 'idempotency-key': 'lq-' + Date.now() } });
+check('quota gratuit : 1 lot de logos par jour → 402', quotaLogos.status === 402, quotaLogos.json.detail);
+const foreignLogo = await call('GET', `/logos/${lid}`, { token: other.json.accessToken });
+check('logo d’un autre espace → 404', foreignLogo.status === 404);
 
 // ─── Module 5 : décoration textile ───
 const templates = await call('GET', '/apparel/templates', { token });

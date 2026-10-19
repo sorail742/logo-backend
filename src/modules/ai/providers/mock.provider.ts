@@ -1,11 +1,30 @@
 import { Injectable } from '@nestjs/common';
 import { NameStyle } from '@prisma/client';
-import type { GeneratedName, NameGenerationInput } from '../../../shared/ai-schemas';
+import { paletteFromList, STYLE_PALETTES, type LogoStyle } from '../../../render/color';
+import { FONTS } from '../../../render/fonts';
+import { ICONS, searchIcons } from '../../../render/icons';
+import type { IconFrame } from '../../../render/logo-spec';
+import type {
+  GeneratedName,
+  LogoComposition,
+  LogoGenerationInput,
+  NameGenerationInput,
+} from '../../../shared/ai-schemas';
 import { AiCallResult, AiProvider } from '../ai-provider';
 
 const SUFFIXES = ['ia', 'o', 'ya', 'ka', 'is', 'en', 'ora', 'ix', 'ari', 'ly'];
 const PREFIXES = ['Néo', 'Nova', 'Ka', 'Sira', 'Bara', 'Lumi', 'Teri', 'Dia', 'Fala', 'Woni'];
 const METAPHORS = ['Baobab', 'Horizon', 'Étoile', 'Source', 'Racine', 'Pont', 'Flamme', 'Envol'];
+
+/** Polices de la bibliothèque associées à chaque style de logo (LOGO-02). */
+const STYLE_FONTS: Record<LogoStyle, string[]> = {
+  MINIMAL: ['space-grotesk', 'montserrat', 'raleway'],
+  MODERN: ['poppins', 'montserrat', 'space-grotesk', 'nunito'],
+  CLASSIC: ['playfair', 'lora', 'merriweather'],
+  INSTITUTIONAL: ['merriweather', 'montserrat', 'lora', 'raleway'],
+  PLAYFUL: ['nunito', 'poppins', 'bebas-neue'],
+  AFRICAN: ['oswald', 'bebas-neue', 'montserrat', 'playfair'],
+};
 
 /**
  * Fournisseur factice déterministe, utilisé en développement et en test tant que le
@@ -40,6 +59,54 @@ export class MockAiProvider extends AiProvider {
     }
 
     return { raw: { names }, provider: this.name, promptVersion: 'mock-1', costUsdMicros: 0 };
+  }
+
+  /** Port du simulateur du front : icônes liées au brief, polices et palettes selon le style. */
+  async composeLogos(input: LogoGenerationInput): Promise<AiCallResult> {
+    const random = rng(hash(JSON.stringify(input)));
+    const pick = <T>(arr: readonly T[]) => arr[Math.floor(random() * arr.length)];
+    const feedback = (input.feedback ?? '').toLowerCase();
+    const reference = input.reference;
+    const sameColors = /m[êe]mes? couleurs|same colou?rs/.test(feedback) && !!reference;
+    const otherIcon = /autre ic[ôo]ne|other icon/.test(feedback);
+    const simpler = /simple/.test(feedback);
+
+    // Icônes dont les étiquettes rejoignent le brief, complétées au hasard.
+    const terms = [...(input.brief?.values ?? []), input.brief?.sector ?? '', ...(input.brief?.mustInclude ?? [])];
+    const avoided = otherIcon ? reference?.iconId : undefined;
+    const icons = [...new Set(terms.flatMap((t) => searchIcons(t.slice(0, 6)).map((i) => i.id)))].filter(
+      (id) => id !== avoided,
+    );
+    while (icons.length < input.count) {
+      const id = pick(ICONS).id;
+      if (!icons.includes(id) && id !== avoided) icons.push(id);
+    }
+
+    const fonts = STYLE_FONTS[input.style].filter((id) => FONTS.some((f) => f.id === id));
+    const frames: IconFrame[] = simpler ? ['none'] : ['circle', 'rounded', 'none', 'hexagon'];
+    const compositions: LogoComposition[] = [];
+    for (let i = 0; i < input.count; i++) {
+      const colors = sameColors
+        ? reference!.colors
+        : input.palette
+          ? paletteFromList(input.palette)
+          : { ...pick(STYLE_PALETTES[input.style]) };
+      const keepIcon = reference?.iconId && !otherIcon;
+      compositions.push({
+        iconId: input.type === 'MONOGRAM' ? null : keepIcon ? reference.iconId : icons[i % icons.length],
+        fontId: pick(fonts.length ? fonts : ['montserrat']),
+        fontWeight: pick([600, 700, 800]),
+        letterSpacing: input.style === 'MINIMAL' || input.style === 'INSTITUTIONAL' ? 0.04 : pick([0, 0, 0.02, 0.08]),
+        uppercase: input.style === 'INSTITUTIONAL' || input.style === 'AFRICAN' || random() > 0.7,
+        iconFrame: input.type === 'MONOGRAM' ? pick(['circle', 'rounded', 'hexagon'] as const) : pick(frames),
+        layout: input.type === 'WORDMARK' ? 'text' : i % 3 === 2 ? 'vertical' : 'horizontal',
+        colors,
+        withTagline: !simpler && random() > 0.5,
+        rationale: `Style ${input.style.toLowerCase()}, proposition ${i + 1}`,
+      });
+    }
+
+    return { raw: { compositions }, provider: this.name, promptVersion: 'mock-logos-1', costUsdMicros: 0 };
   }
 
   private build(
@@ -89,6 +156,18 @@ function clean(w: string) {
 
 function cap(w: string) {
   return w ? w[0].toUpperCase() + w.slice(1).toLowerCase() : w;
+}
+
+/** Générateur pseudo-aléatoire déterministe (mulberry32). */
+function rng(seed: number) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
 }
 
 function hash(s: string) {

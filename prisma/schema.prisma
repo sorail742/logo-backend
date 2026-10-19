@@ -93,6 +93,7 @@ enum SignatureStatus {
 enum JobKind {
   NAMES
   LOGOS
+  LOGO_EXPORT
   SLOGANS
   SIGNATURE
   BRAND_GUIDE
@@ -430,6 +431,7 @@ model GenerationJob {
   costCredits   Int
   costUsdMicros Int? // coût IA réel
   error         String?
+  result        Json? // sortie d'une tâche sans entité dédiée (export : fichier et lien)
   startedAt     DateTime?
   finishedAt    DateTime?
   createdAt     DateTime         @default(now())

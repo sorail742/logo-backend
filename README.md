@@ -8,6 +8,8 @@ Le cahier des charges complet se trouve dans [docs/cahier-des-charges.md](docs/c
 
 NestJS 11 · Prisma 6 · PostgreSQL · Redis + BullMQ · Swagger · pino · argon2id · JWT + cookie de rafraîchissement · TOTP
 
+Rendu : opentype.js (texte en tracés) · SVGO · resvg (PNG) · pdfkit + svg-to-pdfkit (PDF vectoriel) · jpeg-js · stockage S3 (MinIO) ou disque local
+
 Un seul code source, deux points d'entrée :
 
 | Processus | Entrée | Rôle |
@@ -33,11 +35,15 @@ E-mails de développement : http://localhost:8025 (Mailpit).
 
 Sous Windows, Hyper-V réserve souvent des plages de ports (`netsh interface ipv4 show excludedportrange protocol=tcp`). Si 6379 ou 5432 est refusé, définissez `REDIS_PORT` / `POSTGRES_PORT` dans `.env` (par ex. `REDIS_PORT=16379` et `REDIS_URL=redis://localhost:16379`).
 
-Test de bout en bout, API et worker lancés : `npm run test:smoke` (inscription, rotation de session, brief, génération + SSE, disponibilité, vote, choix du nom, quota gratuit, droits, corbeille, essai public).
+Test de bout en bout, API et worker lancés : `npm run test:smoke` (inscription, rotation de session, brief, génération + SSE, disponibilité, vote, choix du nom, quota gratuit, droits, logos : génération, édition, variantes, export, import nettoyé ; textile, corbeille, essai public).
+
+Fichiers générés : par défaut sur disque (`STORAGE_DIR`, servis par URL signée `/api/v1/files`) ; `STORAGE_DRIVER=s3` utilise le MinIO de docker-compose ou tout stockage S3 (URL présignées).
 
 ## Structure
 
 ```text
+assets/fonts/           polices OFL de la bibliothèque (WOFF latin + latin étendu) et manifeste
+scripts/fetch-fonts.mjs récupère ces polices depuis les paquets @fontsource
 prisma/
   schema.prisma         modèle de données (§12)
   seed.ts               offres, liste noire, modèles
@@ -47,14 +53,18 @@ src/
   core.module.ts        socle partagé : config, logs, Prisma, Redis, BullMQ, services transverses
   app.module.ts         API : guards globaux, modules HTTP
   config/env.ts         validation de l'environnement (zod)
-  common/               guards (JWT, rôles, espace), décorateurs, filtre problem+json, utilitaires
+  common/               guards (JWT, rôles, espace), décorateurs, filtre problem+json, stockage, utilitaires
   shared/               coûts en crédits, files, schémas zod des sorties IA
+  render/               moteur SVG (futur packages/render) : polices et texte en tracés, icônes,
+                        composition des logos, variantes, SVGO, PNG, JPG, PDF, ICO, ZIP, pHash
   modules/
     auth/               inscription, connexion, Google, refresh avec rotation, mot de passe oublié, 2FA
     users/              /me, suppression, export des données
     workspaces/         espaces, membres, invitations
     projects/           projets, brief, corbeille, duplication
     names/              génération de noms, favoris, votes, choix final, essai public
+    logos/              moteur A, import nettoyé, versions, variantes, exports (worker)
+    library/            bibliothèque : icônes, polices, modèles
     availability/       domaines (RDAP), réseaux, marques, comparaison phonétique
     jobs/               file de génération, idempotence, SSE
     credits/            grand livre de crédits
@@ -75,7 +85,7 @@ src/
 Deux niveaux (§3), vérifiés côté API :
 
 - **Rôle plateforme** (`USER < SUPPORT < ADMIN < SUPER_ADMIN`) : `@Roles('ADMIN')` + `RolesGuard`. Les rôles internes exigent une session ouverte avec un code TOTP.
-- **Rôle dans l'espace** (`VIEWER < EDITOR < OWNER`) : `@WorkspaceAccess('EDITOR')` + `WorkspaceGuard`. L'espace est déduit de `:wid`, `:pid`, `:nid` ou `:jid`. Le support a un accès en lecture par défaut ; un non-membre reçoit 404.
+- **Rôle dans l'espace** (`VIEWER < EDITOR < OWNER`) : `@WorkspaceAccess('EDITOR')` + `WorkspaceGuard`. L'espace est déduit de `:wid`, `:pid`, `:nid`, `:lid`, `:did` ou `:jid`. Le support a un accès en lecture par défaut ; un non-membre reçoit 404.
 
 ## Cycle d'une génération (§11.4)
 
@@ -91,12 +101,25 @@ Deux niveaux (§3), vérifiés côté API :
 | --- | --- |
 | 1. Socle technique : auth, espaces, projets, back-office minimal | Fait |
 | 2. Générateur de noms : brief, génération, vérifications, favoris, choix | Fait (fournisseur IA factice) |
-| 3. Logos (moteur SVG, éditeur, exports) | À faire |
+| 3. Logos (moteur SVG, éditeur, exports) | Fait pour le moteur A (fournisseur IA factice) ; moteur B (image + vectorisation) à faire |
 | 4. Signatures (slogans, e-mail, paraphe, cachet) | À faire |
 | 5. Kit de marque, partage, commentaires | À faire |
 | 6. Paiements (Orange Money, abonnements, factures) | À faire |
 | 8a. Textile : gabarits, éditeur, maquettes, BAT | Partiel : supports, zones, tailles, préréglages, éléments, contrôle, BAT, ateliers, admin. Propositions IA et maquettes 2D à faire |
 | 8b. Textile : numéros, effectifs, pack atelier | Partiel : import et contrôle d'effectif, ajustement des noms. Polices de numéros et exports par technique à faire |
+
+## Module 2 — logos (§5)
+
+Le front et le serveur partagent la même spécification déclarative (`LogoSpec` : texte, police, graisse, espacement, icône, cadre, disposition, couleurs). Le front l'édite et l'affiche en aperçu ; le serveur la valide (zod, polices et icônes de la bibliothèque uniquement) et produit les fichiers définitifs avec le moteur de [src/render](src/render) :
+
+- **Génération** (`POST /projects/:pid/logos/generate`, tâche `LOGOS`, 2 crédits ou quota gratuit) : l'IA choisit icône, police, palette et disposition (`AiProvider.composeLogos`) ; le serveur compose 8 propositions avec le nom retenu et le slogan choisi, écarte les doublons et les logos proches (pHash) d'un logo exclusif d'un autre client. Relances avec retour (« plus simple », « autre icône », « mêmes couleurs ») et logo de référence.
+- **Texte en tracés** : les polices OFL sont lues avec opentype.js (crénage, repli par caractère sur le latin étendu : Ɓ, Ŋ, Ɛ…). Aucun SVG, PNG ou PDF exporté n'a besoin de la police installée.
+- **Éditeur** : `POST /logos/:lid/versions` enregistre une spec ; le SVG est recomposé côté serveur, contraste texte/fond corrigé à 4,5:1, marques célèbres refusées.
+- **Variantes** (`POST /logos/:lid/variants`) : couleur, noir, blanc, icône seule, horizontale, verticale.
+- **Export** (`POST /logos/:lid/export`, tâche `LOGO_EXPORT`, 0 crédit) : archive ZIP avec SVG optimisés, PDF vectoriels, PNG transparents 512/1024/2048, JPG, pack d'icônes d'app (favicon.ico 16/32/48, 180, 192, 512, 1024), formats réseaux sociaux et LICENCES.txt. Offre gratuite : PNG 512 px filigrané uniquement (`restricted: true`). Le lien signé est donné par `GET /jobs/:jid` (`result.downloadUrl`) ; les exports sont purgés après 7 jours.
+- **Import** (`POST /projects/:pid/logos/import`) : SVG nettoyé par liste blanche (ni script, ni événement, ni lien ou ressource externe, ni DTD) ou PNG encapsulé ; palette extraite. Le SVG d'origine reste la version 1 ; les versions suivantes sont recomposées depuis la spec.
+
+Moteur B (image IA + vectorisation, « Devrait ») : la route répond 501 tant que le fournisseur d'images n'est pas choisi (§15.4). L'exclusivité d'un logo (`isExclusive`) sera posée à l'achat (phase 6).
 
 ## Module 5 — décoration textile (§16)
 
@@ -104,9 +127,9 @@ Le moteur de règles est dans [src/modules/apparel/apparel-rules.ts](src/modules
 
 Repère : bas du col au milieu, X positif = gauche du porteur. Les zones par défaut (adulte M) et les mesures des tailles du seed sont **indicatives** et doivent être validées sur un vêtement réel ([apparel-defaults.ts](src/modules/apparel/apparel-defaults.ts)).
 
-Non exposées pour l'instant, car elles dépendent du moteur de rendu SVG de la phase 3 : `POST /apparel-designs/:did/generate`, `/mockups`, `/production-export` et `/number-fonts`. Les types de tâche et les coûts en crédits sont déjà en place.
+Non exposées pour l'instant : `POST /apparel-designs/:did/generate`, `/mockups`, `/production-export` et `/number-fonts`. Le moteur de rendu de la phase 3 (`src/render`) est désormais disponible pour les construire ; les types de tâche et les coûts en crédits sont déjà en place.
 
-Points en attente d'une décision (§15.4) : fournisseur IA réel, prestataire SMS (CPT-03, routes renvoyant 501), agrégateur de paiement, prix en GNF (à 0 dans le seed), stockage S3.
+Points en attente d'une décision (§15.4) : fournisseur IA réel (texte et images), prestataire SMS (CPT-03, routes renvoyant 501), agrégateur de paiement, prix en GNF (à 0 dans le seed), hébergeur du stockage S3.
 
 ## Scripts
 
@@ -119,6 +142,7 @@ Points en attente d'une décision (§15.4) : fournisseur IA réel, prestataire S
 | `npm run lint` / `npm run typecheck` | ESLint / TypeScript |
 | `npm run prisma:migrate` | Nouvelle migration |
 | `npm run prisma:deploy` | Migrations en production |
+| `npm run fonts:fetch` | Régénère `assets/fonts` (polices de la bibliothèque) |
 
 ## Docker
 

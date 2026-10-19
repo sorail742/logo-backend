@@ -4,6 +4,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { LoggerModule } from 'nestjs-pino';
 import { PrismaModule } from './common/prisma/prisma.module';
 import { RedisModule } from './common/redis/redis.module';
+import { StorageModule } from './common/storage/storage.module';
 import { redisConnection } from './common/utils/redis-connection.util';
 import { validateEnv } from './config/env';
 import { AiModule } from './modules/ai/ai.module';
@@ -13,7 +14,7 @@ import { JobsModule } from './modules/jobs/jobs.module';
 import { MailModule } from './modules/mail/mail.module';
 import { ModerationModule } from './modules/moderation/moderation.module';
 
-/** Socle partagé par l'API et les workers : configuration, logs, base, Redis, files, services transverses. */
+/** Socle partagé par l'API et les workers : configuration, logs, base, Redis, files, stockage, services transverses. */
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, validate: validateEnv, cache: true }),
@@ -37,6 +38,7 @@ import { ModerationModule } from './modules/moderation/moderation.module';
     }),
     PrismaModule,
     RedisModule,
+    StorageModule,
     AuditModule,
     CreditsModule,
     MailModule,
