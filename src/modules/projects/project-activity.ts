@@ -1,6 +1,12 @@
 import type { Prisma } from '@prisma/client';
 import type { AuditEntry } from '../audit/audit.service';
 
+const SIGNATURE_LABELS: Record<string, string> = {
+  EMAIL: 'la signature e-mail',
+  HANDWRITTEN: 'un paraphe',
+  STAMP: 'un cachet',
+};
+
 /**
  * Actions d'un projet enregistrées dans le journal (entityType « Project ») et affichées dans
  * son historique (COL-04). Le libellé est calculé à la lecture.
@@ -16,6 +22,16 @@ export const PROJECT_ACTIONS = {
   'logos.import': () => 'a importé un logo existant',
   'logos.version': (after) => `a enregistré la version ${String(after.number ?? '')} d'un logo`,
   'logos.export': () => 'a exporté un logo',
+  'slogans.generate': (after) =>
+    after.kind === 'DEVISE'
+      ? 'a lancé un lot de devises'
+      : after.kind === 'MISSION'
+        ? 'a lancé un lot de phrases de mission'
+        : 'a lancé un lot de slogans',
+  'slogans.choose': (after) => `a retenu « ${String(after.text ?? '')} »`,
+  'signatures.create': (after) => `a créé ${SIGNATURE_LABELS[String(after.kind)] ?? 'une signature'}`,
+  'signatures.update': (after) => `a modifié ${SIGNATURE_LABELS[String(after.kind)] ?? 'une signature'}`,
+  'signatures.batch': (after) => `a lancé ${String(after.count ?? '')} signatures e-mail en lot`,
 } satisfies Record<string, (after: Record<string, unknown>) => string>;
 
 export type ProjectAction = keyof typeof PROJECT_ACTIONS;

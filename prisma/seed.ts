@@ -140,20 +140,17 @@ const BLOCKED_TERMS: { term: string; language: string; scope: string }[] = [
   ]),
 ];
 
+/** Modèles de signature e-mail (SIG-12) et de cachet (SIG-22), mêmes clés que le front. */
 const TEMPLATES = [
-  { kind: 'EMAIL_SIGNATURE', name: 'Classique', content: { layout: 'logo-left', divider: true } },
-  { kind: 'EMAIL_SIGNATURE', name: 'Moderne', content: { layout: 'logo-top', accentBar: true } },
-  { kind: 'EMAIL_SIGNATURE', name: 'Minimal', content: { layout: 'text-only' } },
-  {
-    kind: 'EMAIL_SIGNATURE',
-    name: 'Institutionnel',
-    content: { layout: 'logo-left', legalLine: true },
-  },
-  { kind: 'EMAIL_SIGNATURE', name: 'Compact', content: { layout: 'inline' } },
-  { kind: 'EMAIL_SIGNATURE', name: 'Bannière', content: { layout: 'logo-left', banner: true } },
-  { kind: 'STAMP', name: 'Rond', content: { shape: 'round' } },
-  { kind: 'STAMP', name: 'Ovale', content: { shape: 'oval' } },
-  { kind: 'STAMP', name: 'Rectangulaire', content: { shape: 'rect' } },
+  { key: 'classic', kind: 'EMAIL_SIGNATURE', name: 'Classique', content: { layout: 'logo-left', divider: true } },
+  { key: 'sidebar', kind: 'EMAIL_SIGNATURE', name: 'Barre latérale', content: { layout: 'photo-left' } },
+  { key: 'compact', kind: 'EMAIL_SIGNATURE', name: 'Compacte', content: { layout: 'inline' } },
+  { key: 'centered', kind: 'EMAIL_SIGNATURE', name: 'Centrée', content: { layout: 'logo-top' } },
+  { key: 'banner', kind: 'EMAIL_SIGNATURE', name: 'Bandeau', content: { layout: 'banner' } },
+  { key: 'minimal', kind: 'EMAIL_SIGNATURE', name: 'Minimale', content: { layout: 'text-only' } },
+  { key: 'round', kind: 'STAMP', name: 'Rond', content: { shape: 'round' } },
+  { key: 'oval', kind: 'STAMP', name: 'Ovale', content: { shape: 'oval' } },
+  { key: 'rectangle', kind: 'STAMP', name: 'Rectangulaire', content: { shape: 'rectangle' } },
 ];
 
 async function main() {
@@ -164,9 +161,13 @@ async function main() {
   await prisma.blockedTerm.createMany({ data: BLOCKED_TERMS, skipDuplicates: true });
 
   for (const t of TEMPLATES) {
-    const existing = await prisma.template.findFirst({ where: { kind: t.kind, name: t.name } });
-    if (!existing) await prisma.template.create({ data: t });
+    await prisma.template.upsert({ where: { key: t.key }, create: t, update: { name: t.name, isActive: true } });
   }
+  // Anciens modèles sans clé (premier seed) : retirés de la bibliothèque.
+  await prisma.template.updateMany({
+    where: { key: null, kind: { in: ['EMAIL_SIGNATURE', 'STAMP'] } },
+    data: { isActive: false },
+  });
 
   // Module textile : préréglages sportifs et supports (créés une seule fois, ensuite gérés par l'admin).
   for (const p of DEFAULT_RULE_PRESETS) {

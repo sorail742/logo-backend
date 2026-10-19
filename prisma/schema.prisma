@@ -460,6 +460,7 @@ model Asset {
 
 model Template {
   id         String      @id @default(uuid())
+  key        String?     @unique // identifiant stable partagé avec le front (« classic », « round »…)
   kind       String // EMAIL_SIGNATURE | STAMP | BRAND_GUIDE
   name       String
   content    Json

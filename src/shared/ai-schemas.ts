@@ -91,3 +91,34 @@ export const logoCompositionsSchema = z.object({
   compositions: z.array(logoCompositionSchema).min(1).max(20),
 });
 export type LogoComposition = z.infer<typeof logoCompositionSchema>;
+
+export const SLOGAN_TONES = ['INSPIRING', 'INSTITUTIONAL', 'CATCHY', 'ENGAGED'] as const;
+export const SLOGAN_KINDS = ['SLOGAN', 'DEVISE', 'MISSION'] as const;
+
+/** Entrée de génération de slogans, devises ou phrases de mission (§6.1). */
+export const sloganGenerationInputSchema = z.object({
+  entityType: z.nativeEnum(EntityType),
+  /** Nom retenu ou titre du projet. */
+  name: z.string().trim().min(1).max(60),
+  brief: z
+    .object({
+      sector: z.string(),
+      mission: z.string(),
+      values: z.array(z.string()),
+      audience: z.string().nullish(),
+    })
+    .nullable(),
+  kind: z.enum(SLOGAN_KINDS),
+  tone: z.enum(SLOGAN_TONES),
+  /** SIG-02 : 8 mots par défaut. */
+  maxWords: z.number().int().min(3).max(20).default(8),
+  language: z.enum(['fr', 'en']).default('fr'),
+  count: z.number().int().min(1).max(20).default(10),
+  /** Propositions déjà faites dans le projet, à ne pas répéter. */
+  exclude: z.array(z.string()).default([]),
+});
+export type SloganGenerationInput = z.infer<typeof sloganGenerationInputSchema>;
+
+export const generatedSlogansSchema = z.object({
+  slogans: z.array(z.object({ text: z.string().trim().min(2).max(300) })).min(1).max(30),
+});

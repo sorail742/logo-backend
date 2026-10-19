@@ -115,7 +115,7 @@ Deux niveaux (§3), vérifiés côté API :
 | 1. Socle technique : auth, espaces, projets, back-office minimal | Fait |
 | 2. Générateur de noms : brief, génération, vérifications, favoris, choix | Fait (fournisseur IA factice) |
 | 3. Logos (moteur SVG, éditeur, exports) | Fait pour le moteur A (fournisseur IA factice) ; moteur B (image + vectorisation) à faire |
-| 4. Signatures (slogans, e-mail, paraphe, cachet) | À faire |
+| 4. Signatures (slogans, e-mail, paraphe, cachet) | Fait (fournisseur IA factice) ; contrôle IA des slogans connus à faire |
 | 5. Kit de marque, partage, commentaires | À faire |
 | 6. Paiements (Orange Money, abonnements, factures) | À faire |
 | 8a. Textile : gabarits, éditeur, maquettes, BAT | Partiel : supports, zones, tailles, préréglages, éléments, contrôle, BAT, ateliers, admin. Propositions IA et maquettes 2D à faire |
@@ -133,6 +133,14 @@ Le front et le serveur partagent la même spécification déclarative (`LogoSpec
 - **Import** (`POST /projects/:pid/logos/import`) : SVG nettoyé par liste blanche (ni script, ni événement, ni lien ou ressource externe, ni DTD) ou PNG encapsulé ; palette extraite. Le SVG d'origine reste la version 1 ; les versions suivantes sont recomposées depuis la spec.
 
 Moteur B (image IA + vectorisation, « Devrait ») : la route répond 501 tant que le fournisseur d'images n'est pas choisi (§15.4). L'exclusivité d'un logo (`isExclusive`) sera posée à l'achat (phase 6).
+
+## Module 3 — signatures (§6)
+
+- **Slogans** (`POST /projects/:pid/slogans/generate`, tâche `SLOGANS`, 1 crédit) : 10 slogans selon le ton, la langue et le nombre de mots (8 par défaut) ; pour une association, devise en trois termes et phrase de mission. Le worker écarte les termes interdits (périmètre `SLOGAN`), les propositions déjà faites et celles trop proches d'un slogan connu (liste de référence interne, [known-slogans.ts](src/modules/slogans/known-slogans.ts)). `PATCH /slogans/:sid` : favori, retouche du texte, choix (un seul retenu par type).
+- **Signature e-mail** (`POST /projects/:pid/signatures`, `kind: EMAIL`, 0 crédit) : 6 modèles (`classic`, `sidebar`, `compact`, `centered`, `banner`, `minimal`), HTML en tableaux et styles en ligne, version texte brut (`GET /signatures/:sid/html`). Nom retenu, slogan choisi, couleurs du logo favori ; le logo est servi en PNG par une URL publique stable (`/public/signatures/:sid/logo.png`). Mention de la plateforme sur l'offre gratuite. `POST /public/email-signature` : rendu sans compte.
+- **Signatures en lot** (`POST /projects/:pid/signatures/batch`, offres Pro et Agence, tâche `SIGNATURE`) : CSV (nom, fonction, e-mail, téléphone) appliqué à la signature e-mail du projet ; archive ZIP d'un HTML et d'un texte par membre (`result.downloadUrl`).
+- **Paraphe et cachet** (`kind: HANDWRITTEN | STAMP`, 1 crédit, attestation obligatoire) : rendu serveur en tracés ([src/render/stamp.ts](src/render/stamp.ts)), texte circulaire compris, encre et effet d'encre, logo du projet au centre. SVG et PNG transparent 2048 px stockés en privé, servis par URL signée de 5 minutes (`GET /signatures/:sid/file`).
+- **Modération** (§6.4) : un cachet portant un terme officiel (« République », « Ministère »…) ou un terme de la liste noire `STAMP` passe en `PENDING_REVIEW` ; son fichier n'est pas servi. `GET /admin/moderation` liste les cachets en attente avec leur aperçu ; `PATCH /admin/signatures/:sid/review` (`APPROVE` ou `REJECT` avec motif, administrateur) trace la décision et notifie les propriétaires de l'espace. Un cachet refusé puis corrigé repasse par le contrôle.
 
 ## Module 5 — décoration textile (§16)
 

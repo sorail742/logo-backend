@@ -81,7 +81,8 @@ export function renderVariants(source: LogoSource): RenderedVariant[] {
   }));
 }
 
-function markSvg(source: LogoSource) {
+/** Symbole seul du logo (icône d'app, profil, centre du cachet). */
+export function markSvg(source: LogoSource) {
   return source.kind === 'spec'
     ? renderLogoSvg(iconSpec(source.spec), { layout: 'icon' }).svg
     : source.svg;

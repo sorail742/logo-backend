@@ -7,9 +7,13 @@ export interface PlanFeatures {
   maxPngSize?: number;
   brandGuidePdf?: boolean;
   stamp?: boolean;
+  /** Signatures e-mail en lot par import CSV (SIG-16). */
+  batchSignatures?: boolean;
+  /** Mention de la plateforme sous la signature e-mail. */
+  emailSignatureBranding?: boolean;
 }
 
-const FREE_DEFAULTS: PlanFeatures = { watermark: true, maxPngSize: 512 };
+const FREE_DEFAULTS: PlanFeatures = { watermark: true, maxPngSize: 512, emailSignatureBranding: true };
 
 /** Un abonnement donne accès à son offre jusqu'à son échéance, sauf s'il a expiré. */
 export function isSubscriptionActive(

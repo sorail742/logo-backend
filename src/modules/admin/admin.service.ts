@@ -1,13 +1,32 @@
-import { ForbiddenException, Injectable } from '@nestjs/common';
-import { JobKind, LedgerReason, PaymentStatus, PlatformRole, Prisma } from '@prisma/client';
+import { ConflictException, ForbiddenException, Injectable } from '@nestjs/common';
+import {
+  JobKind,
+  LedgerReason,
+  PaymentStatus,
+  PlatformRole,
+  Prisma,
+  SignatureKind,
+  SignatureStatus,
+  WorkspaceRole,
+} from '@prisma/client';
 import { AuthUser } from '../../common/auth-user';
 import { cursorArgs, toPage } from '../../common/dto/pagination.dto';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { StorageService } from '../../common/storage/storage.service';
+import { renderStampSvg, stampDataSchema } from '../../render/stamp';
 import { AuditService } from '../audit/audit.service';
 import { SessionService } from '../auth/session.service';
 import { CreditsService } from '../credits/credits.service';
 import { ModerationService } from '../moderation/moderation.service';
-import { AdjustCreditsDto, AdminListUsersDto, AdminUpdateUserDto, AuditQueryDto, BlockedTermDto } from './admin.dto';
+import { stampReviewTerms, stampTerms } from '../signatures/signature-data';
+import {
+  AdjustCreditsDto,
+  AdminListUsersDto,
+  AdminUpdateUserDto,
+  AuditQueryDto,
+  BlockedTermDto,
+  ReviewSignatureDto,
+} from './admin.dto';
 
 const USER_SELECT = {
   id: true,
@@ -48,6 +67,7 @@ export class AdminService {
     private readonly credits: CreditsService,
     private readonly sessions: SessionService,
     private readonly moderation: ModerationService,
+    private readonly storage: StorageService,
   ) {}
 
   /** ADM-01 : indicateurs des 14 derniers jours (type AdminStats du front). */
@@ -244,5 +264,82 @@ export class AdminService {
     const term = await this.prisma.blockedTerm.delete({ where: { id } });
     this.moderation.invalidate();
     await this.audit.log({ actorId: actor.id, action: 'blocked-term.delete', entityType: 'BlockedTerm', entityId: id, before: term, ip });
+  }
+
+  // ─── Modération des cachets (§6.4) ───
+
+  /** File de modération (type ModerationItem du front) : cachets en attente, du plus ancien. */
+  async moderationQueue() {
+    const pending = await this.prisma.signature.findMany({
+      where: { kind: SignatureKind.STAMP, status: SignatureStatus.PENDING_REVIEW },
+      include: { project: { select: { workspace: { select: { name: true } } } } },
+      orderBy: { createdAt: 'asc' },
+      take: 100,
+    });
+    return Promise.all(
+      pending.map(async (signature) => {
+        const stamp = stampDataSchema.parse(signature.data);
+        const blocked = await this.moderation.findBlocked(stampTerms(stamp).join(' '), 'STAMP');
+        const terms = stampReviewTerms(stamp, blocked);
+        return {
+          id: signature.id,
+          kind: 'STAMP' as const,
+          title: stamp.ringText,
+          reason: terms.length ? `Termes officiels : ${terms.join(', ')}` : 'Validation manuelle demandée',
+          workspaceName: signature.project.workspace.name,
+          createdAt: signature.createdAt,
+          // Le fichier rendu (logo compris) quand il existe, sinon un rendu à la volée.
+          previewSvg: signature.fileKey
+            ? (await this.storage.get(signature.fileKey).catch(() => null))?.toString('utf8') ??
+              renderStampSvg(stamp)
+            : renderStampSvg(stamp),
+        };
+      }),
+    );
+  }
+
+  /** Validation ou refus d'un cachet, tracé et notifié aux propriétaires de l'espace. */
+  async reviewSignature(actor: AuthUser, signatureId: string, dto: ReviewSignatureDto, ip: string) {
+    const signature = await this.prisma.signature.findUniqueOrThrow({
+      where: { id: signatureId },
+      include: { project: { select: { id: true, workspaceId: true } } },
+    });
+    if (signature.status !== SignatureStatus.PENDING_REVIEW) {
+      throw new ConflictException('Cette signature n’est pas en attente de validation');
+    }
+    const status = dto.decision === 'APPROVE' ? SignatureStatus.ACTIVE : SignatureStatus.REJECTED;
+    const owners = await this.prisma.membership.findMany({
+      where: { workspaceId: signature.project.workspaceId, role: WorkspaceRole.OWNER },
+      select: { userId: true },
+    });
+    const approved = status === SignatureStatus.ACTIVE;
+    await this.prisma.$transaction(async (tx) => {
+      await tx.signature.update({ where: { id: signatureId }, data: { status } });
+      await tx.notification.createMany({
+        data: owners.map(({ userId }) => ({
+          userId,
+          type: approved ? 'signature.approved' : 'signature.rejected',
+          payload: {
+            title: approved ? 'Cachet validé' : 'Cachet refusé',
+            body: approved
+              ? 'Votre cachet a été validé : vous pouvez le télécharger.'
+              : `Votre cachet a été refusé.${dto.note ? ` Motif : ${dto.note}` : ''}`,
+            href: `/app/projets/${signature.project.id}/signatures?onglet=stamp`,
+          },
+        })),
+      });
+      await this.audit.log(
+        {
+          actorId: actor.id,
+          action: approved ? 'signature.approve' : 'signature.reject',
+          entityType: 'Signature',
+          entityId: signatureId,
+          before: { status: signature.status },
+          after: { status, note: dto.note ?? null },
+          ip,
+        },
+        tx,
+      );
+    });
   }
 }

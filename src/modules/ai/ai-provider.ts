@@ -1,4 +1,8 @@
-import type { LogoGenerationInput, NameGenerationInput } from '../../shared/ai-schemas';
+import type {
+  LogoGenerationInput,
+  NameGenerationInput,
+  SloganGenerationInput,
+} from '../../shared/ai-schemas';
 
 export interface AiCallResult {
   /** Réponse brute, non fiable : à valider par schéma zod avant usage. */
@@ -17,4 +21,6 @@ export abstract class AiProvider {
   abstract generateNames(input: NameGenerationInput): Promise<AiCallResult>;
   /** Moteur A (§5.1) : choix d'icône, de police, de palette et de disposition par proposition. */
   abstract composeLogos(input: LogoGenerationInput): Promise<AiCallResult>;
+  /** Slogans, devises en trois termes ou phrases de mission (§6.1). */
+  abstract generateSlogans(input: SloganGenerationInput): Promise<AiCallResult>;
 }

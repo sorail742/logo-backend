@@ -92,3 +92,15 @@ export class AuditQueryDto extends CursorPaginationDto {
   @MaxLength(80)
   entityId?: string;
 }
+
+export class ReviewSignatureDto {
+  @ApiProperty({ enum: ['APPROVE', 'REJECT'] })
+  @IsIn(['APPROVE', 'REJECT'])
+  decision: 'APPROVE' | 'REJECT';
+
+  @ApiPropertyOptional({ description: 'Motif transmis à l’espace (obligatoire en pratique pour un refus)' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  note?: string;
+}

@@ -14,7 +14,14 @@ import {
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import type { AuthUser } from '../../common/auth-user';
 import { ClientIp, CurrentUser, Roles } from '../../common/decorators';
-import { AdjustCreditsDto, AdminListUsersDto, AdminUpdateUserDto, AuditQueryDto, BlockedTermDto } from './admin.dto';
+import {
+  AdjustCreditsDto,
+  AdminListUsersDto,
+  AdminUpdateUserDto,
+  AuditQueryDto,
+  BlockedTermDto,
+  ReviewSignatureDto,
+} from './admin.dto';
 import { AdminService } from './admin.service';
 
 /** Back-office (§9, §13.9). Toutes les routes exigent un rôle interne et une session 2FA. */
@@ -78,6 +85,25 @@ export class AdminController {
     @ClientIp() ip: string,
   ) {
     return this.admin.removeBlockedTerm(actor, id, ip);
+  }
+
+  // ─── Modération (§6.4, ADM-11) ───
+
+  @Get('moderation')
+  moderation() {
+    return this.admin.moderationQueue();
+  }
+
+  @Patch('signatures/:sid/review')
+  @Roles('ADMIN')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  reviewSignature(
+    @CurrentUser() actor: AuthUser,
+    @Param('sid', ParseUUIDPipe) sid: string,
+    @Body() dto: ReviewSignatureDto,
+    @ClientIp() ip: string,
+  ) {
+    return this.admin.reviewSignature(actor, sid, dto, ip);
   }
 
   @Get('audit-logs')

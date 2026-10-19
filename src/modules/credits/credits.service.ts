@@ -29,7 +29,10 @@ export class CreditsService {
       data: { creditBalance: { decrement: entry.amount } },
     });
     if (updated.count === 0) {
-      throw new HttpException('Crédits insuffisants', HttpStatus.PAYMENT_REQUIRED);
+      throw new HttpException(
+        { message: 'Crédits insuffisants', code: 'INSUFFICIENT_CREDITS' },
+        HttpStatus.PAYMENT_REQUIRED,
+      );
     }
     const { amount, ...rest } = entry;
     await tx.creditLedgerEntry.create({ data: { ...rest, delta: -amount } });

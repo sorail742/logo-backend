@@ -77,6 +77,11 @@ export interface ShapedText {
   capHeight: number;
   /** Tracé SVG du texte, ligne de base en `baseline`, ancré à gauche, au centre ou à droite. */
   toPath(x: number, baseline: number, anchor?: 'start' | 'middle' | 'end'): string;
+  /**
+   * Glyphes un à un, chacun centré sur l'origine et posé sur la ligne de base : `x` est le
+   * centre du glyphe dans la ligne (texte le long d'un arc, cachets).
+   */
+  glyphs(): { x: number; d: string }[];
 }
 
 /** Met en forme une ligne de texte (crénage, repli par caractère) et la convertit en tracés. */
@@ -84,7 +89,7 @@ export function shapeText(text: string, style: TextStyle): ShapedText {
   const chain = fontChain(style.fontId, style.weight);
   const primary = chain[0];
   const spacing = style.letterSpacing ?? 0;
-  const glyphs: { font: opentype.Font; glyph: opentype.Glyph; x: number }[] = [];
+  const glyphs: { font: opentype.Font; glyph: opentype.Glyph; x: number; advance: number }[] = [];
 
   let x = 0;
   let previous: { font: opentype.Font; glyph: opentype.Glyph } | null = null;
@@ -96,7 +101,7 @@ export function shapeText(text: string, style: TextStyle): ShapedText {
       x += spacing;
       if (previous.font === font) x += font.getKerningValue(previous.glyph, glyph) * scale;
     }
-    glyphs.push({ font, glyph, x });
+    glyphs.push({ font, glyph, x, advance: (glyph.advanceWidth ?? 0) * scale });
     x += (glyph.advanceWidth ?? 0) * scale;
     previous = { font, glyph };
   }
@@ -116,6 +121,12 @@ export function shapeText(text: string, style: TextStyle): ShapedText {
         .map(({ glyph, x: gx }) => glyph.getPath(start + gx, baseline, style.size).toPathData(2))
         .filter(Boolean)
         .join('');
+    },
+    glyphs() {
+      return glyphs.map(({ glyph, x: gx, advance }) => ({
+        x: gx + advance / 2,
+        d: glyph.getPath(-advance / 2, 0, style.size).toPathData(2),
+      }));
     },
   };
 }

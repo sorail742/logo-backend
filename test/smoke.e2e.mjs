@@ -1,4 +1,4 @@
-// Test de fumée de bout en bout (phases 1 à 3, module 5) contre une API et un worker lancés localement.
+// Test de fumée de bout en bout (phases 1 à 4, module 5) contre une API et un worker lancés localement.
 // Usage : npm run test:smoke   (API=http://hote/api/v1 pour une autre cible)
 import { PrismaClient } from '@prisma/client';
 import otplib from 'otplib';
@@ -344,6 +344,110 @@ check('le trait minimal de l’atelier s’applique au contrôle', shopCheck.jso
 
 const adminTpl = await call('POST', '/admin/apparel/templates', { token, body: {} });
 check('administration des supports réservée aux admins', adminTpl.status === 403);
+
+// ─── Phase 4 : slogans et signatures ───
+const noCredit = await call('POST', `/projects/${pid}/slogans/generate`, { token, body: { tone: 'INSPIRING' }, headers: { 'idempotency-key': 's0-' + Date.now() } });
+check('slogans sans crédit (offre gratuite) → 402 INSUFFICIENT_CREDITS', noCredit.status === 402 && noCredit.json.code === 'INSUFFICIENT_CREDITS', noCredit.json.detail);
+// Les paiements arrivent en phase 6 : crédits et abonnement Pro posés directement en base.
+const db = new PrismaClient();
+await db.$transaction([
+  db.workspace.update({ where: { id: wid }, data: { creditBalance: { increment: 5 } } }),
+  db.creditLedgerEntry.create({ data: { workspaceId: wid, delta: 5, reason: 'ADMIN_ADJUSTMENT', note: 'test de fumée' } }),
+]);
+const sloganGen = await call('POST', `/projects/${pid}/slogans/generate`, { token, body: { tone: 'ENGAGED', maxWords: 6, language: 'fr' }, headers: { 'idempotency-key': 's1-' + Date.now() } });
+check('lot de slogans accepté (1 crédit)', sloganGen.status === 202 && sloganGen.json.costCredits === 1, sloganGen.json);
+check('lot de slogans terminé', (await waitJob(sloganGen.json.jobId, token)) === 'SUCCEEDED');
+const slogans = await call('GET', `/projects/${pid}/slogans`, { token });
+check('10 slogans de 6 mots au plus (SIG-01, SIG-02)', slogans.json.length === 10 && slogans.json.every((s) => s.kind === 'SLOGAN' && s.tone === 'ENGAGED' && s.text.split(' ').length <= 6), slogans.json.map?.((s) => s.text).slice(0, 2));
+const deviseGen = await call('POST', `/projects/${pid}/slogans/generate`, { token, body: { kind: 'DEVISE', tone: 'INSTITUTIONAL' }, headers: { 'idempotency-key': 's2-' + Date.now() } });
+await waitJob(deviseGen.json.jobId, token);
+const devises = (await call('GET', `/projects/${pid}/slogans`, { token })).json.filter((s) => s.kind === 'DEVISE');
+check('devises en trois termes (SIG-03)', devises.length > 0 && devises.every((d) => d.text.split(' – ').length === 3), devises[0]?.text);
+const [s1, s2] = slogans.json;
+await call('PATCH', `/slogans/${s1.id}`, { token, body: { isChosen: true } });
+const chosen2 = await call('PATCH', `/slogans/${s2.id}`, { token, body: { isChosen: true, isFavorite: true } });
+const afterChoice = (await call('GET', `/projects/${pid}/slogans`, { token })).json;
+check('un seul slogan retenu', chosen2.json.isChosen && afterChoice.filter((s) => s.kind === 'SLOGAN' && s.isChosen).length === 1 && devises.every((d) => !d.isChosen));
+const badSlogan = await call('PATCH', `/slogans/${s2.id}`, { token, body: { text: 'x' } });
+check('slogan retouché trop court → 400', badSlogan.status === 400);
+
+const emailSig = await call('POST', `/projects/${pid}/signatures`, {
+  token,
+  body: { kind: 'EMAIL', templateId: 'sidebar', data: { fullName: 'Aïssatou Diallo', jobTitle: 'Présidente', phones: ['+224 620 00 00 00'], email: 'aissatou@example.org', website: 'kaloum.org', address: 'Conakry', socials: [], photoUrl: '', legal: 'Agrément n° 123' } },
+});
+check('signature e-mail créée (type Signature du front)', emailSig.status === 201 && emailSig.json.templateId === 'sidebar' && emailSig.json.isPrivate === false && emailSig.json.html?.includes('Aïssatou') && !('fileKey' in emailSig.json), emailSig.json.detail);
+const sigHtml = await call('GET', `/signatures/${emailSig.json.id}/html`, { token });
+check('HTML : logo en URL absolue et mention de l’offre gratuite (SIG-13, SIG-15)', sigHtml.status === 200 && /src="http[^"]+\/public\/signatures\/[^"]+\/logo\.png/.test(sigHtml.json.html) && sigHtml.json.html.includes('Marka') && sigHtml.json.text.includes('+224 620 00 00 00'));
+const bannerSig = await call('PATCH', `/signatures/${emailSig.json.id}`, { token, body: { templateId: 'banner' } });
+check('modèle bandeau : slogan retenu repris', bannerSig.status === 200 && bannerSig.json.templateId === 'banner' && bannerSig.json.html.includes(chosen2.json.text), bannerSig.json.detail);
+const logoUrl = sigHtml.json.html.match(/src="([^"]+logo\.png[^"]*)"/)?.[1]?.replace(/&amp;/g, '&');
+const logoPng = logoUrl ? await fetch(logoUrl) : null;
+check('logo de la signature servi publiquement en PNG', logoPng?.status === 200 && logoPng.headers.get('content-type') === 'image/png');
+const badEmail = await call('POST', `/projects/${pid}/signatures`, { token, body: { kind: 'EMAIL', templateId: 'baroque', data: { fullName: 'X' } } });
+check('modèle inconnu → 400', badEmail.status === 400, badEmail.json.detail);
+
+const noAttest = await call('POST', `/projects/${pid}/signatures`, { token, body: { kind: 'HANDWRITTEN', data: { text: 'A. Diallo', fontId: 'great-vibes', ink: 'blue' } } });
+check('paraphe sans attestation → 400 ATTESTATION_REQUIRED', noAttest.status === 400 && noAttest.json.code === 'ATTESTATION_REQUIRED');
+const balanceBefore = (await call('GET', `/workspaces/${wid}/credits`, { token })).json.balance;
+const paraphe = await call('POST', `/projects/${pid}/signatures`, { token, body: { kind: 'HANDWRITTEN', data: { text: 'A. Diallo', fontId: 'great-vibes', ink: 'blue' }, attested: true } });
+const balanceAfter = (await call('GET', `/workspaces/${wid}/credits`, { token })).json.balance;
+check('paraphe créé, privé, 1 crédit (SIG-20)', paraphe.status === 201 && paraphe.json.isPrivate && !!paraphe.json.attestedAt && balanceBefore - balanceAfter === 1, [paraphe.status, balanceBefore, balanceAfter]);
+const parapheFile = await call('GET', `/signatures/${paraphe.json.id}/file`, { token });
+const parapheSvg = parapheFile.json.svgUrl ? await (await fetch(parapheFile.json.svgUrl)).text() : '';
+check('paraphe : URL signée courte, SVG en tracés (SIG-24)', parapheFile.status === 200 && new Date(parapheFile.json.expiresAt) - Date.now() <= 300_000 && parapheSvg.includes('<path') && !parapheSvg.includes('<text'));
+const parapheFetch = await fetch(parapheFile.json.url);
+check('paraphe : PNG transparent', parapheFetch.status === 200 && (await parapheFetch.arrayBuffer()).byteLength > 1000);
+
+const stampData = { shape: 'round', ringText: 'République de Guinée', bottomText: 'Conakry', centerText: 'RG', centerMode: 'acronym', ink: 'blue', inkEffect: true };
+const stamp = await call('POST', `/projects/${pid}/signatures`, { token, body: { kind: 'STAMP', data: stampData, attested: true } });
+check('cachet avec terme officiel → PENDING_REVIEW (§6.4)', stamp.status === 201 && stamp.json.status === 'PENDING_REVIEW' && stamp.json.templateId === 'round', stamp.json.status);
+const pendingFile = await call('GET', `/signatures/${stamp.json.id}/file`, { token });
+check('cachet en attente : fichier refusé', pendingFile.status === 409 && pendingFile.json.code === 'SIGNATURE_PENDING_REVIEW');
+const viewerFile = await call('GET', `/signatures/${paraphe.json.id}/file`, { token: other.json.accessToken });
+check('paraphe d’un autre espace → 404', viewerFile.status === 404);
+
+const freeBatch = await call('POST', `/projects/${pid}/signatures/batch`, { token, body: { csv: 'nom;fonction\nA;B' } });
+check('signatures en lot réservées à Pro → 403', freeBatch.status === 403 && freeBatch.json.code === 'PLAN_REQUIRED');
+await db.subscription.create({
+  data: { workspaceId: wid, planId: (await db.plan.findUniqueOrThrow({ where: { code: 'PRO' } })).id, status: 'ACTIVE', currentPeriodEnd: new Date(Date.now() + 30 * 86_400_000) },
+});
+const batch = await call('POST', `/projects/${pid}/signatures/batch`, { token, body: { csv: 'Nom;Fonction;E-mail;Téléphone\nMamadou Bah;Trésorier;mamadou@example.org;+224 621 11 11 11\n"Fanta Camara";Secrétaire;pas-un-email;\nMamadou Bah;Membre;;', templateId: 'compact' } });
+check('lot de signatures accepté (SIG-16)', batch.status === 202 && batch.json.count === 3, batch.json);
+check('lot de signatures terminé', (await waitJob(batch.json.jobId, token)) === 'SUCCEEDED');
+const batchJob = await call('GET', `/jobs/${batch.json.jobId}`, { token });
+const batchZip = Buffer.from(await (await fetch(batchJob.json.result.downloadUrl)).arrayBuffer());
+check('archive : HTML et texte par membre, noms uniques', zipEntries(batchZip).join(',') === 'mamadou-bah.html,mamadou-bah.txt,fanta-camara.html,fanta-camara.txt,mamadou-bah-2.html,mamadou-bah-2.txt', zipEntries(batchZip));
+const proHtml = await call('GET', `/signatures/${emailSig.json.id}/html`, { token });
+check('offre Pro : plus de mention de la plateforme', !proHtml.json.html.includes('Marka'));
+
+const pubSig = await call('POST', '/public/email-signature', { body: { templateId: 'minimal', data: { fullName: 'Ibrahima Sow', email: 'ibrahima@example.org' }, brand: { name: 'Sow & Fils', primary: '#0f766e', secondary: '#f59e0b' } } });
+check('signature e-mail sans compte', pubSig.status === 200 && pubSig.json.html.includes('Ibrahima Sow') && pubSig.json.html.includes('Sow &amp; Fils') && pubSig.json.html.includes('Marka'));
+
+// Modération : un administrateur avec 2FA valide ou refuse le cachet.
+const queueForbidden = await call('GET', '/admin/moderation', { token });
+check('file de modération interdite à un USER', queueForbidden.status === 403);
+await db.user.update({ where: { email: mfaEmail }, data: { role: 'ADMIN' } });
+const adminLogin = await call('POST', '/auth/login', { body: { email: mfaEmail, password, totpCode: otplib.authenticator.generate(setup.json.secret) } });
+const adminToken = adminLogin.json.accessToken;
+const queue = await call('GET', '/admin/moderation', { token: adminToken });
+const item = queue.json.find?.((i) => i.id === stamp.json.id);
+check('cachet dans la file de modération (type ModerationItem)', queue.status === 200 && item?.kind === 'STAMP' && /r[ée]publique/i.test(item.reason) && !/,/.test(item.reason) && item.previewSvg?.startsWith('<svg') && !!item.workspaceName, item?.reason);
+const reject = await call('PATCH', `/admin/signatures/${stamp.json.id}/review`, { token: adminToken, body: { decision: 'REJECT', note: 'Armoiries officielles' } });
+const rejectedFile = await call('GET', `/signatures/${stamp.json.id}/file`, { token });
+check('cachet refusé : fichier refusé', reject.status === 204 && rejectedFile.status === 403 && rejectedFile.json.code === 'SIGNATURE_REJECTED', [reject.status, rejectedFile.status]);
+const notified = await call('GET', '/notifications', { token });
+check('propriétaire notifié du refus avec le motif', notified.json.items?.some((n) => n.title === 'Cachet refusé' && n.body.includes('Armoiries')));
+const resubmit = await call('PATCH', `/signatures/${stamp.json.id}`, { token, body: { data: { ...stampData, ringText: 'Association Kaloum Jeunesse' }, attested: true } });
+check('cachet corrigé : actif, sans nouveau débit', resubmit.status === 200 && resubmit.json.status === 'ACTIVE');
+const approveAgain = await call('PATCH', `/admin/signatures/${stamp.json.id}/review`, { token: adminToken, body: { decision: 'APPROVE' } });
+check('revue d’un cachet non en attente → 409', approveAgain.status === 409);
+const stampFile = await call('GET', `/signatures/${stamp.json.id}/file`, { token });
+check('cachet actif : fichier disponible', stampFile.status === 200 && !!stampFile.json.url);
+const logoStamp = await call('PATCH', `/signatures/${stamp.json.id}`, { token, body: { data: { ...stampData, ringText: 'Association Kaloum', centerMode: 'logo' }, attested: true } });
+check('cachet avec le logo au centre', logoStamp.status === 200 && logoStamp.json.data.centerMode === 'logo');
+await db.$disconnect();
+const sigActivity = await call('GET', `/projects/${pid}/activity`, { token });
+check('historique : slogans et signatures', ['slogans.generate', 'slogans.choose', 'signatures.create', 'signatures.batch'].every((code) => sigActivity.json.some((a) => a.code === code)));
 
 const del = await call('DELETE', `/projects/${pid}`, { token });
 const gone = await call('GET', `/projects/${pid}`, { token });
