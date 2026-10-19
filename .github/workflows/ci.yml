@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: logo
+          POSTGRES_PASSWORD: logo
+          POSTGRES_DB: logo
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U logo" --health-interval 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://logo:logo@localhost:5432/logo?schema=public
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npx prisma migrate deploy
+      - run: npm run test:cov
+      - run: npm run build

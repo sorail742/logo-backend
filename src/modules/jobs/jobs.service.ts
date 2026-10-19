@@ -1,0 +1,160 @@
+import { InjectQueue } from '@nestjs/bullmq';
+import {
+  BadRequestException,
+  ConflictException,
+  HttpException,
+  HttpStatus,
+  Inject,
+  Injectable,
+} from '@nestjs/common';
+import { JobKind, JobStatus, LedgerReason, Prisma } from '@prisma/client';
+import { Queue } from 'bullmq';
+import Redis from 'ioredis';
+import { PrismaService } from '../../common/prisma/prisma.service';
+import { REDIS } from '../../common/redis/redis.module';
+import { FREE_DAILY_QUOTAS } from '../../shared/credit-costs';
+import { GENERATION_ATTEMPTS, GENERATION_QUEUE, GenerationJobData } from '../../shared/queues';
+import { CreditsService } from '../credits/credits.service';
+
+export interface EnqueueParams {
+  workspaceId: string;
+  projectId: string;
+  kind: JobKind;
+  input: Prisma.InputJsonValue;
+  cost: number;
+  idempotencyKey: string | undefined;
+  actorId: string;
+}
+
+const IDEMPOTENCY_TTL_S = 24 * 3600;
+const TERMINAL: JobStatus[] = [JobStatus.SUCCEEDED, JobStatus.FAILED, JobStatus.CANCELED];
+
+@Injectable()
+export class JobsService {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly credits: CreditsService,
+    @InjectQueue(GENERATION_QUEUE) private readonly queue: Queue<GenerationJobData>,
+    @Inject(REDIS) private readonly redis: Redis,
+  ) {}
+
+  /**
+   * Cycle d'une génération (§11.4) : idempotence, débit + création de la tâche QUEUED dans
+   * une même transaction, puis mise en file BullMQ. Renvoie l'identifiant de la tâche.
+   */
+  async enqueue(p: EnqueueParams): Promise<{ jobId: string; costCredits: number }> {
+    const key = validateIdempotencyKey(p.idempotencyKey);
+    const redisKey = `idem:gen:${p.workspaceId}:${key}`;
+
+    const reserved = await this.redis.set(redisKey, 'pending', 'EX', IDEMPOTENCY_TTL_S, 'NX');
+    if (!reserved) {
+      const existing = await this.redis.get(redisKey);
+      if (!existing || existing === 'pending') {
+        throw new ConflictException('Requête identique déjà en cours de traitement');
+      }
+      const job = await this.prisma.generationJob.findUnique({ where: { id: existing } });
+      if (job) return { jobId: job.id, costCredits: job.costCredits };
+    }
+
+    try {
+      const job = await this.prisma.$transaction(async (tx) => {
+        const costCredits = await this.resolveCost(tx, p);
+        const created = await tx.generationJob.create({
+          data: {
+            projectId: p.projectId,
+            kind: p.kind,
+            input: p.input,
+            costCredits,
+            status: JobStatus.QUEUED,
+          },
+        });
+        // Décrément conditionnel : en cas de course, la transaction entière est annulée.
+        await this.credits.debit(tx, {
+          workspaceId: p.workspaceId,
+          amount: costCredits,
+          reason: LedgerReason.GENERATION,
+          jobId: created.id,
+          actorId: p.actorId,
+          note: p.kind,
+        });
+        return created;
+      });
+
+      await this.queue.add(
+        p.kind,
+        { jobId: job.id },
+        {
+          jobId: job.id,
+          attempts: GENERATION_ATTEMPTS,
+          backoff: { type: 'exponential', delay: 2000 },
+          removeOnComplete: 1000,
+          removeOnFail: 5000,
+        },
+      );
+      await this.redis.set(redisKey, job.id, 'EX', IDEMPOTENCY_TTL_S);
+      return { jobId: job.id, costCredits: job.costCredits };
+    } catch (err) {
+      await this.redis.del(redisKey);
+      throw err;
+    }
+  }
+
+  /** Coût à débiter : le prix plein si le solde suffit, 0 si le quota quotidien gratuit le couvre. */
+  private async resolveCost(tx: Prisma.TransactionClient, p: EnqueueParams): Promise<number> {
+    if (p.cost <= 0) return 0;
+    const ws = await tx.workspace.findUniqueOrThrow({
+      where: { id: p.workspaceId },
+      select: { creditBalance: true },
+    });
+    if (ws.creditBalance >= p.cost) return p.cost;
+
+    const quota = FREE_DAILY_QUOTAS[p.kind] ?? 0;
+    const startOfDay = new Date();
+    startOfDay.setUTCHours(0, 0, 0, 0);
+    const usedToday = await tx.generationJob.count({
+      where: {
+        kind: p.kind,
+        costCredits: 0,
+        createdAt: { gte: startOfDay },
+        status: { not: JobStatus.FAILED },
+        project: { workspaceId: p.workspaceId },
+      },
+    });
+    if (usedToday < quota) return 0;
+
+    throw new HttpException(
+      { message: 'Crédits insuffisants et quota gratuit du jour atteint', quota, usedToday },
+      HttpStatus.PAYMENT_REQUIRED,
+    );
+  }
+
+  get(jobId: string) {
+    return this.prisma.generationJob.findUniqueOrThrow({
+      where: { id: jobId },
+      select: {
+        id: true,
+        projectId: true,
+        kind: true,
+        status: true,
+        costCredits: true,
+        error: true,
+        createdAt: true,
+        startedAt: true,
+        finishedAt: true,
+      },
+    });
+  }
+
+  isTerminal(status: JobStatus) {
+    return TERMINAL.includes(status);
+  }
+}
+
+function validateIdempotencyKey(key: string | undefined): string {
+  if (!key || !/^[A-Za-z0-9_-]{8,128}$/.test(key)) {
+    throw new BadRequestException(
+      'En-tête Idempotency-Key obligatoire (8 à 128 caractères alphanumériques, - ou _)',
+    );
+  }
+  return key;
+}

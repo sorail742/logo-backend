@@ -1,0 +1,587 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Énumérations ───
+enum PlatformRole {
+  USER
+  SUPPORT
+  ADMIN
+  SUPER_ADMIN
+}
+
+enum WorkspaceRole {
+  OWNER
+  EDITOR
+  VIEWER
+}
+
+enum WorkspaceKind {
+  PERSONAL
+  ORGANIZATION
+}
+
+enum EntityType {
+  ASSOCIATION
+  APPLICATION
+  PLATFORM
+  COMPANY
+  EVENT
+  OTHER
+}
+
+enum ProjectStatus {
+  DRAFT
+  IN_PROGRESS
+  FINALIZED
+  ARCHIVED
+}
+
+enum NameStyle {
+  DESCRIPTIVE
+  INVENTED
+  COMPOUND
+  METAPHORICAL
+  ACRONYM
+  PROPER
+}
+
+enum CheckKind {
+  DOMAIN
+  SOCIAL
+  APP_STORE
+  TRADEMARK
+  PHONETIC
+}
+
+enum CheckStatus {
+  AVAILABLE
+  TAKEN
+  UNKNOWN
+}
+
+enum LogoType {
+  WORDMARK
+  MONOGRAM
+  ICON_TEXT
+  EMBLEM
+}
+
+enum LogoEngine {
+  SVG_COMPOSER
+  IMAGE_VECTORIZE
+  UPLOAD
+}
+
+enum SignatureKind {
+  EMAIL
+  HANDWRITTEN
+  STAMP
+}
+
+enum SignatureStatus {
+  ACTIVE
+  PENDING_REVIEW
+  REJECTED
+}
+
+enum JobKind {
+  NAMES
+  LOGOS
+  SLOGANS
+  SIGNATURE
+  BRAND_GUIDE
+  EXPORT_ZIP
+}
+
+enum JobStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CANCELED
+}
+
+enum LedgerReason {
+  PURCHASE
+  SUBSCRIPTION_GRANT
+  GENERATION
+  REFUND
+  ADMIN_ADJUSTMENT
+  PROMO
+}
+
+enum PaymentProvider {
+  ORANGE_MONEY
+  MOBILE_MONEY_AGGREGATOR
+  CARD
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  REFUNDED
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  EXPIRED
+}
+
+enum AssetKind {
+  ICON
+  FONT
+  LOGO_FILE
+  SIGNATURE_FILE
+  EXPORT
+  UPLOAD
+  AVATAR
+}
+
+enum LicenseKind {
+  OFL
+  MIT
+  CC0
+  APACHE2
+  PROPRIETARY
+}
+
+// ─── Identité et accès ───
+model User {
+  id              String        @id @default(uuid())
+  email           String?       @unique
+  phone           String?       @unique
+  passwordHash    String?
+  fullName        String
+  avatarUrl       String?
+  locale          String        @default("fr")
+  country         String        @default("GN")
+  role            PlatformRole  @default(USER)
+  emailVerifiedAt DateTime?
+  totpSecret      String?       // chiffré (AES-256-GCM)
+  suspendedAt     DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  deletedAt       DateTime?
+
+  oauthAccounts   OAuthAccount[]
+  refreshTokens   RefreshToken[]
+  memberships     Membership[]
+  comments        Comment[]
+  notifications   Notification[]
+  auditLogs       AuditLog[]
+}
+
+model OAuthAccount {
+  id                String @id @default(uuid())
+  userId            String
+  provider          String // "google"
+  providerAccountId String
+  user              User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model RefreshToken {
+  id        String    @id @default(uuid())
+  userId    String
+  tokenHash String    @unique
+  userAgent String?
+  ip        String?
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Workspace {
+  id            String        @id @default(uuid())
+  name          String
+  slug          String        @unique
+  kind          WorkspaceKind @default(PERSONAL)
+  creditBalance Int           @default(0) // cache du grand livre
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  members       Membership[]
+  invitations   Invitation[]
+  projects      Project[]
+  subscription  Subscription?
+  payments      Payment[]
+  ledger            CreditLedgerEntry[]
+  associationProofs AssociationProof[]
+}
+
+model Membership {
+  id          String        @id @default(uuid())
+  userId      String
+  workspaceId String
+  role        WorkspaceRole
+  createdAt   DateTime      @default(now())
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, workspaceId])
+}
+
+model Invitation {
+  id          String        @id @default(uuid())
+  workspaceId String
+  email       String
+  role        WorkspaceRole
+  tokenHash   String        @unique
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+// ─── Projets ───
+model Project {
+  id           String           @id @default(uuid())
+  workspaceId  String
+  entityType   EntityType
+  status       ProjectStatus    @default(DRAFT)
+  title        String           // titre de travail
+  chosenNameId String?          @unique
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  deletedAt    DateTime?        // corbeille 30 jours
+
+  workspace    Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  brief        Brief?
+  names        NameSuggestion[] @relation("ProjectNames")
+  chosenName   NameSuggestion?  @relation("ChosenName", fields: [chosenNameId], references: [id])
+  logos        Logo[]
+  slogans      Slogan[]
+  signatures   Signature[]
+  brandKits    BrandKit[]
+  jobs         GenerationJob[]
+  comments     Comment[]
+
+  @@index([workspaceId, status])
+}
+
+model Brief {
+  id          String      @id @default(uuid())
+  projectId   String      @unique
+  sector      String
+  mission     String      @db.VarChar(500)
+  values      String[]
+  audience    String?
+  languages   String[]    @default(["fr"])
+  nameStyles  NameStyle[]
+  maxLength   Int?
+  mustInclude String[]
+  mustAvoid   String[]
+  tone        String?
+  updatedAt   DateTime    @updatedAt
+  project     Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+// ─── Contenus générés ───
+model NameSuggestion {
+  id            String              @id @default(uuid())
+  projectId     String
+  jobId         String?
+  value         String
+  acronym       String?
+  meaning       String
+  style         NameStyle
+  pronunciation String?
+  score         Int?
+  isFavorite    Boolean             @default(false)
+  isRejected    Boolean             @default(false)
+  createdAt     DateTime            @default(now())
+  project       Project             @relation("ProjectNames", fields: [projectId], references: [id], onDelete: Cascade)
+  chosenFor     Project?            @relation("ChosenName")
+  job           GenerationJob?      @relation(fields: [jobId], references: [id])
+  checks        AvailabilityCheck[]
+  votes         NameVote[]
+
+  @@unique([projectId, value])
+}
+
+model AvailabilityCheck {
+  id        String         @id @default(uuid())
+  nameId    String
+  kind      CheckKind
+  target    String         // ex. "monasso.org", "instagram"
+  status    CheckStatus
+  details   Json?
+  checkedAt DateTime       @default(now())
+  name      NameSuggestion @relation(fields: [nameId], references: [id], onDelete: Cascade)
+
+  @@index([nameId, kind])
+}
+
+model NameVote {
+  nameId String
+  userId String
+  value  Int            // +1 ou -1
+  name   NameSuggestion @relation(fields: [nameId], references: [id], onDelete: Cascade)
+
+  @@id([nameId, userId])
+}
+
+model Logo {
+  id          String         @id @default(uuid())
+  projectId   String
+  jobId       String?
+  type        LogoType
+  engine      LogoEngine
+  style       String
+  isFavorite  Boolean        @default(false)
+  isExclusive Boolean        @default(false) // vrai après achat
+  phash       String?        // empreinte perceptuelle
+  createdAt   DateTime       @default(now())
+  project     Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  job         GenerationJob? @relation(fields: [jobId], references: [id])
+  versions    LogoVersion[]
+
+  @@index([phash])
+}
+
+model LogoVersion {
+  id        String   @id @default(uuid())
+  logoId    String
+  number    Int
+  label     String?
+  spec      Json     // texte, police, couleurs, icône, disposition
+  svg       String   // source SVG
+  createdAt DateTime @default(now())
+  logo      Logo     @relation(fields: [logoId], references: [id], onDelete: Cascade)
+
+  @@unique([logoId, number])
+}
+
+model Slogan {
+  id         String   @id @default(uuid())
+  projectId  String
+  text       String
+  kind       String   @default("SLOGAN") // SLOGAN | DEVISE | MISSION
+  tone       String?
+  isFavorite Boolean  @default(false)
+  isChosen   Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model Signature {
+  id         String          @id @default(uuid())
+  projectId  String
+  kind       SignatureKind
+  status     SignatureStatus @default(ACTIVE)
+  templateId String?
+  data       Json            // champs saisis
+  html       String?         // signature e-mail
+  fileKey    String?         // paraphe ou cachet (stockage objet privé)
+  isPrivate  Boolean         @default(true)
+  attestedAt DateTime?       // « je suis habilité »
+  createdAt  DateTime        @default(now())
+  project    Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  template   Template?       @relation(fields: [templateId], references: [id])
+}
+
+model BrandKit {
+  id                String    @id @default(uuid())
+  projectId         String
+  version           Int
+  palette           Json      // [{ hex, rgb, cmyk, role }]
+  fonts             Json
+  logoVersionId     String?
+  sloganId          String?
+  guidePdfKey       String?
+  zipKey            String?
+  shareToken        String?   @unique
+  sharePasswordHash String?
+  shareExpiresAt    DateTime?
+  createdAt         DateTime  @default(now())
+  project           Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, version])
+}
+
+// ─── Génération et bibliothèque ───
+model GenerationJob {
+  id            String           @id @default(uuid())
+  projectId     String
+  kind          JobKind
+  status        JobStatus        @default(QUEUED)
+  input         Json
+  provider      String?
+  promptVersion String?
+  costCredits   Int
+  costUsdMicros Int?             // coût IA réel
+  error         String?
+  startedAt     DateTime?
+  finishedAt    DateTime?
+  createdAt     DateTime         @default(now())
+  project       Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  names         NameSuggestion[]
+  logos         Logo[]
+
+  @@index([status, createdAt])
+}
+
+model Asset {
+  id         String       @id @default(uuid())
+  kind       AssetKind
+  name       String
+  storageKey String       @unique
+  mimeType   String
+  sizeBytes  Int
+  license    LicenseKind?
+  tags       String[]
+  isActive   Boolean      @default(true)
+  createdAt  DateTime     @default(now())
+
+  @@index([kind, isActive])
+}
+
+model Template {
+  id         String      @id @default(uuid())
+  kind       String      // EMAIL_SIGNATURE | STAMP | BRAND_GUIDE
+  name       String
+  content    Json
+  isActive   Boolean     @default(true)
+  signatures Signature[]
+}
+
+model BlockedTerm {
+  id       String @id @default(uuid())
+  term     String
+  language String
+  scope    String // NAME | SLOGAN | STAMP
+
+  @@unique([term, language, scope])
+}
+
+// ─── Facturation ───
+model Plan {
+  id             String         @id @default(uuid())
+  code           String         @unique // FREE, PACK, ASSOCIATION, PRO, AGENCY
+  name           String
+  priceGnf       BigInt
+  interval       String?        // null = paiement unique, "month", "year"
+  monthlyCredits Int            @default(0)
+  maxMembers     Int            @default(1)
+  features       Json
+  isActive       Boolean        @default(true)
+  subscriptions  Subscription[]
+}
+
+model Subscription {
+  id                String             @id @default(uuid())
+  workspaceId       String             @unique
+  planId            String
+  status            SubscriptionStatus
+  currentPeriodEnd  DateTime
+  cancelAtPeriodEnd Boolean            @default(false)
+  workspace         Workspace          @relation(fields: [workspaceId], references: [id])
+  plan              Plan               @relation(fields: [planId], references: [id])
+}
+
+model Payment {
+  id             String          @id @default(uuid())
+  workspaceId    String
+  provider       PaymentProvider
+  providerRef    String?         @unique
+  idempotencyKey String          @unique
+  amountGnf      BigInt
+  status         PaymentStatus   @default(PENDING)
+  planCode       String?
+  creditsGranted Int?
+  raw            Json?           // réponse brute du prestataire
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  workspace      Workspace       @relation(fields: [workspaceId], references: [id])
+  invoice        Invoice?
+}
+
+model Invoice {
+  id        String   @id @default(uuid())
+  paymentId String   @unique
+  number    String   @unique // ex. FAC-2026-000123
+  amountGnf BigInt
+  taxGnf    BigInt   @default(0)
+  pdfKey    String
+  issuedAt  DateTime @default(now())
+  payment   Payment  @relation(fields: [paymentId], references: [id])
+}
+
+model CreditLedgerEntry {
+  id          String       @id @default(uuid())
+  workspaceId String
+  delta       Int          // positif = crédit, négatif = débit
+  reason      LedgerReason
+  jobId       String?
+  paymentId   String?
+  actorId     String?
+  note        String?
+  createdAt   DateTime     @default(now())
+  workspace   Workspace    @relation(fields: [workspaceId], references: [id])
+
+  @@index([workspaceId, createdAt])
+}
+
+model AssociationProof {
+  id           String    @id @default(uuid())
+  workspaceId  String
+  fileKey      String    // justificatif (stockage privé)
+  status       String    @default("PENDING") // PENDING | APPROVED | REJECTED
+  reviewNote   String?
+  reviewedById String?
+  createdAt    DateTime  @default(now())
+  reviewedAt   DateTime?
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+// ─── Suivi ───
+model Comment {
+  id         String   @id @default(uuid())
+  projectId  String
+  authorId   String
+  targetType String   // NAME | LOGO | SIGNATURE | SLOGAN
+  targetId   String
+  body       String
+  createdAt  DateTime @default(now())
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  author     User     @relation(fields: [authorId], references: [id])
+}
+
+model Notification {
+  id        String    @id @default(uuid())
+  userId    String
+  type      String
+  payload   Json
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt])
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  actorId    String?
+  action     String   // ex. "credits.adjust"
+  entityType String
+  entityId   String
+  before     Json?
+  after      Json?
+  ip         String?
+  createdAt  DateTime @default(now())
+  actor      User?    @relation(fields: [actorId], references: [id])
+
+  @@index([entityType, entityId])
+}
