@@ -166,12 +166,14 @@ export class BrandKitsService {
     }
     const { project, ...row } = kit;
     const [dto] = await this.present([row], true);
+    // Une version figée fait foi, même sans sigle ni origine ; repli sur le projet sinon.
     const content = parseKitContent(kit.content);
+    const frozen = content.name !== undefined;
     return {
       ...dto,
       projectName: content.name ?? project.chosenName?.value ?? project.title,
-      acronym: content.acronym ?? project.chosenName?.acronym ?? null,
-      meaning: content.meaning ?? project.chosenName?.meaning ?? null,
+      acronym: frozen ? (content.acronym ?? null) : (project.chosenName?.acronym ?? null),
+      meaning: frozen ? (content.meaning ?? null) : (project.chosenName?.meaning ?? null),
       entityType: project.entityType,
     };
   }
