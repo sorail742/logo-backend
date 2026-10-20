@@ -7,6 +7,6 @@ import { SignaturesService } from './signatures.service';
 @Module({
   controllers: [SignaturesController],
   providers: [SignaturesService, SignatureBrandService, SignatureBatchService],
-  exports: [SignatureBatchService],
+  exports: [SignatureBatchService, SignatureBrandService],
 })
 export class SignaturesModule {}

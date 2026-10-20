@@ -31,6 +31,9 @@ const TAGLINE_SPACING = 0.18;
 const PAD = 32;
 const MARK_SIZE = 112;
 
+/** Marge, côté du symbole et corps du nom, en unités du SVG (zone de protection de la charte). */
+export const LOGO_METRICS = { pad: PAD, mark: MARK_SIZE, text: TEXT_SIZE } as const;
+
 function variantColors(colors: LogoColors, variant: LogoVariant): LogoColors {
   if (variant === 'black') {
     return { primary: '#111111', secondary: '#111111', text: '#111111', background: '#ffffff' };

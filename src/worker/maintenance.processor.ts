@@ -30,7 +30,11 @@ export class MaintenanceProcessor extends WorkerHost implements OnApplicationBoo
   }
 
   async onApplicationBootstrap() {
-    await this.queue.upsertJobScheduler('nightly', { pattern: '0 3 * * *', tz: 'Africa/Conakry' }, { name: 'nightly' });
+    await this.queue.upsertJobScheduler(
+      'nightly',
+      { pattern: '0 3 * * *', tz: 'Africa/Conakry' },
+      { name: 'nightly' },
+    );
   }
 
   async process(_job: Job) {
@@ -43,7 +47,10 @@ export class MaintenanceProcessor extends WorkerHost implements OnApplicationBoo
 
     // Comptes supprimés depuis plus de 30 jours : anonymisation (les factures restent liées à l'espace).
     const users = await this.prisma.user.findMany({
-      where: { deletedAt: { lt: new Date(now - ACCOUNT_RETENTION_DAYS * day) }, email: { not: null } },
+      where: {
+        deletedAt: { lt: new Date(now - ACCOUNT_RETENTION_DAYS * day) },
+        email: { not: null },
+      },
       select: { id: true },
     });
     for (const { id } of users) {
@@ -53,7 +60,14 @@ export class MaintenanceProcessor extends WorkerHost implements OnApplicationBoo
         this.prisma.membership.deleteMany({ where: { userId: id } }),
         this.prisma.user.update({
           where: { id },
-          data: { email: null, phone: null, passwordHash: null, totpSecret: null, avatarUrl: null, fullName: 'Compte supprimé' },
+          data: {
+            email: null,
+            phone: null,
+            passwordHash: null,
+            totpSecret: null,
+            avatarUrl: null,
+            fullName: 'Compte supprimé',
+          },
         }),
       ]);
     }
@@ -73,6 +87,18 @@ export class MaintenanceProcessor extends WorkerHost implements OnApplicationBoo
     for (const asset of exports) {
       await this.storage.delete(asset.storageKey);
       await this.prisma.asset.delete({ where: { id: asset.id } });
+    }
+    // Kits dont la charte ou l'archive vient d'être purgée : régénérables sans coût (§7.4).
+    const purgedKeys = exports.map((asset) => asset.storageKey);
+    if (purgedKeys.length) {
+      await this.prisma.brandKit.updateMany({
+        where: { guidePdfKey: { in: purgedKeys } },
+        data: { guidePdfKey: null },
+      });
+      await this.prisma.brandKit.updateMany({
+        where: { zipKey: { in: purgedKeys } },
+        data: { zipKey: null },
+      });
     }
 
     const drift = await this.credits.reconcileBalances();

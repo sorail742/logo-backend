@@ -5,6 +5,7 @@ import { PrismaService } from '../../common/prisma/prisma.service';
 import { REDIS } from '../../common/redis/redis.module';
 import type { NameGenerationInput } from '../../shared/ai-schemas';
 import { CREDIT_COSTS, PUBLIC_TRIES_PER_DAY } from '../../shared/credit-costs';
+import { BrandKitsService } from '../brand-kits/brand-kits.service';
 import { JobsService } from '../jobs/jobs.service';
 import { NameGeneratorService } from './name-generator.service';
 import { NAME_INCLUDE, toNameDto } from './name.presenter';
@@ -18,6 +19,7 @@ export class NamesService {
     private readonly jobs: JobsService,
     private readonly generator: NameGeneratorService,
     @Inject(REDIS) private readonly redis: Redis,
+    private readonly brandKits: BrandKitsService,
   ) {}
 
   /** Lance un lot de 10 noms (NOM-10, NOM-13) : 202 + jobId. */
@@ -30,7 +32,8 @@ export class NamesService {
       where: { id: ctx.projectId },
       include: { brief: true },
     });
-    if (!project.brief) throw new BadRequestException('Complétez le brief avant de générer des noms');
+    if (!project.brief)
+      throw new BadRequestException('Complétez le brief avant de générer des noms');
 
     let likeName: string | undefined;
     if (dto.referenceNameId) {
@@ -78,7 +81,11 @@ export class NamesService {
         ...(!q.rejected && { isRejected: false }),
       },
       include: NAME_INCLUDE,
-      orderBy: [{ isFavorite: 'desc' }, { score: { sort: 'desc', nulls: 'last' } }, { createdAt: 'desc' }],
+      orderBy: [
+        { isFavorite: 'desc' },
+        { score: { sort: 'desc', nulls: 'last' } },
+        { createdAt: 'desc' },
+      ],
       take: 200,
     });
     return names.map((n) => toNameDto(n, userId));
@@ -104,18 +111,34 @@ export class NamesService {
       create: { nameId, userId, value },
       update: { value },
     });
-    const name = await this.prisma.nameSuggestion.findUniqueOrThrow({ where: { id: nameId }, include: NAME_INCLUDE });
+    const name = await this.prisma.nameSuggestion.findUniqueOrThrow({
+      where: { id: nameId },
+      include: NAME_INCLUDE,
+    });
     return toNameDto(name, userId);
   }
 
-  /** NOM-32 : le nom retenu devient le nom du projet. */
+  /**
+   * NOM-32 : le nom retenu devient le nom du projet. NOM-33 : un changement de nom final
+   * crée une nouvelle version du kit s'il en existe déjà un.
+   */
   async choose(projectId: string, nameId: string, userId: string) {
     const name = await this.prisma.nameSuggestion.findFirst({ where: { id: nameId, projectId } });
     if (!name) throw new BadRequestException('Ce nom n’appartient pas au projet');
     if (name.isRejected) throw new BadRequestException('Ce nom a été rejeté');
-    const project = await this.prisma.project.update({
+    const before = await this.prisma.project.findUniqueOrThrow({
+      where: { id: projectId },
+      select: { chosenNameId: true },
+    });
+    await this.prisma.project.update({
       where: { id: projectId },
       data: { chosenNameId: nameId, status: ProjectStatus.IN_PROGRESS },
+    });
+    if (before.chosenNameId && before.chosenNameId !== nameId) {
+      await this.brandKits.onNameChanged(projectId);
+    }
+    const project = await this.prisma.project.findUniqueOrThrow({
+      where: { id: projectId },
       include: PROJECT_INCLUDE,
     });
     return toProjectDto(project, userId);

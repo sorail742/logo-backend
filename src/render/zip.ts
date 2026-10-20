@@ -8,7 +8,7 @@ export interface ZipEntry {
   data: Buffer | string;
 }
 
-const STORED_EXTENSIONS = /\.(png|jpe?g|zip|woff2?)$/i;
+const STORED_EXTENSIONS = /\.(png|jpe?g|zip|docx|woff2?)$/i;
 // Date DOS fixe (1er janvier 2026) : deux archives identiques ont le même contenu.
 const DOS_TIME = 0;
 const DOS_DATE = ((2026 - 1980) << 9) | (1 << 5) | 1;

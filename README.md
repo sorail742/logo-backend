@@ -56,7 +56,8 @@ src/
   common/               guards (JWT, rôles, espace), décorateurs, filtre problem+json, stockage, utilitaires
   shared/               coûts en crédits, files, schémas zod des sorties IA
   render/               moteur SVG (futur packages/render) : polices et texte en tracés, icônes,
-                        composition des logos, variantes, SVGO, PNG, JPG, PDF, ICO, ZIP, pHash
+                        composition des logos, variantes, SVGO, PNG, JPG, PDF, ICO, ZIP, pHash,
+                        charte graphique PDF, supports imprimables, papier à en-tête Word
   modules/
     auth/               inscription, connexion, Google, refresh avec rotation, mot de passe oublié, 2FA
     users/              /me, suppression, export des données
@@ -64,6 +65,10 @@ src/
     projects/           projets, brief, corbeille, duplication
     names/              génération de noms, favoris, votes, choix final, essai public
     logos/              moteur A, import nettoyé, versions, variantes, exports (worker)
+    slogans/            slogans, devises, phrases de mission
+    signatures/         signature e-mail, paraphe, cachet, lots CSV
+    brand-kits/         kit de marque : versions, charte PDF et archive (worker), partage public
+    comments/           commentaires et mentions @
     library/            bibliothèque : icônes, polices, modèles
     availability/       domaines (RDAP), réseaux, marques, comparaison phonétique
     jobs/               file de génération, idempotence, SSE
@@ -71,7 +76,7 @@ src/
     ai/                 interface AiProvider + fournisseur factice
     moderation/         liste noire, marques célèbres
     billing/            offres, solde, historique
-    notifications/      notifications in-app
+    notifications/      notifications dans l'application et par e-mail
     apparel/            module textile : supports, tenues, contrôle de conformité, effectifs, BAT, ateliers
     admin/              back-office : stats, utilisateurs, crédits, liste noire, audit
     audit/              journal d'audit
@@ -85,10 +90,12 @@ src/
 Les réponses suivent les types du front ([logo-frontend](https://github.com/sorail742/logo-frontend), `src/lib/types.ts`), appelés à devenir `packages/shared` (§11.2). Les présentateurs (`*.presenter.ts`) les produisent à partir des modèles Prisma :
 
 - **Session** : `register`, `login`, `refresh`, `google` et `2fa/verify` renvoient `{ accessToken, user }` ; l'activation de la 2FA renvoie aussi 10 codes de secours à usage unique (§14.1), acceptés à la place du code TOTP.
-- **Erreurs** : `code` explicite quand le front doit réagir (`MFA_REQUIRED`, `MFA_INVALID`, `INSUFFICIENT_CREDITS`).
+- **Erreurs** : `code` explicite quand le front doit réagir (`MFA_REQUIRED`, `MFA_INVALID`, `INSUFFICIENT_CREDITS`, `PLAN_REQUIRED`, `LOGO_REQUIRED`).
 - **Espaces** : rôle de l'utilisateur et offre en vigueur (`planCode`) ; membres et invitations en attente ; invitation par lien (`asLink`).
 - **Projets** : brief, nom retenu, avancement du parcours (`progress`), aperçu du logo favori (`previewSpec`), historique d'activité (`GET /projects/:pid/activity`, COL-04, tiré du journal d'audit) ; parcours « J'ai déjà un nom » (`existingName`).
 - **Noms** : total des votes et vote de l'utilisateur (`votes`, `myVote`), vérifications avec lien de contrôle manuel.
+- **Kits** : contenu figé de la version (`name`, `acronym`, `meaning`, `slogan`, `devise`, `mission`), `logoSpec` et, pour un logo importé, `logoSvg` ; liens signés `guidePdfUrl` et `zipUrl` (Éditeur et Propriétaire), `guideCost` (3 ou 0), `restoredFrom`. Page publique : `PublicKit`, mot de passe dans l'en-tête `X-Kit-Password` (`PASSWORD_REQUIRED`, `PASSWORD_INVALID`).
+- **Commentaires** : `authorName` et membres mentionnés (`mentions`).
 - **Listes paginées** (`items`, `nextCursor`) : projets, grand livre, notifications, utilisateurs et journal du back-office.
 
 Les liens des e-mails pointent vers les pages du front (`/verifier-email`, `/reinitialiser-mot-de-passe`, `/invitation/:token`). Si le front et l'API sont servis sur deux domaines distincts, `REFRESH_COOKIE_SAMESITE=none` rend le cookie de rafraîchissement utilisable (il est alors sécurisé).
@@ -98,7 +105,7 @@ Les liens des e-mails pointent vers les pages du front (`/verifier-email`, `/rei
 Deux niveaux (§3), vérifiés côté API :
 
 - **Rôle plateforme** (`USER < SUPPORT < ADMIN < SUPER_ADMIN`) : `@Roles('ADMIN')` + `RolesGuard`. Les rôles internes exigent une session ouverte avec un code TOTP.
-- **Rôle dans l'espace** (`VIEWER < EDITOR < OWNER`) : `@WorkspaceAccess('EDITOR')` + `WorkspaceGuard`. L'espace est déduit de `:wid`, `:pid`, `:nid`, `:lid`, `:did` ou `:jid`. Le support a un accès en lecture par défaut ; un non-membre reçoit 404.
+- **Rôle dans l'espace** (`VIEWER < EDITOR < OWNER`) : `@WorkspaceAccess('EDITOR')` + `WorkspaceGuard`. L'espace est déduit de `:wid`, `:pid`, `:nid`, `:lid`, `:did`, `:kid`, `:cid`, `:sid` ou `:jid`. Le support a un accès en lecture par défaut ; un non-membre reçoit 404.
 
 ## Cycle d'une génération (§11.4)
 
@@ -116,7 +123,7 @@ Deux niveaux (§3), vérifiés côté API :
 | 2. Générateur de noms : brief, génération, vérifications, favoris, choix | Fait (fournisseur IA factice) |
 | 3. Logos (moteur SVG, éditeur, exports) | Fait pour le moteur A (fournisseur IA factice) ; moteur B (image + vectorisation) à faire |
 | 4. Signatures (slogans, e-mail, paraphe, cachet) | Fait (fournisseur IA factice) ; contrôle IA des slogans connus à faire |
-| 5. Kit de marque, partage, commentaires | À faire |
+| 5. Kit de marque, partage, commentaires | Fait : versions, charte PDF, archive, supports imprimables, partage, commentaires et mentions, notifications par e-mail |
 | 6. Paiements (Orange Money, abonnements, factures) | À faire |
 | 8a. Textile : gabarits, éditeur, maquettes, BAT | Partiel : supports, zones, tailles, préréglages, éléments, contrôle, BAT, ateliers, admin. Propositions IA et maquettes 2D à faire |
 | 8b. Textile : numéros, effectifs, pack atelier | Partiel : import et contrôle d'effectif, ajustement des noms. Polices de numéros et exports par technique à faire |
@@ -132,7 +139,7 @@ Le front et le serveur partagent la même spécification déclarative (`LogoSpec
 - **Export** (`POST /logos/:lid/export`, tâche `LOGO_EXPORT`, 0 crédit) : archive ZIP avec SVG optimisés, PDF vectoriels, PNG transparents 512/1024/2048, JPG, pack d'icônes d'app (favicon.ico 16/32/48, 180, 192, 512, 1024), formats réseaux sociaux et LICENCES.txt. Offre gratuite : PNG 512 px filigrané uniquement (`restricted: true`). Le lien signé est donné par `GET /jobs/:jid` (`result.downloadUrl`) ; les exports sont purgés après 7 jours.
 - **Import** (`POST /projects/:pid/logos/import`) : SVG nettoyé par liste blanche (ni script, ni événement, ni lien ou ressource externe, ni DTD) ou PNG encapsulé ; palette extraite. Le SVG d'origine reste la version 1 ; les versions suivantes sont recomposées depuis la spec.
 
-Moteur B (image IA + vectorisation, « Devrait ») : la route répond 501 tant que le fournisseur d'images n'est pas choisi (§15.4). L'exclusivité d'un logo (`isExclusive`) sera posée à l'achat (phase 6).
+Moteur B (image IA + vectorisation, « Devrait ») : la route répond 501 tant que le fournisseur d'images n'est pas choisi (§15.4). L'exclusivité d'un logo (`isExclusive`) est posée quand il entre dans un kit sur une offre payante.
 
 ## Module 3 — signatures (§6)
 
@@ -141,6 +148,17 @@ Moteur B (image IA + vectorisation, « Devrait ») : la route répond 501 tant q
 - **Signatures en lot** (`POST /projects/:pid/signatures/batch`, offres Pro et Agence, tâche `SIGNATURE`) : CSV (nom, fonction, e-mail, téléphone) appliqué à la signature e-mail du projet ; archive ZIP d'un HTML et d'un texte par membre (`result.downloadUrl`).
 - **Paraphe et cachet** (`kind: HANDWRITTEN | STAMP`, 1 crédit, attestation obligatoire) : rendu serveur en tracés ([src/render/stamp.ts](src/render/stamp.ts)), texte circulaire compris, encre et effet d'encre, logo du projet au centre. SVG et PNG transparent 2048 px stockés en privé, servis par URL signée de 5 minutes (`GET /signatures/:sid/file`).
 - **Modération** (§6.4) : un cachet portant un terme officiel (« République », « Ministère »…) ou un terme de la liste noire `STAMP` passe en `PENDING_REVIEW` ; son fichier n'est pas servi. `GET /admin/moderation` liste les cachets en attente avec leur aperçu ; `PATCH /admin/signatures/:sid/review` (`APPROVE` ou `REJECT` avec motif, administrateur) trace la décision et notifie les propriétaires de l'espace. Un cachet refusé puis corrigé repasse par le contrôle.
+
+## Module 4 — kit de marque et collaboration (§7)
+
+- **Versions** (KIT-01, KIT-06) : `POST /projects/:pid/brand-kits` fige l'état du projet (nom retenu, sigle et origine, logo favori, palette HEX/RGB/CMJN, polices avec licence, slogan, devise et mission choisis). `POST /brand-kits/:kid/restore` recopie une ancienne version sous un nouveau numéro. Changer de nom final crée une nouvelle version (NOM-33).
+- **Charte graphique PDF** (KIT-02, `POST /brand-kits/:kid/guide`, tâche `BRAND_GUIDE`, `Idempotency-Key` obligatoire) : 3 crédits la première fois pour une version, puis régénérable sans coût (une version restaurée hérite de la charte payée). Réservée aux offres qui l'incluent (`PLAN_REQUIRED` sinon). Neuf pages vectorielles ([src/render/brand-guide.ts](src/render/brand-guide.ts)) : couverture, origine du nom, logo et variantes, zone de protection et taille minimale, usages interdits, couleurs et contraste, typographies (spécimens en tracés), signatures (slogan, devise, cachet, paraphe, texte de la signature e-mail), exemples d'application.
+- **Archive ZIP** (KIT-03, `POST /brand-kits/:kid/zip`, tâche `EXPORT_ZIP`, 0 crédit) : `logo/svg`, `logo/png`, `logo/pdf`, `logo/jpg`, `icones-app`, `reseaux-sociaux`, `signatures` (HTML et texte de la signature e-mail, slogans, cachet et paraphe validés), `supports`, `charte.pdf` (si payée), `LICENCES.txt`, `LISEZMOI.txt`. Offre gratuite : PNG 512 px filigranés, sans vectoriel, charte ni supports (§7.4).
+- **Supports imprimables** (KIT-04, dans l'archive) : carte de visite recto verso et carte de membre d'association avec fond perdu de 3 mm (TrimBox renseignée), papier à en-tête A4 en PDF et en Word (OOXML écrit sans dépendance, logo en en-tête). Les coordonnées viennent de la signature e-mail du projet.
+- **Fichiers** : stockés en privé, servis par URL signée de 15 minutes (`guidePdfUrl`, `zipUrl`, `result.downloadUrl`), purgés après 7 jours puis régénérables.
+- **Partage** (KIT-05, `POST /brand-kits/:kid/share`) : lien en lecture seule, mot de passe (argon2id) et date d'expiration facultatifs, révocable. `GET /public/kits/:token` (20 requêtes par minute) renvoie le kit et ses liens de téléchargement.
+- **Commentaires** (COL-02, `GET|POST /projects/:pid/comments`, `DELETE /comments/:cid`) : sur le projet, un nom, un logo, une signature, un slogan ou le kit ; tout membre, lecteur compris. Mentions `@Prénom`, `@PrénomNom` ou `@partie-locale-de-l-e-mail`, sans casse ni accents.
+- **Notifications** (COL-03) : dans l'application et par e-mail pour une mention, une charte ou une archive prête, des crédits bas (seuil de 5, une fois au franchissement) ; dans l'application pour une réponse dans une discussion, une invitation reçue par un utilisateur inscrit, un export de logo ou un lot de signatures prêt.
 
 ## Module 5 — décoration textile (§16)
 

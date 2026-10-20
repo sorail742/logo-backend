@@ -1,4 +1,4 @@
-// Test de fumée de bout en bout (phases 1 à 4, module 5) contre une API et un worker lancés localement.
+// Test de fumée de bout en bout (phases 1 à 5, module 5) contre une API et un worker lancés localement.
 // Usage : npm run test:smoke   (API=http://hote/api/v1 pour une autre cible)
 import { PrismaClient } from '@prisma/client';
 import otplib from 'otplib';
@@ -445,6 +445,140 @@ const stampFile = await call('GET', `/signatures/${stamp.json.id}/file`, { token
 check('cachet actif : fichier disponible', stampFile.status === 200 && !!stampFile.json.url);
 const logoStamp = await call('PATCH', `/signatures/${stamp.json.id}`, { token, body: { data: { ...stampData, ringText: 'Association Kaloum', centerMode: 'logo' }, attested: true } });
 check('cachet avec le logo au centre', logoStamp.status === 200 && logoStamp.json.data.centerMode === 'logo');
+
+// ─── Phase 5 : kit de marque, partage, commentaires, notifications ───
+const kit1 = await call('POST', `/projects/${pid}/brand-kits`, { token });
+check(
+  'kit v1 : nom, palette HEX/RGB/CMJN, polices sous licence, slogan (KIT-01)',
+  kit1.status === 201 && kit1.json.version === 1 && kit1.json.name === chosen.json.chosenName.value &&
+    kit1.json.palette.length === 4 && kit1.json.palette.every((c) => /^#[0-9A-F]{6}$/.test(c.hex) && c.rgb.split(', ').length === 3 && c.cmyk.split(', ').length === 4) &&
+    kit1.json.fonts.every((f) => f.license === 'SIL Open Font License 1.1') && !!kit1.json.logoSpec && kit1.json.slogan === chosen2.json.text &&
+    kit1.json.guideCost === 3 && kit1.json.guidePdfUrl === null && kit1.json.zipUrl === null,
+  kit1.json.detail ?? kit1.json.version,
+);
+const kid = kit1.json.id;
+check('avancement du parcours : kit', (await call('GET', `/projects/${pid}`, { token })).json.progress.kit === true);
+
+// Offre gratuite (abonnement suspendu le temps du test) : charte refusée, archive réduite.
+await db.subscription.update({ where: { workspaceId: wid }, data: { status: 'EXPIRED' } });
+const freeGuide = await call('POST', `/brand-kits/${kid}/guide`, { token, headers: { 'idempotency-key': 'g0-' + Date.now() } });
+check('charte en offre gratuite → 403 PLAN_REQUIRED', freeGuide.status === 403 && freeGuide.json.code === 'PLAN_REQUIRED', freeGuide.json.detail);
+const freeZip = await call('POST', `/brand-kits/${kid}/zip`, { token });
+check('archive en offre gratuite : demandée, réduite', freeZip.status === 202 && freeZip.json.restricted === true, freeZip.json);
+check('archive gratuite terminée', (await waitJob(freeZip.json.jobId, token, 60000)) === 'SUCCEEDED');
+const freeZipJob = await call('GET', `/jobs/${freeZip.json.jobId}`, { token });
+const freeFiles = zipEntries(Buffer.from(await (await fetch(freeZipJob.json.result.downloadUrl)).arrayBuffer()));
+check(
+  'offre gratuite : PNG 512 px seulement, ni vectoriel, ni charte, ni supports (§7.4)',
+  freeFiles.some((f) => /\/logo\/png\/.+-couleur-512\.png$/.test(f)) &&
+    freeFiles.every((f) => /\/(logo\/png\/.+-512\.png|signatures\/.+|LICENCES\.txt|LISEZMOI\.txt)$/.test(f)),
+  freeFiles.filter((f) => !/\/(logo\/png\/.+-512\.png|signatures\/.+|LICENCES\.txt|LISEZMOI\.txt)$/.test(f)),
+);
+await db.subscription.update({ where: { workspaceId: wid }, data: { status: 'ACTIVE' } });
+
+// Solde à 7 crédits : la charte (3) le fait passer sous le seuil d'alerte (5).
+const { creditBalance: balance } = await db.workspace.findUniqueOrThrow({ where: { id: wid } });
+await db.$transaction([
+  db.workspace.update({ where: { id: wid }, data: { creditBalance: 7 } }),
+  db.creditLedgerEntry.create({ data: { workspaceId: wid, delta: 7 - balance, reason: 'ADMIN_ADJUSTMENT', note: 'test de fumée' } }),
+]);
+const guideNoKey = await call('POST', `/brand-kits/${kid}/guide`, { token });
+check('charte : Idempotency-Key obligatoire', guideNoKey.status === 400);
+const guide = await call('POST', `/brand-kits/${kid}/guide`, { token, headers: { 'idempotency-key': 'g1-' + Date.now() } });
+check('charte demandée : 3 crédits (§8.3)', guide.status === 202 && guide.json.costCredits === 3, guide.json);
+check('charte terminée', (await waitJob(guide.json.jobId, token, 60000)) === 'SUCCEEDED');
+const guideJob = await call('GET', `/jobs/${guide.json.jobId}`, { token });
+const guidePdf = Buffer.from(await (await fetch(guideJob.json.result.downloadUrl)).arrayBuffer());
+const guidePages = guidePdf.toString('latin1').match(/\/Type \/Page\b/g)?.length ?? 0;
+check('charte PDF de 9 pages (KIT-02)', guidePdf.subarray(0, 5).toString() === '%PDF-' && guidePages === 9, guidePages);
+const afterGuide = await call('GET', '/notifications', { token });
+check('export prêt notifié (COL-03)', afterGuide.json.items.some((n) => n.type === 'EXPORT_READY' && n.title === 'Charte graphique prête' && n.href === `/app/projets/${pid}/kit`));
+check('alerte de crédits bas (COL-03)', afterGuide.json.items.some((n) => n.type === 'LOW_CREDITS' && n.body.includes('4 crédits')), afterGuide.json.items.map((n) => n.type));
+const regen = await call('POST', `/brand-kits/${kid}/guide`, { token, headers: { 'idempotency-key': 'g2-' + Date.now() } });
+check('charte régénérée sans coût (§7.4)', regen.status === 202 && regen.json.costCredits === 0, regen.json);
+await waitJob(regen.json.jobId, token, 60000);
+
+const zip = await call('POST', `/brand-kits/${kid}/zip`, { token });
+check('archive complète demandée', zip.status === 202 && zip.json.restricted === false, zip.json);
+check('archive complète terminée', (await waitJob(zip.json.jobId, token, 90000)) === 'SUCCEEDED');
+const kitsList = await call('GET', `/projects/${pid}/brand-kits`, { token });
+const current = kitsList.json[0];
+check('kit : liens signés vers la charte et l’archive', !!current.guidePdfUrl && !!current.zipUrl && current.guideCost === 0, current);
+const guideInline = await fetch(current.guidePdfUrl);
+check('charte servie en ligne (PDF)', guideInline.status === 200 && guideInline.headers.get('content-type') === 'application/pdf' && /^inline/.test(guideInline.headers.get('content-disposition') ?? ''));
+const kitFiles = zipEntries(Buffer.from(await (await fetch(current.zipUrl)).arrayBuffer()));
+const kitRoot = kitFiles[0]?.split('/')[0] ?? '';
+const expectedFiles = [
+  'logo/svg/', 'logo/png/', 'logo/pdf/', 'icones-app/favicon.ico', 'reseaux-sociaux/', 'signatures/signature-email.html',
+  'signatures/slogan.txt', 'signatures/cachet.svg', 'signatures/paraphe.png', 'supports/carte-de-visite.pdf',
+  'supports/papier-a-en-tete.pdf', 'supports/papier-a-en-tete.docx', 'supports/carte-de-membre.pdf', 'charte.pdf', 'LICENCES.txt', 'LISEZMOI.txt',
+];
+check(
+  'archive rangée : logo, icônes, réseaux, signatures, supports, charte, licences (KIT-03, KIT-04)',
+  /-kit-v1$/.test(kitRoot) && expectedFiles.every((p) => kitFiles.some((f) => f.startsWith(`${kitRoot}/${p}`))),
+  expectedFiles.filter((p) => !kitFiles.some((f) => f.startsWith(`${kitRoot}/${p}`))),
+);
+
+// Versions : un nouveau nom final crée v2 (NOM-33) ; v1 se restaure en v3 (KIT-06).
+const otherName = (await call('GET', `/projects/${pid}/names`, { token })).json.find((n) => n.id !== nid && !n.isRejected);
+await call('POST', `/projects/${pid}/chosen-name`, { token, body: { nameId: otherName.id } });
+const versions2 = (await call('GET', `/projects/${pid}/brand-kits`, { token })).json;
+check(
+  'nouveau nom final → kit v2, v1 conservé (NOM-33)',
+  versions2.length === 2 && versions2[0].version === 2 && versions2[0].name === otherName.value && versions2[1].name === chosen.json.chosenName.value,
+  versions2.map((k) => `${k.version}:${k.name}`),
+);
+const restoredKit = await call('POST', `/brand-kits/${kid}/restore`, { token });
+check(
+  'v1 restaurée en v3, charte déjà payée (KIT-06)',
+  restoredKit.status === 201 && restoredKit.json.version === 3 && restoredKit.json.restoredFrom === 1 && restoredKit.json.name === chosen.json.chosenName.value && restoredKit.json.guideCost === 0 && restoredKit.json.guidePdfUrl === null,
+  restoredKit.json,
+);
+
+// Partage en lecture seule (KIT-05)
+const pastShare = await call('POST', `/brand-kits/${kid}/share`, { token, body: { enabled: true, expiresAt: '2020-01-01T00:00:00Z' } });
+check('partage : expiration passée refusée', pastShare.status === 400);
+const shared = await call('POST', `/brand-kits/${kid}/share`, { token, body: { enabled: true, password: 'kola2026', expiresAt: new Date(Date.now() + 86_400_000).toISOString() } });
+check('lien de partage avec mot de passe et expiration', shared.status === 200 && !!shared.json.shareToken && shared.json.hasPassword === true && !!shared.json.shareExpiresAt && !('sharePasswordHash' in shared.json), shared.json.detail);
+const shareToken = shared.json.shareToken;
+const locked = await call('GET', `/public/kits/${shareToken}`);
+check('kit protégé : mot de passe requis', locked.status === 401 && locked.json.code === 'PASSWORD_REQUIRED');
+const wrongPassword = await call('GET', `/public/kits/${shareToken}`, { headers: { 'x-kit-password': 'faux' } });
+check('kit protégé : mauvais mot de passe', wrongPassword.status === 401 && wrongPassword.json.code === 'PASSWORD_INVALID');
+const publicKit = await call('GET', `/public/kits/${shareToken}`, { headers: { 'x-kit-password': 'kola2026' } });
+check(
+  'page publique du kit (type PublicKit)',
+  publicKit.status === 200 && publicKit.json.projectName === chosen.json.chosenName.value && publicKit.json.entityType === 'ASSOCIATION' &&
+    publicKit.json.palette.length === 4 && !!publicKit.json.zipUrl && !('sharePasswordHash' in publicKit.json),
+  publicKit.json.detail,
+);
+const revoked = await call('POST', `/brand-kits/${kid}/share`, { token, body: { enabled: false } });
+const revokedPublic = await call('GET', `/public/kits/${shareToken}`, { headers: { 'x-kit-password': 'kola2026' } });
+check('lien révoqué → 404', revoked.json.shareToken === null && revokedPublic.status === 404);
+check('kit d’un autre espace → 404', (await call('GET', `/brand-kits/${kid}`, { token: other.json.accessToken })).status === 404);
+const kitActivity = await call('GET', `/projects/${pid}/activity`, { token });
+check('historique : kit assemblé, charte, archive, partage, restauration', ['kits.create', 'kits.guide', 'kits.zip', 'kits.share', 'kits.restore'].every((code) => kitActivity.json.some((a) => a.code === code)));
+
+// Commentaires et mentions dans l'espace d'organisation (COL-02, COL-03)
+const shared2 = await call('POST', `/workspaces/${org.json.id}/projects`, { token, body: { entityType: 'ASSOCIATION', title: 'Projet commun' } });
+const opid = shared2.json.id;
+const comment = await call('POST', `/projects/${opid}/comments`, { token, body: { targetType: 'PROJECT', targetId: opid, body: 'Qu’en penses-tu @Autre ? Le kit est prêt.' } });
+check('commentaire avec mention (COL-02)', comment.status === 201 && comment.json.authorName === 'Testeur E2E' && comment.json.mentions?.[0]?.fullName === 'Autre', comment.json);
+const mentionedNotifs = await call('GET', '/notifications', { token: other.json.accessToken });
+check('membre mentionné notifié', mentionedNotifs.json.items?.some((n) => n.type === 'COMMENT' && n.title === 'Testeur E2E vous a mentionné' && n.href === `/app/projets/${opid}`));
+const reply = await call('POST', `/projects/${opid}/comments`, { token: other.json.accessToken, body: { targetType: 'PROJECT', targetId: opid, body: 'Parfait, je valide.' } });
+const ownerNotifs = await call('GET', '/notifications', { token });
+check('participant prévenu de la réponse', reply.status === 201 && ownerNotifs.json.items.some((n) => n.type === 'COMMENT' && n.title === 'Autre a commenté le projet'));
+const thread = await call('GET', `/projects/${opid}/comments?targetType=PROJECT&targetId=${opid}`, { token });
+check('commentaires du plus récent au plus ancien', thread.status === 200 && thread.json.length === 2 && thread.json[0].body === 'Parfait, je valide.', thread.json.length);
+const foreignTarget = await call('POST', `/projects/${opid}/comments`, { token, body: { targetType: 'LOGO', targetId: lid, body: 'Hors sujet' } });
+check('élément d’un autre projet → 400', foreignTarget.status === 400);
+const deleteOthers = await call('DELETE', `/comments/${comment.json.id}`, { token: other.json.accessToken });
+const deleteOwn = await call('DELETE', `/comments/${comment.json.id}`, { token });
+check('suppression : auteur oui, autre éditeur non', deleteOthers.status === 403 && deleteOwn.status === 204, [deleteOthers.status, deleteOwn.status]);
+const invite = await call('POST', `/workspaces/${org.json.id}/invitations`, { token, body: { role: 'VIEWER', email: mfaEmail } });
+const inviteeNotifs = await call('GET', '/notifications', { token: adminToken });
+check('invitation notifiée à un utilisateur inscrit (COL-03)', invite.status === 201 && inviteeNotifs.json.items?.some((n) => n.type === 'INVITATION' && n.href?.startsWith('/invitation/')), invite.json.detail);
 await db.$disconnect();
 const sigActivity = await call('GET', `/projects/${pid}/activity`, { token });
 check('historique : slogans et signatures', ['slogans.generate', 'slogans.choose', 'signatures.create', 'signatures.batch'].every((code) => sigActivity.json.some((a) => a.code === code)));

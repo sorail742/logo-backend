@@ -414,6 +414,8 @@ model BrandKit {
   shareToken        String?   @unique
   sharePasswordHash String?
   shareExpiresAt    DateTime?
+  content           Json      @default("{}") // instantané : nom, sigle, origine, slogan, devise, mission
+  restoredFrom      Int? // version restaurée (KIT-06)
   createdAt         DateTime  @default(now())
   project           Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
@@ -433,6 +435,7 @@ model GenerationJob {
   costUsdMicros Int? // coût IA réel
   error         String?
   result        Json? // sortie d'une tâche sans entité dédiée (export : fichier et lien)
+  requestedById String? // auteur de la demande, prévenu quand un export est prêt (COL-03)
   startedAt     DateTime?
   finishedAt    DateTime?
   createdAt     DateTime         @default(now())
@@ -562,12 +565,14 @@ model Comment {
   id         String   @id @default(uuid())
   projectId  String
   authorId   String
-  targetType String // NAME | LOGO | SIGNATURE | SLOGAN
+  targetType String // PROJECT | NAME | LOGO | SIGNATURE | SLOGAN | KIT
   targetId   String
   body       String
   createdAt  DateTime @default(now())
   project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   author     User     @relation(fields: [authorId], references: [id])
+
+  @@index([projectId, createdAt])
 }
 
 model Notification {

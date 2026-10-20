@@ -16,6 +16,7 @@ import { StorageService } from '../../common/storage/storage.service';
 import { FREE_DAILY_QUOTAS } from '../../shared/credit-costs';
 import { GENERATION_ATTEMPTS, GENERATION_QUEUE, GenerationJobData } from '../../shared/queues';
 import { CreditsService } from '../credits/credits.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 export interface EnqueueParams {
   workspaceId: string;
@@ -38,6 +39,7 @@ export class JobsService {
     @InjectQueue(GENERATION_QUEUE) private readonly queue: Queue<GenerationJobData>,
     @Inject(REDIS) private readonly redis: Redis,
     private readonly storage: StorageService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   /**
@@ -68,6 +70,7 @@ export class JobsService {
             input: p.input,
             costCredits,
             status: JobStatus.QUEUED,
+            requestedById: p.actorId,
           },
         });
         // Décrément conditionnel : en cas de course, la transaction entière est annulée.
@@ -94,6 +97,14 @@ export class JobsService {
         },
       );
       await this.redis.set(redisKey, job.id, 'EX', IDEMPOTENCY_TTL_S);
+      if (job.costCredits > 0) {
+        const { creditBalance } = await this.credits.balance(p.workspaceId);
+        await this.notifications.creditsDebited(
+          p.workspaceId,
+          creditBalance + job.costCredits,
+          creditBalance,
+        );
+      }
       return { jobId: job.id, costCredits: job.costCredits };
     } catch (err) {
       await this.redis.del(redisKey);

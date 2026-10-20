@@ -23,6 +23,7 @@ import { workspacePlan } from '../billing/plan-features';
 import { CreditsService } from '../credits/credits.service';
 import { JobsService } from '../jobs/jobs.service';
 import { ModerationService } from '../moderation/moderation.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import type { SignatureBatchInput } from './signature-batch.service';
 import { POWERED_BY, SignatureBrandService } from './signature-brand.service';
 import {
@@ -71,6 +72,7 @@ export class SignaturesService {
     private readonly jobs: JobsService,
     private readonly audit: AuditService,
     private readonly brands: SignatureBrandService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   async list(projectId: string) {
@@ -133,6 +135,14 @@ export class SignaturesService {
         });
       });
       await this.flagForReview(ctx, signature.id, review.terms);
+      if (dto.kind !== SignatureKind.EMAIL) {
+        const { creditBalance } = await this.credits.balance(ctx.workspaceId);
+        await this.notifications.creditsDebited(
+          ctx.workspaceId,
+          creditBalance + CREDIT_COSTS.HANDWRITTEN_OR_STAMP,
+          creditBalance,
+        );
+      }
       return toSignatureDto(signature);
     } catch (err) {
       await this.removeFiles(content.fileKey);

@@ -10,6 +10,9 @@ import { BriefDto, CreateProjectDto, ListProjectsDto, UpdateProjectDto } from '.
 /** Un projet supprimé reste récupérable 30 jours (PRJ-04). */
 export const TRASH_RETENTION_DAYS = 30;
 
+/** Signification d'un nom saisi par l'utilisateur (parcours « J'ai déjà un nom »). */
+export const TYPED_NAME_MEANING = 'Nom saisi par l’utilisateur';
+
 @Injectable()
 export class ProjectsService {
   constructor(
@@ -55,7 +58,7 @@ export class ProjectsService {
         data: {
           projectId: project.id,
           value: name,
-          meaning: 'Nom saisi par l’utilisateur',
+          meaning: TYPED_NAME_MEANING,
           style: NameStyle.PROPER,
           isFavorite: true,
         },

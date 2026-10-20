@@ -53,6 +53,17 @@ export class MailService {
       text: `Rejoindre l'espace ${workspaceName} : ${url}`,
     });
   }
+
+  /** Notification par e-mail (COL-03) : titre, texte et lien vers l'application. */
+  sendNotification(to: string, content: { title: string; body: string; href: string | null }) {
+    const url = content.href ? this.link(content.href) : null;
+    return this.send({
+      to,
+      subject: content.title,
+      html: `<p><strong>${escapeHtml(content.title)}</strong></p><p>${escapeHtml(content.body)}</p>${url ? `<p><a href="${escapeHtml(url)}">Ouvrir dans l’application</a></p>` : ''}`,
+      text: url ? `${content.body}\n\n${url}` : content.body,
+    });
+  }
 }
 
 export function escapeHtml(s: string): string {

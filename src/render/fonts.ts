@@ -53,6 +53,11 @@ function load(file: string) {
   return font;
 }
 
+/** Vrai si le fichier de police contient le caractère (choix du sous-ensemble dans un PDF). */
+export function fileHasGlyph(file: string, char: string) {
+  return load(file).charToGlyphIndex(char) > 0;
+}
+
 /** Fichiers à essayer pour chaque caractère : la police demandée, puis la police de repli. */
 function fontChain(id: string, weight: number): opentype.Font[] {
   const font = getFont(id);

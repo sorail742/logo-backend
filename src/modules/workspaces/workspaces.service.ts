@@ -11,6 +11,7 @@ import { PrismaService } from '../../common/prisma/prisma.service';
 import { randomToken, sha256 } from '../../common/utils/crypto.util';
 import { uniqueSlug } from '../../common/utils/slug.util';
 import { MailService } from '../mail/mail.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import {
   LINK_INVITATION_EMAIL,
   toInvitationDto,
@@ -21,11 +22,18 @@ import { CreateInvitationDto, CreateWorkspaceDto, UpdateWorkspaceDto } from './w
 
 const INVITATION_TTL_DAYS = 7;
 
+const ROLE_LABELS: Record<WorkspaceRole, string> = {
+  OWNER: 'propriétaire',
+  EDITOR: 'éditeur',
+  VIEWER: 'lecteur',
+};
+
 @Injectable()
 export class WorkspacesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly mail: MailService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   async list(userId: string) {
@@ -37,7 +45,10 @@ export class WorkspacesService {
       },
       orderBy: { createdAt: 'asc' },
     });
-    return rows.map(({ _count, ...ws }) => ({ ...toWorkspaceDto(ws), projectCount: _count.projects }));
+    return rows.map(({ _count, ...ws }) => ({
+      ...toWorkspaceDto(ws),
+      projectCount: _count.projects,
+    }));
   }
 
   async create(userId: string, dto: CreateWorkspaceDto) {
@@ -133,7 +144,19 @@ export class WorkspacesService {
         expiresAt: new Date(Date.now() + INVITATION_TTL_DAYS * 86_400_000),
       },
     });
-    if (email !== LINK_INVITATION_EMAIL) await this.mail.sendInvitation(email, ws.name, token);
+    if (email !== LINK_INVITATION_EMAIL) {
+      await this.mail.sendInvitation(email, ws.name, token);
+      // Invité déjà inscrit : l'invitation apparaît aussi dans ses notifications (COL-03).
+      const invitee = await this.prisma.user.findUnique({ where: { email }, select: { id: true } });
+      if (invitee) {
+        await this.notifications.notify([invitee.id], {
+          type: 'INVITATION',
+          title: `Invitation à rejoindre « ${ws.name} »`,
+          body: `Vous êtes invité comme ${ROLE_LABELS[dto.role]}.`,
+          href: `/invitation/${encodeURIComponent(token)}`,
+        });
+      }
+    }
 
     return toInvitationDto(invitation, token);
   }

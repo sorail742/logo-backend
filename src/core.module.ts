@@ -13,6 +13,7 @@ import { CreditsModule } from './modules/credits/credits.module';
 import { JobsModule } from './modules/jobs/jobs.module';
 import { MailModule } from './modules/mail/mail.module';
 import { ModerationModule } from './modules/moderation/moderation.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
 
 /** Socle partagé par l'API et les workers : configuration, logs, base, Redis, files, stockage, services transverses. */
 @Module({
@@ -44,6 +45,7 @@ import { ModerationModule } from './modules/moderation/moderation.module';
     MailModule,
     AiModule,
     ModerationModule,
+    NotificationsModule,
     JobsModule,
   ],
 })
