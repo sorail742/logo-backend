@@ -13,12 +13,14 @@ import { NameGeneratorService } from '../modules/names/name-generator.service';
 import { NotificationsService } from '../modules/notifications/notifications.service';
 import { SignatureBatchService } from '../modules/signatures/signature-batch.service';
 import { SloganGeneratorService } from '../modules/slogans/slogan-generator.service';
+import { StudioExportService } from '../modules/studio/studio-export.service';
 
 const READY_MESSAGES: Partial<Record<JobKind, { title: string; page: string; email: boolean }>> = {
   BRAND_GUIDE: { title: 'Charte graphique prête', page: 'kit', email: true },
   EXPORT_ZIP: { title: 'Archive du kit prête', page: 'kit', email: true },
   LOGO_EXPORT: { title: 'Export du logo prêt', page: 'logos', email: false },
   SIGNATURE: { title: 'Signatures en lot prêtes', page: 'signatures', email: false },
+  DESIGN_EXPORT: { title: 'Export de création prêt', page: 'studio', email: false },
 };
 
 /**
@@ -40,6 +42,7 @@ export class GenerationProcessor extends WorkerHost {
     private readonly signatureBatches: SignatureBatchService,
     private readonly kitFiles: BrandKitFilesService,
     private readonly notifications: NotificationsService,
+    private readonly studioExports: StudioExportService,
   ) {
     super();
   }
@@ -92,6 +95,10 @@ export class GenerationProcessor extends WorkerHost {
       case JobKind.EXPORT_ZIP: {
         const { fileName, files } = await this.kitFiles.runZip(jobId);
         return { fileName, files };
+      }
+      case JobKind.DESIGN_EXPORT: {
+        const { fileName, pages } = await this.studioExports.runJob(jobId);
+        return { fileName, pages };
       }
       default:
         // Module textile : propositions, maquettes et pack atelier à venir.

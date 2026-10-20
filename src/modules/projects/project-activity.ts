@@ -42,6 +42,8 @@ export const PROJECT_ACTIONS = {
   'kits.share': (after) =>
     after.enabled ? 'a activé le lien de partage du kit' : 'a désactivé le lien de partage du kit',
   'comments.create': (after) => `a commenté ${String(after.target ?? 'le projet')}`,
+  'studio.create': (after) => `a créé « ${String(after.name ?? '')} » dans le Studio`,
+  'studio.export': (after) => `a exporté une création du Studio (${String(after.format ?? '').toUpperCase()})`,
 } satisfies Record<string, (after: Record<string, unknown>) => string>;
 
 export type ProjectAction = keyof typeof PROJECT_ACTIONS;

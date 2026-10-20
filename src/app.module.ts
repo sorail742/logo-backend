@@ -22,6 +22,7 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
 import { ProjectsModule } from './modules/projects/projects.module';
 import { SignaturesModule } from './modules/signatures/signatures.module';
 import { SlogansModule } from './modules/slogans/slogans.module';
+import { StudioModule } from './modules/studio/studio.module';
 import { UsersModule } from './modules/users/users.module';
 import { WorkspacesModule } from './modules/workspaces/workspaces.module';
 
@@ -49,6 +50,7 @@ import { WorkspacesModule } from './modules/workspaces/workspaces.module';
     SignaturesModule,
     BrandKitsModule,
     CommentsModule,
+    StudioModule,
     LibraryModule,
     BillingModule,
     NotificationsModule,

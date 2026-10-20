@@ -102,6 +102,7 @@ enum JobKind {
   APPAREL_MOCKUP
   PRODUCTION_PACK
   NUMBER_FONT
+  DESIGN_EXPORT
 }
 
 enum JobStatus {
@@ -274,6 +275,7 @@ model Project {
   signatures     Signature[]
   brandKits      BrandKit[]
   apparelDesigns ApparelDesign[]
+  studioDesigns  StudioDesign[]
   jobs           GenerationJob[]
   comments       Comment[]
 
@@ -420,6 +422,24 @@ model BrandKit {
   project           Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@unique([projectId, version])
+}
+
+// Création du Studio : publication, affiche, flyer, carte… (document de pages et d'éléments)
+model StudioDesign {
+  id          String   @id @default(uuid())
+  projectId   String
+  name        String
+  format      String // identifiant du format (post-square, flyer-a4…) ou custom
+  width       Int
+  height      Int
+  doc         Json // DesignDoc validé (render/design-doc.ts)
+  thumbnail   String? // aperçu PNG en data URL, produit par l'éditeur
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, updatedAt])
 }
 
 // ─── Génération et bibliothèque ───
