@@ -60,24 +60,35 @@ function renderVariant(
   variant: LogoVariant,
   layout?: (typeof LOGO_VARIANTS)[number]['layout'],
   watermark?: string | null,
+  transparent = false,
 ) {
-  if (source.kind === 'spec') return renderLogoSvg(source.spec, { variant, layout, watermark }).svg;
+  if (source.kind === 'spec') {
+    return renderLogoSvg(source.spec, {
+      variant,
+      layout,
+      watermark,
+      ...(transparent && { withBackground: false }),
+    }).svg;
+  }
   if (variant === 'color') return source.svg;
   const recolored = recolorSvg(source.svg, variant === 'black' ? '#111111' : '#ffffff');
-  return variant === 'white' ? withBackground(recolored, '#111111') : recolored;
+  return variant === 'white' && !transparent ? withBackground(recolored, '#111111') : recolored;
 }
 
 function withBackground(svg: string, color: string) {
   return frameSvg(svg, { ...svgSize(svg), background: color });
 }
 
-/** Variantes automatiques (LOGO-20) ; un logo importé n'a que couleur, noir et blanc. */
-export function renderVariants(source: LogoSource): RenderedVariant[] {
+/**
+ * Variantes automatiques (LOGO-20) ; un logo importé n'a que couleur, noir et blanc.
+ * `transparent` : la version blanche sans son fond sombre (pose sur une création du Studio).
+ */
+export function renderVariants(source: LogoSource, transparent = false): RenderedVariant[] {
   return LOGO_VARIANTS.filter((def) => source.kind === 'spec' || !def.layout).map((def) => ({
     id: def.id,
     file: def.file,
     dark: def.variant === 'white',
-    svg: optimizeSvg(renderVariant(source, def.variant, def.layout)),
+    svg: optimizeSvg(renderVariant(source, def.variant, def.layout, null, transparent)),
   }));
 }
 

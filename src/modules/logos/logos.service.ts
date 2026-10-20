@@ -241,9 +241,12 @@ export class LogosService {
   }
 
   /** Variantes automatiques (LOGO-20) : couleur, noir, blanc, icône seule, horizontale, verticale. */
-  async variants(logoId: string, versionId?: string) {
+  async variants(logoId: string, versionId?: string, transparent = false) {
     const { logo, version } = await this.version(logoId, versionId);
-    return { versionId: version.id, variants: renderVariants(logoSource(logo, version)) };
+    return {
+      versionId: version.id,
+      variants: renderVariants(logoSource(logo, version), transparent),
+    };
   }
 
   /**

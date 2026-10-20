@@ -114,6 +114,16 @@ export class VariantsDto {
   versionId?: string;
 }
 
+export class LogoVariantsDto extends VariantsDto {
+  @ApiPropertyOptional({
+    description: 'Version blanche sans fond (pose sur une création du Studio)',
+    default: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  transparent?: boolean;
+}
+
 export class ExportLogoDto extends VariantsDto {
   @ApiPropertyOptional({ enum: EXPORT_FORMATS, isArray: true, default: EXPORT_FORMATS })
   @IsOptional()

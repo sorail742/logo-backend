@@ -22,9 +22,9 @@ import {
   GenerateLogosDto,
   ImportLogoDto,
   ListLogosDto,
+  LogoVariantsDto,
   SaveVersionDto,
   UpdateLogoDto,
-  VariantsDto,
 } from './logos.dto';
 import { LogosService } from './logos.service';
 
@@ -112,8 +112,8 @@ export class LogosController {
   @Post('logos/:lid/variants')
   @WorkspaceAccess('EDITOR')
   @HttpCode(HttpStatus.OK)
-  variants(@Param('lid', ParseUUIDPipe) lid: string, @Body() dto: VariantsDto) {
-    return this.logos.variants(lid, dto.versionId);
+  variants(@Param('lid', ParseUUIDPipe) lid: string, @Body() dto: LogoVariantsDto) {
+    return this.logos.variants(lid, dto.versionId, dto.transparent);
   }
 
   @Post('logos/:lid/export')
