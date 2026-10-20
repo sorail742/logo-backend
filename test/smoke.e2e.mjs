@@ -1,4 +1,4 @@
-// Test de fumée de bout en bout (phases 1 à 5, module 5) contre une API et un worker lancés localement.
+// Test de fumée de bout en bout (phases 1 à 5, module 5, Studio) contre une API et un worker lancés localement.
 // Usage : npm run test:smoke   (API=http://hote/api/v1 pour une autre cible)
 import { PrismaClient } from '@prisma/client';
 import otplib from 'otplib';
@@ -165,7 +165,7 @@ check('back-office interdit à un USER', admin.status === 403, admin.json.detail
 const icons = await call('GET', '/library/icons?q=ecole', { token });
 check('bibliothèque : recherche d’icônes sans accents', icons.status === 200 && icons.json.some((i) => i.id === 'graduation-cap'), icons.json.map?.((i) => i.id));
 const fonts = await call('GET', '/library/fonts', { token });
-check('bibliothèque : polices OFL', fonts.status === 200 && fonts.json.length === 15 && fonts.json.every((f) => f.license === 'OFL'));
+check('bibliothèque : 47 polices OFL', fonts.status === 200 && fonts.json.length === 47 && fonts.json.every((f) => f.license === 'OFL'), fonts.json.length);
 
 const engineB = await call('POST', `/projects/${pid}/logos/generate`, { token, body: { type: 'ICON_TEXT', style: 'MODERN', engine: 'IMAGE_VECTORIZE' }, headers: { 'idempotency-key': 'b-' + Date.now() } });
 check('moteur B pas encore disponible → 501', engineB.status === 501, engineB.json.detail);
@@ -582,6 +582,63 @@ check('invitation notifiée à un utilisateur inscrit (COL-03)', invite.status =
 await db.$disconnect();
 const sigActivity = await call('GET', `/projects/${pid}/activity`, { token });
 check('historique : slogans et signatures', ['slogans.generate', 'slogans.choose', 'signatures.create', 'signatures.batch'].every((code) => sigActivity.json.some((a) => a.code === code)));
+
+// ─── Studio de création ───
+const studioDoc = {
+  version: 1,
+  width: 874,
+  height: 1240,
+  print: { widthMm: 148, heightMm: 210, bleedMm: 3 },
+  pages: [
+    {
+      id: 'p1',
+      background: { type: 'linear', angle: 90, stops: [{ offset: 0, color: '#0f6b5c' }, { offset: 1, color: '#062f28' }] },
+      elements: [
+        { id: 'bg', type: 'shape', shape: 'blob', seed: 3, x: 500, y: 900, width: 500, height: 420, rotation: 0, opacity: 1, fill: { type: 'solid', color: '#f2b705' } },
+        { id: 'title', type: 'text', x: 60, y: 300, width: 754, height: 220, rotation: 0, opacity: 1, text: 'Journée portes ouvertes', fontId: 'anton', fontWeight: 400, fontSize: 100, letterSpacing: 0, lineHeight: 1.05, align: 'left', uppercase: true, fill: { type: 'solid', color: '#ffffff' }, lines: ['JOURNÉE PORTES', 'OUVERTES'], shadow: { x: 0, y: 6, blur: 18, color: '#000000', opacity: 0.35 } },
+        { id: 'arc', type: 'text', x: 200, y: 120, width: 474, height: 120, rotation: 0, opacity: 1, text: 'Kaloum · Conakry', fontId: 'montserrat', fontWeight: 700, fontSize: 40, letterSpacing: 0.1, lineHeight: 1.2, align: 'center', uppercase: true, fill: { type: 'solid', color: '#f2b705' }, curve: 40 },
+        { id: 'svg', type: 'svg', source: 'graphic', x: 60, y: 1000, width: 160, height: 160, rotation: 0, opacity: 1, svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><script>alert(1)</script><circle cx="5" cy="5" r="4" fill="#fff" onclick="x()"/></svg>' },
+      ],
+    },
+  ],
+};
+const studioDesign = await call('POST', `/projects/${pid}/studio-designs`, { token, body: { name: 'Flyer portes ouvertes', format: 'flyer-a5', doc: studioDoc } });
+const sdid = studioDesign.json.id;
+check('Studio : création (format imprimé)', studioDesign.status === 201 && studioDesign.json.width === 874 && studioDesign.json.doc.print.bleedMm === 3, studioDesign.json.detail ?? studioDesign.json.errors);
+const svgEl = studioDesign.json.doc?.pages[0].elements.find((e) => e.id === 'svg');
+check('Studio : SVG intégré nettoyé (script, événements)', !!svgEl && !/script|onclick/i.test(svgEl.svg), svgEl?.svg);
+const badDoc = structuredClone(studioDoc);
+badDoc.pages[0].elements[1].fontId = 'comic-sans';
+const invalid = await call('POST', `/projects/${pid}/studio-designs`, { token, body: { name: 'Invalide', format: 'flyer-a5', doc: badDoc } });
+check('Studio : document invalide → 400', invalid.status === 400, invalid.status);
+const studioList = await call('GET', `/projects/${pid}/studio-designs`, { token });
+check('Studio : liste sans document', studioList.status === 200 && studioList.json.length === 1 && !('doc' in studioList.json[0]));
+const renamed = await call('PUT', `/studio-designs/${sdid}`, { token, body: { name: 'Flyer JPO', thumbnail: 'data:image/png;base64,iVBORw0KGgo=' } });
+check('Studio : sauvegarde (nom, aperçu)', renamed.status === 200 && renamed.json.name === 'Flyer JPO' && !!renamed.json.thumbnail, renamed.status);
+const pdfExport = await call('POST', `/studio-designs/${sdid}/export`, { token, body: { format: 'pdf', cropMarks: true } });
+const pdfStatus = pdfExport.status === 202 ? await waitJob(pdfExport.json.jobId, token, 60000) : null;
+const pdfJob = pdfExport.status === 202 ? await call('GET', `/jobs/${pdfExport.json.jobId}`, { token }) : null;
+const pdfFile = pdfJob?.json.result?.downloadUrl ? await fetch(pdfJob.json.result.downloadUrl) : null;
+const pdfBytes = pdfFile ? Buffer.from(await pdfFile.arrayBuffer()) : Buffer.alloc(0);
+check(
+  'Studio : PDF d’impression (fond perdu, traits de coupe, 0 crédit)',
+  pdfStatus === 'SUCCEEDED' && pdfBytes.subarray(0, 4).toString() === '%PDF' && /\/TrimBox/.test(pdfBytes.toString('latin1')) && pdfJob.json.costCredits === 0,
+  [pdfStatus, pdfBytes.length],
+);
+const svgExport = await call('POST', `/studio-designs/${sdid}/export`, { token, body: { format: 'svg' } });
+const svgStatus = svgExport.status === 202 ? await waitJob(svgExport.json.jobId, token, 60000) : null;
+const svgJob = svgExport.status === 202 ? await call('GET', `/jobs/${svgExport.json.jobId}`, { token }) : null;
+const svgText = svgJob?.json.result?.downloadUrl ? await (await fetch(svgJob.json.result.downloadUrl)).text() : '';
+check('Studio : SVG au texte vectorisé', svgStatus === 'SUCCEEDED' && svgText.startsWith('<svg') && !svgText.includes('<text'), svgStatus);
+const studioCopy = await call('POST', `/studio-designs/${sdid}/duplicate`, { token });
+check('Studio : duplication', studioCopy.status === 201 && studioCopy.json.name === 'Flyer JPO (copie)' && studioCopy.json.doc.pages.length === 1);
+check('Studio : création d’un autre espace → 404', (await call('GET', `/studio-designs/${sdid}`, { token: other.json.accessToken })).status === 404);
+check('Studio : suppression', (await call('DELETE', `/studio-designs/${studioCopy.json.id}`, { token })).status === 204);
+const transparentVariants = await call('POST', `/logos/${lid}/variants`, { token, body: { transparent: true } });
+const whiteLogo = transparentVariants.json.variants?.find((v) => v.id === 'white')?.svg ?? '';
+check('Studio : logo blanc sans fond', transparentVariants.status === 200 && !!whiteLogo && !/<path fill="#1{3,6}" d="M0 0h[\d.]+v[\d.]+H0z"/.test(whiteLogo));
+const studioActivity = await call('GET', `/projects/${pid}/activity`, { token });
+check('historique : créations et exports du Studio', ['studio.create', 'studio.export'].every((code) => studioActivity.json.some((a) => a.code === code)));
 
 const del = await call('DELETE', `/projects/${pid}`, { token });
 const gone = await call('GET', `/projects/${pid}`, { token });

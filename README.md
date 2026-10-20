@@ -69,6 +69,7 @@ src/
     signatures/         signature e-mail, paraphe, cachet, lots CSV
     brand-kits/         kit de marque : versions, charte PDF et archive (worker), partage public
     comments/           commentaires et mentions @
+    studio/             Studio de création : documents (pages et éléments), sauvegarde, exports (worker)
     library/            bibliothèque : icônes, polices, modèles
     availability/       domaines (RDAP), réseaux, marques, comparaison phonétique
     jobs/               file de génération, idempotence, SSE
@@ -159,6 +160,31 @@ Moteur B (image IA + vectorisation, « Devrait ») : la route répond 501 tant q
 - **Partage** (KIT-05, `POST /brand-kits/:kid/share`) : lien en lecture seule, mot de passe (argon2id) et date d'expiration facultatifs, révocable. `GET /public/kits/:token` (20 requêtes par minute) renvoie le kit et ses liens de téléchargement.
 - **Commentaires** (COL-02, `GET|POST /projects/:pid/comments`, `DELETE /comments/:cid`) : sur le projet, un nom, un logo, une signature, un slogan ou le kit ; tout membre, lecteur compris. Mentions `@Prénom`, `@PrénomNom` ou `@partie-locale-de-l-e-mail`, sans casse ni accents.
 - **Notifications** (COL-03) : dans l'application et par e-mail pour une mention, une charte ou une archive prête, des crédits bas (seuil de 5, une fois au franchissement) ; dans l'application pour une réponse dans une discussion, une invitation reçue par un utilisateur inscrit, un export de logo ou un lot de signatures prêt.
+
+## Studio de création
+
+Éditeur de supports à la marque (publications, stories, flyers, affiches, cartes de visite,
+présentations). Le front compose et édite le document ; l'API le valide, le conserve et en
+produit les fichiers définitifs.
+
+- **Document** ([src/render/design-doc.ts](src/render/design-doc.ts)) : pages d'éléments en px
+  (texte, forme, icône, photo, SVG), même contrat que le front (`src/lib/studio/types.ts`).
+  Schéma zod (clés inconnues ignorées) : 30 pages, 300 éléments par page, photos PNG ou JPEG en data URL de 4 Mo
+  au plus, document de 14 Mo au plus (413), SVG intégrés nettoyés comme un logo importé (422).
+  Format imprimé : dimensions en mm et fond perdu.
+- **Routes** : `GET|POST /projects/:pid/studio-designs` (liste sans document, création),
+  `GET|PUT|DELETE /studio-designs/:sdid` (sauvegarde automatique : 120 par minute),
+  `POST /studio-designs/:sdid/duplicate`, `POST /studio-designs/:sdid/export` (202, tâche
+  `DESIGN_EXPORT`, 0 crédit, `Idempotency-Key` facultative). Le lien du fichier est dans le
+  résultat de la tâche (`GET /jobs/:jid`, URL signée).
+- **Rendu** ([src/render/design.ts](src/render/design.ts)) : texte converti en tracés avec les
+  lignes calculées par l'éditeur (rendu identique), texte en arc, dégradés, contours, surlignage,
+  ombres, modes de fusion, masques et filtres photo.
+- **PDF** ([src/render/design-pdf.ts](src/render/design-pdf.ts)) : taille réelle, BleedBox et
+  TrimBox, traits de coupe facultatifs ; une page portant des effets que le PDF ne rend pas
+  (ombres, fusion, filtres) est tramée à 300 dpi. SVG d'une page, ou ZIP pour plusieurs.
+- **Logos** : `POST /logos/:lid/variants` avec `transparent: true` livre la version blanche sans
+  fond, pour la poser sur une création.
 
 ## Module 5 — décoration textile (§16)
 
