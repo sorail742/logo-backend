@@ -132,6 +132,8 @@ export class SignaturesController {
   async logo(@Param('sid', ParseUUIDPipe) sid: string, @Res() res: Response) {
     const png = await this.signatures.logoPng(sid);
     res.setHeader('Cache-Control', 'public, max-age=86400');
+    // Affichée par les webmails et l'aperçu du front, servis depuis d'autres origines.
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
     res.type('image/png').send(png);
   }
 }
