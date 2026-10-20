@@ -14,6 +14,9 @@ export interface LibraryFont {
   category: FontCategory;
   license: 'OFL';
   weights: number[];
+  /** Hauteurs au-dessus et au-dessous de la ligne de base, en em (lignes de texte du Studio). */
+  ascent: number;
+  descent: number;
   /** Fichiers par graisse : sous-ensemble latin puis latin étendu. */
   files: Record<string, string[]>;
 }
