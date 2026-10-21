@@ -212,7 +212,7 @@ export class PhotosService {
         code: 'NOT_AVAILABLE',
       });
     }
-    const cacheKey = `library:pexels:${createHash('sha1').update(path).digest('hex')}`;
+    const cacheKey = `library:pexels:${createHash('sha256').update(path).digest('hex')}`;
     const cached = await this.redis.get(cacheKey);
     if (cached) return JSON.parse(cached) as unknown;
 

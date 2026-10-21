@@ -35,7 +35,7 @@ E-mails de développement : http://localhost:8025 (Mailpit).
 
 Sous Windows, Hyper-V réserve souvent des plages de ports (`netsh interface ipv4 show excludedportrange protocol=tcp`). Si 6379 ou 5432 est refusé, définissez `REDIS_PORT` / `POSTGRES_PORT` dans `.env` (par ex. `REDIS_PORT=16379` et `REDIS_URL=redis://localhost:16379`).
 
-Test de bout en bout, API et worker lancés : `npm run test:smoke` (inscription, rotation de session, brief, génération + SSE, disponibilité, vote, choix du nom, quota gratuit, droits, logos : génération, édition, variantes, export, import nettoyé ; historique, espaces et invitations, 2FA et codes de secours, textile, Studio : créations, exports, avis épinglés, images générées, banque de photos ; corbeille, essai public). Il lit la base (`DATABASE_URL`) pour poser un abonnement, les paiements n'existant pas encore.
+Test de bout en bout, API et worker lancés : `npm run test:smoke` (inscription, rotation de session, brief, génération + SSE, disponibilité, vote, choix du nom, quota gratuit, droits, logos : génération, édition, variantes, export, import nettoyé ; historique, espaces et invitations, 2FA et codes de secours, textile, Studio : créations, exports, avis épinglés, images générées, banque de photos ; corbeille, essai public). Il lit la base (`DATABASE_URL`) pour poser un abonnement, les paiements n'existant pas encore. Il ne contacte que les hôtes de test listés dans `TRUSTED_HOSTS` (localhost par défaut) : pour viser une autre API (`API=http://hote/api/v1`), ajoutez son hôte à cette liste.
 
 Banque de photos du Studio : facultative, activée par une clé gratuite [Pexels](https://www.pexels.com/api/) dans `PEXELS_API_KEY`.
 

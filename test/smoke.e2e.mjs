@@ -1,9 +1,30 @@
 // Test de fumée de bout en bout (phases 1 à 5, module 5, Studio, avis, images et photos) contre une API et un worker lancés localement.
-// Usage : npm run test:smoke   (API=http://hote/api/v1 pour une autre cible)
+// Usage : npm run test:smoke   (API=http://hote/api/v1 pour une autre cible, hôte déclaré dans TRUSTED_HOSTS)
 import { PrismaClient } from '@prisma/client';
 import otplib from 'otplib';
 
-const API = process.env.API ?? 'http://localhost:3001/api/v1';
+// Le test ne contacte que l'environnement de test : la cible et les liens signés renvoyés par
+// l'API (téléchargements, images) sont vérifiés contre ces listes avant toute requête.
+const TRUSTED_PROTOCOLS = ['http:', 'https:'];
+const TRUSTED_HOSTS = ['localhost', '127.0.0.1'];
+
+function trusted(address) {
+  const url = new URL(address);
+  if (!TRUSTED_PROTOCOLS.includes(url.protocol) || !TRUSTED_HOSTS.includes(url.hostname)) {
+    throw new Error(`Adresse hors de l'environnement de test : ${url.origin}`);
+  }
+  return url;
+}
+
+const API = trusted(process.env.API ?? 'http://localhost:3001/api/v1').href.replace(/\/$/, '');
+
+/** URL d'une route de l'API, segments encodés : un identifiant renvoyé ne peut pas changer la route. */
+function apiUrl(path) {
+  const [pathname, search] = path.split('?');
+  const segments = pathname.split('/').map((segment) => encodeURIComponent(decodeURIComponent(segment)));
+  return trusted(`${API}${segments.join('/')}${search === undefined ? '' : `?${search}`}`);
+}
+
 let failures = 0;
 
 function check(label, cond, extra) {
@@ -12,7 +33,7 @@ function check(label, cond, extra) {
 }
 
 async function call(method, path, { token, body, headers = {} } = {}) {
-  const res = await fetch(API + path, {
+  const res = await fetch(apiUrl(path), {
     method,
     headers: {
       'content-type': 'application/json',
@@ -29,7 +50,7 @@ async function call(method, path, { token, body, headers = {} } = {}) {
 
 /** Suit le flux SSE d'une tâche jusqu'à son état final. */
 async function waitJob(jobId, token, timeoutMs = 30000) {
-  const sse = await fetch(`${API}/jobs/${jobId}/events`, { headers: { authorization: `Bearer ${token}` } });
+  const sse = await fetch(apiUrl(`/jobs/${jobId}/events`), { headers: { authorization: `Bearer ${token}` } });
   const reader = sse.body.getReader();
   const dec = new TextDecoder();
   let buf = '';
@@ -212,10 +233,10 @@ check('export demandé, réduit en offre gratuite', exp.status === 202 && exp.js
 check('export terminé', (await waitJob(exp.json.jobId, token)) === 'SUCCEEDED');
 const expJob = await call('GET', `/jobs/${exp.json.jobId}`, { token });
 check('lien de téléchargement signé', !!expJob.json.result?.downloadUrl && !('storageKey' in expJob.json.result), expJob.json.result);
-const zipRes = await fetch(expJob.json.result.downloadUrl);
+const zipRes = await fetch(trusted(expJob.json.result.downloadUrl));
 const zipFiles = zipEntries(Buffer.from(await zipRes.arrayBuffer()));
 check('offre gratuite : PNG 512 px filigrané uniquement', zipRes.status === 200 && zipFiles.every((f) => /-512\.png$|LICENCES\.txt$/.test(f)) && zipFiles.some((f) => f.endsWith('-couleur-512.png')), zipFiles);
-const forged = await fetch(expJob.json.result.downloadUrl.replace(/sig=[^&]+/, 'sig=faux'));
+const forged = await fetch(trusted(expJob.json.result.downloadUrl.replace(/sig=[^&]+/, 'sig=faux')));
 check('lien falsifié refusé', forged.status === 404, forged.status);
 
 const evilSvg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" onload="alert(1)"><script>alert(1)</script><a href="javascript:x()"><circle cx="32" cy="32" r="30" fill="#0B3D91"/></a><rect width="10" height="10" fill="#F4B400"/></svg>';
@@ -381,7 +402,7 @@ check('HTML : logo en URL absolue et mention de l’offre gratuite (SIG-13, SIG-
 const bannerSig = await call('PATCH', `/signatures/${emailSig.json.id}`, { token, body: { templateId: 'banner' } });
 check('modèle bandeau : slogan retenu repris', bannerSig.status === 200 && bannerSig.json.templateId === 'banner' && bannerSig.json.html.includes(chosen2.json.text), bannerSig.json.detail);
 const logoUrl = sigHtml.json.html.match(/src="([^"]+logo\.png[^"]*)"/)?.[1]?.replace(/&amp;/g, '&');
-const logoPng = logoUrl ? await fetch(logoUrl) : null;
+const logoPng = logoUrl ? await fetch(trusted(logoUrl)) : null;
 check('logo de la signature servi publiquement en PNG', logoPng?.status === 200 && logoPng.headers.get('content-type') === 'image/png');
 const badEmail = await call('POST', `/projects/${pid}/signatures`, { token, body: { kind: 'EMAIL', templateId: 'baroque', data: { fullName: 'X' } } });
 check('modèle inconnu → 400', badEmail.status === 400, badEmail.json.detail);
@@ -393,9 +414,9 @@ const paraphe = await call('POST', `/projects/${pid}/signatures`, { token, body:
 const balanceAfter = (await call('GET', `/workspaces/${wid}/credits`, { token })).json.balance;
 check('paraphe créé, privé, 1 crédit (SIG-20)', paraphe.status === 201 && paraphe.json.isPrivate && !!paraphe.json.attestedAt && balanceBefore - balanceAfter === 1, [paraphe.status, balanceBefore, balanceAfter]);
 const parapheFile = await call('GET', `/signatures/${paraphe.json.id}/file`, { token });
-const parapheSvg = parapheFile.json.svgUrl ? await (await fetch(parapheFile.json.svgUrl)).text() : '';
+const parapheSvg = parapheFile.json.svgUrl ? await (await fetch(trusted(parapheFile.json.svgUrl))).text() : '';
 check('paraphe : URL signée courte, SVG en tracés (SIG-24)', parapheFile.status === 200 && new Date(parapheFile.json.expiresAt) - Date.now() <= 300_000 && parapheSvg.includes('<path') && !parapheSvg.includes('<text'));
-const parapheFetch = await fetch(parapheFile.json.url);
+const parapheFetch = await fetch(trusted(parapheFile.json.url));
 check('paraphe : PNG transparent', parapheFetch.status === 200 && (await parapheFetch.arrayBuffer()).byteLength > 1000);
 
 const stampData = { shape: 'round', ringText: 'République de Guinée', bottomText: 'Conakry', centerText: 'RG', centerMode: 'acronym', ink: 'blue', inkEffect: true };
@@ -415,7 +436,7 @@ const batch = await call('POST', `/projects/${pid}/signatures/batch`, { token, b
 check('lot de signatures accepté (SIG-16)', batch.status === 202 && batch.json.count === 3, batch.json);
 check('lot de signatures terminé', (await waitJob(batch.json.jobId, token)) === 'SUCCEEDED');
 const batchJob = await call('GET', `/jobs/${batch.json.jobId}`, { token });
-const batchZip = Buffer.from(await (await fetch(batchJob.json.result.downloadUrl)).arrayBuffer());
+const batchZip = Buffer.from(await (await fetch(trusted(batchJob.json.result.downloadUrl))).arrayBuffer());
 check('archive : HTML et texte par membre, noms uniques', zipEntries(batchZip).join(',') === 'mamadou-bah.html,mamadou-bah.txt,fanta-camara.html,fanta-camara.txt,mamadou-bah-2.html,mamadou-bah-2.txt', zipEntries(batchZip));
 const proHtml = await call('GET', `/signatures/${emailSig.json.id}/html`, { token });
 check('offre Pro : plus de mention de la plateforme', !proHtml.json.html.includes('Marka'));
@@ -467,7 +488,7 @@ const freeZip = await call('POST', `/brand-kits/${kid}/zip`, { token });
 check('archive en offre gratuite : demandée, réduite', freeZip.status === 202 && freeZip.json.restricted === true, freeZip.json);
 check('archive gratuite terminée', (await waitJob(freeZip.json.jobId, token, 60000)) === 'SUCCEEDED');
 const freeZipJob = await call('GET', `/jobs/${freeZip.json.jobId}`, { token });
-const freeFiles = zipEntries(Buffer.from(await (await fetch(freeZipJob.json.result.downloadUrl)).arrayBuffer()));
+const freeFiles = zipEntries(Buffer.from(await (await fetch(trusted(freeZipJob.json.result.downloadUrl))).arrayBuffer()));
 check(
   'offre gratuite : PNG 512 px seulement, ni vectoriel, ni charte, ni supports (§7.4)',
   freeFiles.some((f) => /\/logo\/png\/.+-couleur-512\.png$/.test(f)) &&
@@ -488,7 +509,7 @@ const guide = await call('POST', `/brand-kits/${kid}/guide`, { token, headers: {
 check('charte demandée : 3 crédits (§8.3)', guide.status === 202 && guide.json.costCredits === 3, guide.json);
 check('charte terminée', (await waitJob(guide.json.jobId, token, 60000)) === 'SUCCEEDED');
 const guideJob = await call('GET', `/jobs/${guide.json.jobId}`, { token });
-const guidePdf = Buffer.from(await (await fetch(guideJob.json.result.downloadUrl)).arrayBuffer());
+const guidePdf = Buffer.from(await (await fetch(trusted(guideJob.json.result.downloadUrl))).arrayBuffer());
 const guidePages = guidePdf.toString('latin1').match(/\/Type \/Page\b/g)?.length ?? 0;
 check('charte PDF de 9 pages (KIT-02)', guidePdf.subarray(0, 5).toString() === '%PDF-' && guidePages === 9, guidePages);
 const afterGuide = await call('GET', '/notifications', { token });
@@ -504,9 +525,9 @@ check('archive complète terminée', (await waitJob(zip.json.jobId, token, 90000
 const kitsList = await call('GET', `/projects/${pid}/brand-kits`, { token });
 const current = kitsList.json[0];
 check('kit : liens signés vers la charte et l’archive', !!current.guidePdfUrl && !!current.zipUrl && current.guideCost === 0, current);
-const guideInline = await fetch(current.guidePdfUrl);
+const guideInline = await fetch(trusted(current.guidePdfUrl));
 check('charte servie en ligne (PDF)', guideInline.status === 200 && guideInline.headers.get('content-type') === 'application/pdf' && /^inline/.test(guideInline.headers.get('content-disposition') ?? ''));
-const kitFiles = zipEntries(Buffer.from(await (await fetch(current.zipUrl)).arrayBuffer()));
+const kitFiles = zipEntries(Buffer.from(await (await fetch(trusted(current.zipUrl))).arrayBuffer()));
 const kitRoot = kitFiles[0]?.split('/')[0] ?? '';
 const expectedFiles = [
   'logo/svg/', 'logo/png/', 'logo/pdf/', 'icones-app/favicon.ico', 'reseaux-sociaux/', 'signatures/signature-email.html',
@@ -618,7 +639,7 @@ check('Studio : sauvegarde (nom, aperçu)', renamed.status === 200 && renamed.js
 const pdfExport = await call('POST', `/studio-designs/${sdid}/export`, { token, body: { format: 'pdf', cropMarks: true } });
 const pdfStatus = pdfExport.status === 202 ? await waitJob(pdfExport.json.jobId, token, 60000) : null;
 const pdfJob = pdfExport.status === 202 ? await call('GET', `/jobs/${pdfExport.json.jobId}`, { token }) : null;
-const pdfFile = pdfJob?.json.result?.downloadUrl ? await fetch(pdfJob.json.result.downloadUrl) : null;
+const pdfFile = pdfJob?.json.result?.downloadUrl ? await fetch(trusted(pdfJob.json.result.downloadUrl)) : null;
 const pdfBytes = pdfFile ? Buffer.from(await pdfFile.arrayBuffer()) : Buffer.alloc(0);
 check(
   'Studio : PDF d’impression (fond perdu, traits de coupe, 0 crédit)',
@@ -628,7 +649,7 @@ check(
 const svgExport = await call('POST', `/studio-designs/${sdid}/export`, { token, body: { format: 'svg' } });
 const svgStatus = svgExport.status === 202 ? await waitJob(svgExport.json.jobId, token, 60000) : null;
 const svgJob = svgExport.status === 202 ? await call('GET', `/jobs/${svgExport.json.jobId}`, { token }) : null;
-const svgText = svgJob?.json.result?.downloadUrl ? await (await fetch(svgJob.json.result.downloadUrl)).text() : '';
+const svgText = svgJob?.json.result?.downloadUrl ? await (await fetch(trusted(svgJob.json.result.downloadUrl))).text() : '';
 check('Studio : SVG au texte vectorisé', svgStatus === 'SUCCEEDED' && svgText.startsWith('<svg') && !svgText.includes('<text'), svgStatus);
 const studioCopy = await call('POST', `/studio-designs/${sdid}/duplicate`, { token });
 check('Studio : duplication', studioCopy.status === 201 && studioCopy.json.name === 'Flyer JPO (copie)' && studioCopy.json.doc.pages.length === 1);
@@ -663,7 +684,7 @@ check('images : lot demandé', images.status === 202 && !!images.json.jobId, ima
 check('images : lot terminé', (await waitJob(images.json.jobId, token, 60000)) === 'SUCCEEDED');
 const imagesJob = await call('GET', `/jobs/${images.json.jobId}`, { token });
 const generated = imagesJob.json.result?.images ?? [];
-const firstImage = generated[0] ? await fetch(generated[0].url) : null;
+const firstImage = generated[0] ? await fetch(trusted(generated[0].url)) : null;
 check(
   'images : 4 PNG portrait servis par URL signée',
   generated.length === 4 && generated.every((i) => i.width === 1280 && i.height === 1600) && firstImage?.status === 200 && firstImage.headers.get('content-type') === 'image/png' && !('storageKey' in generated[0]),
@@ -687,7 +708,7 @@ const pub = await call('POST', '/public/names/try', { body: { entityType: 'APPLI
 // 3 essais par IP et par jour : au-delà, 429 est le comportement attendu.
 check('essai public sans compte (ou limite du jour atteinte)', (pub.status === 200 && pub.json.names.length > 0) || pub.status === 429, pub.status);
 
-const ready = await fetch(API + '/health/ready');
+const ready = await fetch(apiUrl('/health/ready'));
 check('sonde ready', ready.status === 200);
 
 console.log(failures ? `\n${failures} échec(s)` : '\nTout est vert');

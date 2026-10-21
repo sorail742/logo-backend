@@ -279,12 +279,10 @@ function cover(w: GuideWriter, input: BrandGuideInput) {
     color: fg,
     width: CONTENT_WIDTH,
   });
-  let y =
+  const y =
     540 + textHeight(doc, input.content.name, { font: 'bold', size: 34, width: CONTENT_WIDTH }) + 8;
   if (input.content.slogan) {
-    const style = { size: 14, color: fg, width: CONTENT_WIDTH };
-    w.text(input.content.slogan, MARGIN, y, style);
-    y += textHeight(doc, input.content.slogan, style);
+    w.text(input.content.slogan, MARGIN, y, { size: 14, color: fg, width: CONTENT_WIDTH });
   }
   w.text(`Version ${input.version} · ${formatDate(input.date)}`, MARGIN, PAGE.height - 80, {
     size: 9,
