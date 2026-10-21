@@ -7,6 +7,7 @@ import {
   HttpStatus,
   Param,
   ParseUUIDPipe,
+  Patch,
   Post,
   Query,
 } from '@nestjs/common';
@@ -15,7 +16,7 @@ import type { AuthUser, WorkspaceContext } from '../../common/auth-user';
 import { CurrentUser, CurrentWorkspace, WorkspaceAccess } from '../../common/decorators';
 import { AuditService } from '../audit/audit.service';
 import { projectEvent } from '../projects/project-activity';
-import { CreateCommentDto, ListCommentsDto } from './comments.dto';
+import { CreateCommentDto, ListCommentsDto, UpdateCommentDto } from './comments.dto';
 import { CommentsService } from './comments.service';
 
 /** Commentaires (COL-02, §13.7) : tout membre de l'espace, lecteur compris ; pas le support. */
@@ -52,6 +53,18 @@ export class CommentsController {
     );
     await this.audit.log(projectEvent(pid, user.id, 'comments.create', { target }));
     return comment;
+  }
+
+  /** Fil résolu ou rouvert (création du Studio, ou tout commentaire de premier niveau). */
+  @Patch('comments/:cid')
+  @WorkspaceAccess('VIEWER', { staff: undefined })
+  resolve(
+    @Param('cid', ParseUUIDPipe) cid: string,
+    @Body() dto: UpdateCommentDto,
+    @CurrentUser() user: AuthUser,
+    @CurrentWorkspace() ws: WorkspaceContext,
+  ) {
+    return this.comments.resolve(cid, user.id, ws.role, ws.workspaceId, dto);
   }
 
   @Delete('comments/:cid')

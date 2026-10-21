@@ -1,8 +1,13 @@
 import { BadRequestException, ForbiddenException, Injectable } from '@nestjs/common';
-import { WorkspaceRole, type Comment } from '@prisma/client';
+import { Prisma, WorkspaceRole, type Comment } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
-import type { CommentTarget, CreateCommentDto, ListCommentsDto } from './comments.dto';
+import type {
+  CommentTarget,
+  CreateCommentDto,
+  ListCommentsDto,
+  UpdateCommentDto,
+} from './comments.dto';
 import { resolveMentions, type Mentionable } from './mentions';
 
 interface Ctx {
@@ -29,7 +34,17 @@ function toCommentDto(comment: CommentRow, members: Mentionable[]) {
   };
 }
 
-/** Commentaires sur un nom, un logo, une signature, un slogan, le kit ou le projet (COL-02). */
+interface Target {
+  label: string;
+  href: string;
+  /** Pages d'une création du Studio (épingles). */
+  pageIds?: string[];
+}
+
+/**
+ * Commentaires sur un nom, un logo, une signature, un slogan, le kit, le projet (COL-02) ou une
+ * création du Studio, épinglés sur la page, avec fil de réponses et résolution.
+ */
 @Injectable()
 export class CommentsService {
   constructor(
@@ -63,6 +78,31 @@ export class CommentsService {
     if (!body) throw new BadRequestException('Le commentaire est vide');
     const target = await this.target(ctx.projectId, dto.targetType, dto.targetId);
 
+    // Réponse : même élément, un seul niveau de fil ; l'épingle reste celle du fil.
+    let threadId: string | null = null;
+    if (dto.parentId) {
+      const parent = await this.prisma.comment.findFirst({
+        where: { id: dto.parentId, projectId: ctx.projectId },
+      });
+      if (
+        !parent ||
+        parent.parentId ||
+        parent.targetType !== dto.targetType ||
+        parent.targetId !== dto.targetId
+      ) {
+        throw new BadRequestException('Ce fil de discussion n’existe pas sur cet élément');
+      }
+      threadId = parent.id;
+    }
+    if (dto.anchor) {
+      if (dto.targetType !== 'DESIGN' || threadId) {
+        throw new BadRequestException('Une épingle ne se pose que sur une création du Studio');
+      }
+      if (!target.pageIds?.includes(dto.anchor.pageId)) {
+        throw new BadRequestException('Cette page n’existe pas dans la création');
+      }
+    }
+
     const comment = await this.prisma.comment.create({
       data: {
         projectId: ctx.projectId,
@@ -70,19 +110,32 @@ export class CommentsService {
         targetType: dto.targetType,
         targetId: dto.targetId,
         body,
+        parentId: threadId,
+        anchor: dto.anchor
+          ? ({ pageId: dto.anchor.pageId, x: dto.anchor.x, y: dto.anchor.y } as Prisma.InputJsonValue)
+          : undefined,
       },
       include: { author: { select: { fullName: true } } },
     });
+    // Une réponse rouvre un fil résolu.
+    if (threadId) {
+      await this.prisma.comment.updateMany({
+        where: { id: threadId, resolvedAt: { not: null } },
+        data: { resolvedAt: null, resolvedById: null },
+      });
+    }
 
     const members = await this.members(ctx.workspaceId);
     const mentioned = resolveMentions(body, members)
       .map((m) => m.userId)
       .filter((id) => id !== ctx.actorId);
+    // Participants prévenus : ceux du fil pour une réponse, ceux de l'élément sinon.
     const participants = await this.prisma.comment.findMany({
       where: {
         projectId: ctx.projectId,
         targetType: dto.targetType,
         targetId: dto.targetId,
+        ...(threadId && { OR: [{ id: threadId }, { parentId: threadId }] }),
         authorId: { notIn: [ctx.actorId, ...mentioned] },
       },
       distinct: ['authorId'],
@@ -91,13 +144,15 @@ export class CommentsService {
     const memberIds = new Set(members.map((m) => m.userId));
     const author = comment.author.fullName;
     const excerpt = body.length > EXCERPT_LENGTH ? `${body.slice(0, EXCERPT_LENGTH - 1)}…` : body;
+    const href =
+      dto.targetType === 'DESIGN' ? `${target.href}?commentaire=${threadId ?? comment.id}` : target.href;
     await this.notifications.notify(
       mentioned,
       {
         type: 'COMMENT',
         title: `${author} vous a mentionné`,
         body: `Sur ${target.label} : « ${excerpt} »`,
-        href: target.href,
+        href,
       },
       { email: true },
     );
@@ -105,12 +160,35 @@ export class CommentsService {
       participants.map((p) => p.authorId).filter((id) => memberIds.has(id)),
       {
         type: 'COMMENT',
-        title: `${author} a commenté ${target.label}`,
+        title: threadId ? `${author} a répondu sur ${target.label}` : `${author} a commenté ${target.label}`,
         body: excerpt,
-        href: target.href,
+        href,
       },
     );
     return { comment: toCommentDto(comment, members), target: target.label };
+  }
+
+  /** Résout ou rouvre un fil : son auteur, un éditeur ou un propriétaire. */
+  async resolve(
+    commentId: string,
+    userId: string,
+    role: WorkspaceRole | null,
+    workspaceId: string,
+    dto: UpdateCommentDto,
+  ) {
+    const comment = await this.prisma.comment.findUniqueOrThrow({ where: { id: commentId } });
+    if (comment.parentId) throw new BadRequestException('Seul le premier message d’un fil se résout');
+    if (comment.authorId !== userId && role !== WorkspaceRole.OWNER && role !== WorkspaceRole.EDITOR) {
+      throw new ForbiddenException('Vous ne pouvez pas résoudre ce fil');
+    }
+    const updated = await this.prisma.comment.update({
+      where: { id: commentId },
+      data: dto.resolved
+        ? { resolvedAt: new Date(), resolvedById: userId }
+        : { resolvedAt: null, resolvedById: null },
+      include: { author: { select: { fullName: true } } },
+    });
+    return toCommentDto(updated, await this.members(workspaceId));
   }
 
   /** Suppression par son auteur ou par un propriétaire de l'espace. */
@@ -137,7 +215,7 @@ export class CommentsService {
   }
 
   /** Vérifie que l'élément commenté appartient au projet ; libellé et lien pour les notifications. */
-  private async target(projectId: string, type: CommentTarget, id: string) {
+  private async target(projectId: string, type: CommentTarget, id: string): Promise<Target> {
     const base = `/app/projets/${projectId}`;
     const missing = () => new BadRequestException('Cet élément n’appartient pas au projet');
     switch (type) {
@@ -166,6 +244,19 @@ export class CommentsService {
         const kit = await this.prisma.brandKit.findFirst({ where: { id, projectId } });
         if (!kit) throw missing();
         return { label: `le kit v${kit.version}`, href: `${base}/kit` };
+      }
+      case 'DESIGN': {
+        const design = await this.prisma.studioDesign.findFirst({
+          where: { id, projectId },
+          select: { name: true, doc: true },
+        });
+        if (!design) throw missing();
+        const pages = (design.doc as { pages?: { id: string }[] }).pages ?? [];
+        return {
+          label: `la création « ${design.name} »`,
+          href: `/studio/${id}`,
+          pageIds: pages.map((p) => p.id),
+        };
       }
     }
   }
