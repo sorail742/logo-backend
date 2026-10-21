@@ -364,7 +364,8 @@ export class SignaturesService {
       where: { id: projectId },
       select: { workspaceId: true },
     });
-    const fileKey = `signatures/${project.workspaceId}/${signatureId}/${Date.now()}.svg`;
+    // Nom de fichier tiré au hasard : aucun paramètre de la requête n'entre dans le chemin.
+    const fileKey = `signatures/${project.workspaceId}/${randomUUID()}.svg`;
     await this.storage.put(fileKey, Buffer.from(svg), 'image/svg+xml');
     await this.storage.put(pngKey(fileKey), png, 'image/png');
     return { html: null, fileKey };
