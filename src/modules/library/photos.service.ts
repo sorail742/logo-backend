@@ -197,9 +197,7 @@ export class PhotosService {
       });
     const contentType = response.headers.get('content-type')?.split(';')[0]?.trim() ?? '';
     if (!response.ok || !IMAGE_TYPES.includes(contentType)) {
-      this.logger.warn(
-        `Téléchargement Pexels refusé (${response.status}, ${contentType || 'type inconnu'})`,
-      );
+      this.logger.warn(`Téléchargement Pexels refusé (statut ${response.status})`);
       throw new BadGatewayException({ message: 'Photo indisponible', code: 'PHOTOS_UNAVAILABLE' });
     }
     return { data: await readLimited(response, MAX_DOWNLOAD_BYTES), contentType };
@@ -228,7 +226,7 @@ export class PhotosService {
       });
     }
     if (!response.ok) {
-      this.logger.warn(`Pexels ${path.split('?')[0]} : ${response.status}`);
+      this.logger.warn(`Pexels : réponse ${response.status}`);
       throw new BadGatewayException({
         message: 'Banque de photos injoignable',
         code: 'PHOTOS_UNAVAILABLE',

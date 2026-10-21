@@ -108,7 +108,8 @@ export class SignatureBatchService {
 
 function uniqueSlug(slug: string, used: Set<string>) {
   let candidate = slug;
-  for (let i = 2; used.has(candidate); i++) candidate = `${slug}-${i}`;
+  let i = 1;
+  while (used.has(candidate)) candidate = `${slug}-${++i}`;
   used.add(candidate);
   return candidate;
 }

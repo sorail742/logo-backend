@@ -37,12 +37,14 @@ export class SloganGeneratorService {
       if (input.kind !== 'MISSION' && clean.split(' ').length > input.maxWords) continue;
       const blocked = await this.moderation.findBlocked(clean, 'SLOGAN');
       if (blocked.length) {
-        this.logger.debug(`Slogan filtré « ${clean} » : ${blocked.join(', ')}`);
+        this.logger.debug(
+          `Slogan écarté par la modération (${blocked.length} terme(s) interdit(s))`,
+        );
         continue;
       }
       const known = closeKnownSlogan(clean);
       if (known) {
-        this.logger.debug(`Slogan trop proche de « ${known} » : « ${clean} »`);
+        this.logger.debug('Slogan écarté : trop proche d’un slogan connu');
         continue;
       }
       seen.add(clean.toLowerCase());

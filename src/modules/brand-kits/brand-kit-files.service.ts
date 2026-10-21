@@ -270,7 +270,7 @@ export class BrandKitFilesService {
     const file = async (key: string | null | undefined) =>
       key
         ? ((await this.storage.get(key).catch((err: Error) => {
-            this.logger.warn(`Fichier de signature illisible (${key}) : ${err.message}`);
+            this.logger.warn(`Fichier de signature illisible : ${err.message}`);
             return null;
           })) ?? null)
         : null;

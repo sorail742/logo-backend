@@ -210,7 +210,6 @@ export function renderStampSvg(data: StampData, options: StampRenderOptions = {}
   } else {
     const isOval = data.shape === 'oval';
     width = isOval ? 400 : 320;
-    height = 320;
     const cx = width / 2;
     const cy = height / 2;
     const rx = width / 2 - 10;

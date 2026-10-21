@@ -46,7 +46,7 @@ export class NameGeneratorService {
         'NAME',
       );
       if (blocked.length) {
-        this.logger.debug(`Nom filtré « ${name.value} » : ${blocked.join(', ')}`);
+        this.logger.debug(`Nom écarté par la modération (${blocked.length} terme(s) interdit(s))`);
         continue;
       }
       exclude.add(name.value.toLowerCase());
