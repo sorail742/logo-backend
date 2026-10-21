@@ -1,4 +1,5 @@
 import type {
+  ImageGenerationInput,
   LogoGenerationInput,
   NameGenerationInput,
   SloganGenerationInput,
@@ -12,6 +13,16 @@ export interface AiCallResult {
   costUsdMicros: number;
 }
 
+/** Images produites (PNG), avec leur taille. */
+export interface AiImagesResult {
+  images: { data: Buffer; width: number; height: number }[];
+  provider: string;
+  promptVersion: string;
+  costUsdMicros: number;
+  /** Fournisseur de démonstration : visuels génératifs, la description n'est pas interprétée. */
+  demo: boolean;
+}
+
 /**
  * Abstraction des fournisseurs IA (NOM-10, §11.1) : le reste du code ne dépend que de cette interface.
  * Règle §14.1 : le brief est transmis comme donnée, jamais concaténé comme instruction.
@@ -23,4 +34,6 @@ export abstract class AiProvider {
   abstract composeLogos(input: LogoGenerationInput): Promise<AiCallResult>;
   /** Slogans, devises en trois termes ou phrases de mission (§6.1). */
   abstract generateSlogans(input: SloganGenerationInput): Promise<AiCallResult>;
+  /** Images pour le Studio de création (fonds, illustrations). */
+  abstract generateImages(input: ImageGenerationInput): Promise<AiImagesResult>;
 }

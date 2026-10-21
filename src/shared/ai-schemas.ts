@@ -122,3 +122,30 @@ export type SloganGenerationInput = z.infer<typeof sloganGenerationInputSchema>;
 export const generatedSlogansSchema = z.object({
   slogans: z.array(z.object({ text: z.string().trim().min(2).max(300) })).min(1).max(30),
 });
+
+// ─── Images du Studio ───
+
+export const IMAGE_STYLES = [
+  'abstract',
+  'gradient',
+  'geometric',
+  'waves',
+  'wax',
+  'bogolan',
+  'confetti',
+] as const;
+export const IMAGE_ASPECTS = ['square', 'portrait', 'landscape'] as const;
+
+/** Demande d'images : description libre (donnée, jamais instruction), style, format, couleurs. */
+export const imageGenerationInputSchema = z.object({
+  prompt: z.string().trim().min(3).max(300),
+  /** « auto » : style suggéré par la description. */
+  style: z.enum(['auto', ...IMAGE_STYLES]),
+  aspect: z.enum(IMAGE_ASPECTS),
+  palette: z
+    .array(z.string().regex(/^#[0-9a-fA-F]{6}$/))
+    .min(2)
+    .max(6),
+  count: z.number().int().min(1).max(4),
+});
+export type ImageGenerationInput = z.infer<typeof imageGenerationInputSchema>;

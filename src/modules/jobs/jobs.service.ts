@@ -165,10 +165,27 @@ export class JobsService {
     return { ...job, result: await this.publicResult(job.result) };
   }
 
-  /** Résultat exposé : un fichier produit est servi par une URL signée tant qu'il existe. */
+  /**
+   * Résultat exposé : un fichier produit est servi par une URL signée tant qu'il existe ; une
+   * liste d'images (Studio) l'est image par image.
+   */
   private async publicResult(result: Prisma.JsonValue) {
     if (!result || typeof result !== 'object' || Array.isArray(result)) return result;
-    const { storageKey, assetId, ...rest } = result as Record<string, Prisma.JsonValue>;
+    const record = result as Record<string, Prisma.JsonValue>;
+    if (Array.isArray(record.images)) {
+      const images = await Promise.all(
+        (record.images as { assetId: string; storageKey: string; width: number; height: number }[]).map(
+          async ({ assetId, storageKey, width, height }) => {
+            const exists = await this.prisma.asset.count({ where: { id: assetId } });
+            return exists
+              ? { url: await this.storage.signedUrl(storageKey, { inline: true }), width, height }
+              : null;
+          },
+        ),
+      );
+      return { ...record, images: images.filter((i) => i !== null), expired: images.some((i) => !i) };
+    }
+    const { storageKey, assetId, ...rest } = record;
     if (typeof storageKey !== 'string' || typeof assetId !== 'string') return result;
     const asset = await this.prisma.asset.findUnique({
       where: { id: assetId },

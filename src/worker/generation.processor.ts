@@ -14,6 +14,7 @@ import { NotificationsService } from '../modules/notifications/notifications.ser
 import { SignatureBatchService } from '../modules/signatures/signature-batch.service';
 import { SloganGeneratorService } from '../modules/slogans/slogan-generator.service';
 import { StudioExportService } from '../modules/studio/studio-export.service';
+import { StudioImagesService } from '../modules/studio/studio-images.service';
 
 const READY_MESSAGES: Partial<Record<JobKind, { title: string; page: string; email: boolean }>> = {
   BRAND_GUIDE: { title: 'Charte graphique prête', page: 'kit', email: true },
@@ -43,6 +44,7 @@ export class GenerationProcessor extends WorkerHost {
     private readonly kitFiles: BrandKitFilesService,
     private readonly notifications: NotificationsService,
     private readonly studioExports: StudioExportService,
+    private readonly studioImages: StudioImagesService,
   ) {
     super();
   }
@@ -99,6 +101,10 @@ export class GenerationProcessor extends WorkerHost {
       case JobKind.DESIGN_EXPORT: {
         const { fileName, pages } = await this.studioExports.runJob(jobId);
         return { fileName, pages };
+      }
+      case JobKind.STUDIO_IMAGES: {
+        const { images, provider } = await this.studioImages.runJob(jobId);
+        return { images: images.length, provider };
       }
       default:
         // Module textile : propositions, maquettes et pack atelier à venir.

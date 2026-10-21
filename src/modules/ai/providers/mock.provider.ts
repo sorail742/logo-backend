@@ -4,14 +4,21 @@ import { paletteFromList, STYLE_PALETTES, type LogoStyle } from '../../../render
 import { FONTS } from '../../../render/fonts';
 import { ICONS, searchIcons } from '../../../render/icons';
 import type { IconFrame } from '../../../render/logo-spec';
+import { hashSeed, renderArtwork, styleFromPrompt } from '../../../render/artwork';
+import { svgToPng } from '../../../render/raster';
 import type {
   GeneratedName,
+  ImageGenerationInput,
   LogoComposition,
   LogoGenerationInput,
   NameGenerationInput,
   SloganGenerationInput,
 } from '../../../shared/ai-schemas';
-import { AiCallResult, AiProvider } from '../ai-provider';
+import { AiCallResult, AiImagesResult, AiProvider } from '../ai-provider';
+
+/** Taille des images produites (côté le plus long, en px). */
+const IMAGE_SIZE = 1600;
+const ASPECT_RATIOS = { square: 1, portrait: 4 / 5, landscape: 16 / 9 } as const;
 
 const SUFFIXES = ['ia', 'o', 'ya', 'ka', 'is', 'en', 'ora', 'ix', 'ari', 'ly'];
 const PREFIXES = ['Néo', 'Nova', 'Ka', 'Sira', 'Bara', 'Lumi', 'Teri', 'Dia', 'Fala', 'Woni'];
@@ -259,6 +266,25 @@ export class MockAiProvider extends AiProvider {
       default:
         return null;
     }
+  }
+
+  /**
+   * Images de démonstration : visuels génératifs vectoriels (style choisi, ou suggéré par un mot
+   * de la description), aux couleurs demandées, puis tramés. Un fournisseur réel remplacera
+   * cette méthode sans changer le reste.
+   */
+  generateImages(input: ImageGenerationInput): Promise<AiImagesResult> {
+    const ratio = ASPECT_RATIOS[input.aspect];
+    const width = ratio >= 1 ? IMAGE_SIZE : Math.round(IMAGE_SIZE * ratio);
+    const height = ratio >= 1 ? Math.round(IMAGE_SIZE / ratio) : IMAGE_SIZE;
+    const style =
+      input.style === 'auto' ? (styleFromPrompt(input.prompt) ?? 'abstract') : input.style;
+    const seed = hashSeed(`${input.prompt}|${input.style}|${input.palette.join()}`);
+    const images = Array.from({ length: input.count }, (_, i) => {
+      const svg = renderArtwork({ style, palette: input.palette, width, height, seed: seed + i * 7919 });
+      return { data: svgToPng(svg, { size: Math.max(width, height) }), width, height };
+    });
+    return Promise.resolve({ images, provider: this.name, promptVersion: 'artwork-v1', costUsdMicros: 0, demo: true });
   }
 }
 

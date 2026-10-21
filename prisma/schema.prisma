@@ -103,6 +103,7 @@ enum JobKind {
   PRODUCTION_PACK
   NUMBER_FONT
   DESIGN_EXPORT
+  STUDIO_IMAGES
 }
 
 enum JobStatus {
@@ -150,6 +151,7 @@ enum AssetKind {
   EXPORT
   UPLOAD
   AVATAR
+  GENERATED
 }
 
 enum LicenseKind {

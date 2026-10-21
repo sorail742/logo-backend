@@ -1,6 +1,8 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
+import { IMAGE_ASPECTS, IMAGE_STYLES } from '../../shared/ai-schemas';
 import {
   ArrayMaxSize,
+  ArrayMinSize,
   IsArray,
   IsBoolean,
   IsIn,
@@ -71,4 +73,26 @@ export class ExportStudioDesignDto {
   @IsOptional()
   @IsBoolean()
   cropMarks?: boolean;
+}
+
+/** Lot de 4 images pour le Studio (fournisseur IA ; démonstration générative par défaut). */
+export class GenerateStudioImagesDto {
+  @IsString()
+  @MinLength(3)
+  @MaxLength(300)
+  prompt!: string;
+
+  @IsIn(['auto', ...IMAGE_STYLES])
+  style!: 'auto' | (typeof IMAGE_STYLES)[number];
+
+  @IsIn(IMAGE_ASPECTS)
+  aspect!: (typeof IMAGE_ASPECTS)[number];
+
+  @ApiPropertyOptional({ description: 'Couleurs (#rrggbb) ; par défaut, celles du logo favori' })
+  @IsOptional()
+  @IsArray()
+  @ArrayMinSize(2)
+  @ArrayMaxSize(6)
+  @Matches(/^#[0-9a-fA-F]{6}$/, { each: true })
+  palette?: string[];
 }

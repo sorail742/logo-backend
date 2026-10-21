@@ -18,7 +18,13 @@ import type { AuthUser, WorkspaceContext } from '../../common/auth-user';
 import { CurrentUser, CurrentWorkspace, WorkspaceAccess } from '../../common/decorators';
 import { AuditService } from '../audit/audit.service';
 import { projectEvent } from '../projects/project-activity';
-import { CreateStudioDesignDto, ExportStudioDesignDto, UpdateStudioDesignDto } from './studio.dto';
+import {
+  CreateStudioDesignDto,
+  ExportStudioDesignDto,
+  GenerateStudioImagesDto,
+  UpdateStudioDesignDto,
+} from './studio.dto';
+import { StudioImagesService } from './studio-images.service';
 import { StudioService } from './studio.service';
 
 /** Studio de création : documents de pages et d'éléments, exports d'impression. */
@@ -28,6 +34,7 @@ import { StudioService } from './studio.service';
 export class StudioController {
   constructor(
     private readonly studio: StudioService,
+    private readonly images: StudioImagesService,
     private readonly audit: AuditService,
   ) {}
 
@@ -51,6 +58,29 @@ export class StudioController {
     );
     await this.audit.log(projectEvent(pid, user.id, 'studio.create', { name: design.name }));
     return design;
+  }
+
+  /** Lot de 4 images (1 crédit, quota gratuit quotidien), produit par le worker. */
+  @Post('projects/:pid/studio-images')
+  @WorkspaceAccess('EDITOR')
+  @HttpCode(HttpStatus.ACCEPTED)
+  @ApiHeader({ name: 'Idempotency-Key', required: true })
+  async generateImages(
+    @Param('pid', ParseUUIDPipe) pid: string,
+    @Body() dto: GenerateStudioImagesDto,
+    @CurrentUser() user: AuthUser,
+    @CurrentWorkspace() ws: WorkspaceContext,
+    @Headers('idempotency-key') idempotencyKey?: string,
+  ) {
+    const job = await this.images.request(
+      { projectId: pid, workspaceId: ws.workspaceId, actorId: user.id },
+      dto,
+      idempotencyKey,
+    );
+    await this.audit.log(
+      projectEvent(pid, user.id, 'studio.images', { style: dto.style, jobId: job.jobId }),
+    );
+    return job;
   }
 
   @Get('studio-designs/:sdid')
