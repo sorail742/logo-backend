@@ -7,12 +7,21 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import type { Request } from 'express';
+import { WorkspaceRole } from '@prisma/client';
+import { AuditService } from '../../modules/audit/audit.service';
 import { PLATFORM_ROLE_RANK, WORKSPACE_ROLE_RANK } from '../auth-user';
 import { WORKSPACE_ACCESS, WorkspaceAccessOptions } from '../decorators';
 import { PrismaService } from '../prisma/prisma.service';
 
+interface ResolvedWorkspace {
+  workspaceId: string;
+  projectId?: string;
+  viewerDownloads: boolean;
+}
+
 /**
- * Vérifie le rôle de l'utilisateur dans l'espace de travail (§3).
+ * Vérifie le rôle de l'utilisateur dans l'espace de travail (§3). Un espace supprimé n'existe
+ * plus pour personne ; un accès du support ou d'un admin est inscrit au journal d'audit.
  * L'espace est déduit des paramètres de route : :wid, :pid, :nid, :lid, :did, :jid, :kid
  * (kit), :cid (commentaire), :sdid (création du Studio), :sid (signature ou slogan).
  */
@@ -21,6 +30,7 @@ export class WorkspaceGuard implements CanActivate {
   constructor(
     private readonly reflector: Reflector,
     private readonly prisma: PrismaService,
+    private readonly audit: AuditService,
   ) {}
 
   async canActivate(ctx: ExecutionContext): Promise<boolean> {
@@ -34,7 +44,7 @@ export class WorkspaceGuard implements CanActivate {
     const user = req.user;
     if (!user) throw new ForbiddenException();
 
-    const { workspaceId, projectId } = await this.resolve(
+    const { workspaceId, projectId, viewerDownloads } = await this.resolve(
       req.params as Record<string, string>,
       opts.includeDeleted ?? false,
     );
@@ -44,14 +54,30 @@ export class WorkspaceGuard implements CanActivate {
       select: { role: true },
     });
 
-    if (membership && WORKSPACE_ROLE_RANK[membership.role] >= WORKSPACE_ROLE_RANK[opts.role]) {
-      req.workspace = { workspaceId, projectId, role: membership.role };
-      return true;
+    if (membership) {
+      const rank = WORKSPACE_ROLE_RANK[membership.role];
+      const canDownload =
+        rank >= WORKSPACE_ROLE_RANK.EDITOR ||
+        (membership.role === WorkspaceRole.VIEWER && viewerDownloads);
+      // Téléchargement : le Lecteur passe quand l'espace l'autorise.
+      if (rank >= WORKSPACE_ROLE_RANK[opts.role] || (opts.download && canDownload)) {
+        req.workspace = { workspaceId, projectId, role: membership.role, canDownload };
+        return true;
+      }
     }
 
-    // Accès plateforme (support en lecture, admin pour la suppression…), avec 2FA obligatoire.
+    // Accès plateforme (support en lecture, admin pour la suppression…), avec 2FA obligatoire,
+    // inscrit au journal d'audit (§3 : toute action du support ou d'un admin est tracée).
     if (opts.staff && PLATFORM_ROLE_RANK[user.role] >= PLATFORM_ROLE_RANK[opts.staff] && user.mfa) {
-      req.workspace = { workspaceId, projectId, role: null };
+      req.workspace = { workspaceId, projectId, role: null, canDownload: false };
+      await this.audit.log({
+        actorId: user.id,
+        action: 'staff.access',
+        entityType: 'Workspace',
+        entityId: workspaceId,
+        after: { method: req.method, path: req.route?.path ?? req.path, projectId },
+        ip: req.ip,
+      });
       return true;
     }
 
@@ -63,14 +89,14 @@ export class WorkspaceGuard implements CanActivate {
   private async resolve(
     params: Record<string, string>,
     includeDeleted: boolean,
-  ): Promise<{ workspaceId: string; projectId?: string }> {
+  ): Promise<ResolvedWorkspace> {
     if (params.wid) {
       const ws = await this.prisma.workspace.findUnique({
         where: { id: params.wid },
-        select: { id: true },
+        select: { id: true, deletedAt: true, viewerDownloads: true },
       });
-      if (!ws) throw new NotFoundException('Espace introuvable');
-      return { workspaceId: ws.id };
+      if (!ws || ws.deletedAt) throw new NotFoundException('Espace introuvable');
+      return { workspaceId: ws.id, viewerDownloads: ws.viewerDownloads };
     }
 
     let projectId: string | undefined = params.pid;
@@ -140,11 +166,20 @@ export class WorkspaceGuard implements CanActivate {
 
     const project = await this.prisma.project.findUnique({
       where: { id: projectId },
-      select: { id: true, workspaceId: true, deletedAt: true },
+      select: {
+        id: true,
+        workspaceId: true,
+        deletedAt: true,
+        workspace: { select: { deletedAt: true, viewerDownloads: true } },
+      },
     });
-    if (!project || (project.deletedAt && !includeDeleted)) {
+    if (!project || project.workspace.deletedAt || (project.deletedAt && !includeDeleted)) {
       throw new NotFoundException('Projet introuvable');
     }
-    return { workspaceId: project.workspaceId, projectId: project.id };
+    return {
+      workspaceId: project.workspaceId,
+      projectId: project.id,
+      viewerDownloads: project.workspace.viewerDownloads,
+    };
   }
 }

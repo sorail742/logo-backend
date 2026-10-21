@@ -108,7 +108,9 @@ Les liens des e-mails pointent vers les pages du front (`/verifier-email`, `/rei
 Deux niveaux (§3), vérifiés côté API :
 
 - **Rôle plateforme** (`USER < SUPPORT < ADMIN < SUPER_ADMIN`) : `@Roles('ADMIN')` + `RolesGuard`. Les rôles internes exigent une session ouverte avec un code TOTP.
-- **Rôle dans l'espace** (`VIEWER < EDITOR < OWNER`) : `@WorkspaceAccess('EDITOR')` + `WorkspaceGuard`. L'espace est déduit de `:wid`, `:pid`, `:nid`, `:lid`, `:did`, `:kid`, `:cid`, `:sid` ou `:jid`. Le support a un accès en lecture par défaut ; un non-membre reçoit 404.
+- **Rôle dans l'espace** (`VIEWER < EDITOR < OWNER`) : `@WorkspaceAccess('EDITOR')` + `WorkspaceGuard`. L'espace est déduit de `:wid`, `:pid`, `:nid`, `:lid`, `:did`, `:kid`, `:cid`, `:sdid`, `:sid` ou `:jid`. Le support a un accès en lecture par défaut, inscrit au journal d'audit ; un non-membre reçoit 404 ; un espace supprimé n'existe plus. `{ download: true }` laisse passer un lecteur quand l'espace autorise ses téléchargements.
+
+Matrice complète, route par route : [docs/permissions.md](docs/permissions.md). Vérification de bout en bout (propriétaire, éditeur, lecteur, non-membre, support, admin) : `npm run test:permissions`.
 
 ## Cycle d'une génération (§11.4)
 
@@ -224,6 +226,7 @@ Points en attente d'une décision (§15.4) : fournisseur IA réel (texte et imag
 | `npm run build` | Compilation dans `dist/` |
 | `npm test` / `npm run test:cov` | Tests unitaires / couverture |
 | `npm run test:smoke` | Parcours complet contre une API locale |
+| `npm run test:permissions` | Matrice des droits, rôle par rôle, contre une API locale |
 | `npm run lint` / `npm run typecheck` | ESLint / TypeScript |
 | `npm run prisma:migrate` | Nouvelle migration |
 | `npm run prisma:deploy` | Migrations en production |

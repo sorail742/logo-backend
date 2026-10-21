@@ -1,4 +1,5 @@
 import {
+  ForbiddenException,
   Body,
   Controller,
   Delete,
@@ -13,6 +14,7 @@ import {
   Query,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { WorkspaceRole } from '@prisma/client';
 import type { AuthUser, WorkspaceContext } from '../../common/auth-user';
 import { ClientIp, CurrentUser, CurrentWorkspace, WorkspaceAccess } from '../../common/decorators';
 import { AuditService } from '../audit/audit.service';
@@ -35,7 +37,12 @@ export class ProjectsController {
     @Param('wid', ParseUUIDPipe) wid: string,
     @Query() q: ListProjectsDto,
     @CurrentUser() user: AuthUser,
+    @CurrentWorkspace() ws: WorkspaceContext,
   ) {
+    // La corbeille relève de qui peut supprimer et restaurer : propriétaire, ou admin.
+    if (q.trash && ws.role !== WorkspaceRole.OWNER && !(ws.role === null && user.role !== 'SUPPORT')) {
+      throw new ForbiddenException('La corbeille est réservée au propriétaire de l’espace');
+    }
     return this.projects.list(wid, user.id, q);
   }
 

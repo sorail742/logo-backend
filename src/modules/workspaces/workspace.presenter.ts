@@ -9,6 +9,7 @@ export const workspaceSelect = (userId: string) =>
     slug: true,
     kind: true,
     creditBalance: true,
+    viewerDownloads: true,
     members: { where: { userId }, select: { role: true } },
     subscription: { select: { status: true, currentPeriodEnd: true, plan: { select: { code: true } } } },
   }) satisfies Prisma.WorkspaceSelect;

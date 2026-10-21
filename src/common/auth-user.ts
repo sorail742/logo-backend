@@ -12,6 +12,8 @@ export interface WorkspaceContext {
   /** Rôle de l'utilisateur dans l'espace ; null pour un accès plateforme (support, admin). */
   role: WorkspaceRole | null;
   projectId?: string;
+  /** Téléchargement des fichiers et exports : Éditeur et Propriétaire, Lecteur si l'espace l'autorise. */
+  canDownload: boolean;
 }
 
 declare module 'express' {

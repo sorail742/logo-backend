@@ -214,13 +214,18 @@ model RefreshToken {
 }
 
 model Workspace {
-  id            String        @id @default(uuid())
-  name          String
-  slug          String        @unique
-  kind          WorkspaceKind @default(PERSONAL)
-  creditBalance Int           @default(0) // cache du grand livre
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  id              String        @id @default(uuid())
+  name            String
+  slug            String        @unique
+  kind            WorkspaceKind @default(PERSONAL)
+  creditBalance   Int           @default(0) // cache du grand livre
+  // Lecteurs autorisés à télécharger les fichiers et exports (§3, « si autorisé »)
+  viewerDownloads Boolean       @default(false)
+  // Espace supprimé par son propriétaire ou un admin : invisible, projets purgés après 30 jours ;
+  // le grand livre, les paiements et l'abonnement restent conservés.
+  deletedAt       DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
 
   members           Membership[]
   invitations       Invitation[]
@@ -231,6 +236,7 @@ model Workspace {
   associationProofs AssociationProof[]
   printShops        PrintShopProfile[]
   numberFonts       NumberFontSet[]
+  creditRequests    CreditAdjustmentRequest[]
 }
 
 model Membership {
@@ -570,6 +576,23 @@ model CreditLedgerEntry {
   workspace   Workspace    @relation(fields: [workspaceId], references: [id])
 
   @@index([workspaceId, createdAt])
+}
+
+// Ajustement de crédits proposé par le support, appliqué après validation d'un admin (§3).
+model CreditAdjustmentRequest {
+  id            String    @id @default(uuid())
+  workspaceId   String
+  delta         Int
+  reason        String
+  status        String    @default("PENDING") // PENDING | APPROVED | REJECTED
+  requestedById String
+  decidedById   String?
+  decisionNote  String?
+  decidedAt     DateTime?
+  createdAt     DateTime  @default(now())
+  workspace     Workspace @relation(fields: [workspaceId], references: [id])
+
+  @@index([status, createdAt])
 }
 
 model AssociationProof {

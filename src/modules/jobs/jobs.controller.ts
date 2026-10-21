@@ -13,7 +13,8 @@ import {
   switchMap,
   takeWhile,
 } from 'rxjs';
-import { WorkspaceAccess } from '../../common/decorators';
+import type { WorkspaceContext } from '../../common/auth-user';
+import { CurrentWorkspace, WorkspaceAccess } from '../../common/decorators';
 import { JobEventsService } from './job-events.service';
 import { JobsService } from './jobs.service';
 
@@ -28,8 +29,8 @@ export class JobsController {
 
   @Get(':jid')
   @WorkspaceAccess('VIEWER')
-  get(@Param('jid', ParseUUIDPipe) jid: string) {
-    return this.jobs.get(jid);
+  get(@Param('jid', ParseUUIDPipe) jid: string, @CurrentWorkspace() ws: WorkspaceContext) {
+    return this.jobs.get(jid, { canDownload: ws.canDownload });
   }
 
   /**

@@ -111,7 +111,7 @@ export class StudioController {
   }
 
   @Post('studio-designs/:sdid/export')
-  @WorkspaceAccess('EDITOR')
+  @WorkspaceAccess('EDITOR', { download: true })
   @HttpCode(HttpStatus.ACCEPTED)
   @ApiHeader({ name: 'Idempotency-Key', required: false, description: 'Générée si absente' })
   async export(

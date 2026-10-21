@@ -11,9 +11,8 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiHeader, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
-import { WorkspaceRole } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
-import { WORKSPACE_ROLE_RANK, type AuthUser, type WorkspaceContext } from '../../common/auth-user';
+import type { AuthUser, WorkspaceContext } from '../../common/auth-user';
 import { CurrentUser, CurrentWorkspace, Public, WorkspaceAccess } from '../../common/decorators';
 import { AuditService } from '../audit/audit.service';
 import { projectEvent } from '../projects/project-activity';
@@ -21,9 +20,6 @@ import { ShareKitDto } from './brand-kits.dto';
 import { BrandKitsService } from './brand-kits.service';
 
 /** Téléchargement des livrables : Éditeur et Propriétaire (§3, « Lecteur : si autorisé »). */
-function canDownload(ws: WorkspaceContext) {
-  return !!ws.role && WORKSPACE_ROLE_RANK[ws.role] >= WORKSPACE_ROLE_RANK[WorkspaceRole.EDITOR];
-}
 
 /** Module 4 — kit de marque (§7.1, §13.7). */
 @ApiTags('brand-kits')
@@ -38,7 +34,7 @@ export class BrandKitsController {
   @Get('projects/:pid/brand-kits')
   @WorkspaceAccess('VIEWER')
   list(@Param('pid', ParseUUIDPipe) pid: string, @CurrentWorkspace() ws: WorkspaceContext) {
-    return this.kits.list(pid, canDownload(ws));
+    return this.kits.list(pid, ws.canDownload);
   }
 
   @Post('projects/:pid/brand-kits')
@@ -60,7 +56,7 @@ export class BrandKitsController {
   @Get('brand-kits/:kid')
   @WorkspaceAccess('VIEWER')
   get(@Param('kid', ParseUUIDPipe) kid: string, @CurrentWorkspace() ws: WorkspaceContext) {
-    return this.kits.get(kid, canDownload(ws));
+    return this.kits.get(kid, ws.canDownload);
   }
 
   @Post('brand-kits/:kid/restore')
@@ -102,7 +98,7 @@ export class BrandKitsController {
   }
 
   @Post('brand-kits/:kid/zip')
-  @WorkspaceAccess('EDITOR')
+  @WorkspaceAccess('EDITOR', { download: true })
   @HttpCode(HttpStatus.ACCEPTED)
   @ApiHeader({ name: 'Idempotency-Key', required: false, description: 'Générée si absente' })
   async zip(

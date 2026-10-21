@@ -18,7 +18,7 @@ export class UsersService {
       select: USER_SELECT,
     });
     const workspaces = await this.prisma.membership.findMany({
-      where: { userId },
+      where: { userId, workspace: { deletedAt: null } },
       select: {
         role: true,
         workspace: { select: { id: true, name: true, slug: true, kind: true } },

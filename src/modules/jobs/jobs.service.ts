@@ -146,7 +146,8 @@ export class JobsService {
     );
   }
 
-  async get(jobId: string) {
+  /** Tâche ; ses fichiers ne sont signés que pour qui peut télécharger (§3). */
+  async get(jobId: string, opts: { canDownload: boolean } = { canDownload: true }) {
     const job = await this.prisma.generationJob.findUniqueOrThrow({
       where: { id: jobId },
       select: {
@@ -162,7 +163,10 @@ export class JobsService {
         finishedAt: true,
       },
     });
-    return { ...job, result: await this.publicResult(job.result) };
+    return {
+      ...job,
+      result: opts.canDownload ? await this.publicResult(job.result) : withoutFiles(job.result),
+    };
   }
 
   /**
@@ -208,4 +212,11 @@ function validateIdempotencyKey(key: string | undefined): string {
     );
   }
   return key;
+}
+
+/** Résultat sans fichier ni lien : ce que voit un lecteur non autorisé à télécharger. */
+function withoutFiles(result: Prisma.JsonValue): Prisma.JsonValue {
+  if (!result || typeof result !== 'object' || Array.isArray(result)) return result;
+  const { storageKey: _key, assetId: _asset, images, ...rest } = result as Record<string, Prisma.JsonValue>;
+  return { ...rest, ...(Array.isArray(images) && { images: [] }), restricted: true };
 }

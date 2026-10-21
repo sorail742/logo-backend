@@ -16,6 +16,18 @@ export class UpdateWorkspaceDto {
   @IsString()
   @Length(2, 80)
   name?: string;
+
+  @ApiPropertyOptional({ description: 'Les lecteurs peuvent télécharger fichiers et exports (§3)' })
+  @IsOptional()
+  @IsBoolean()
+  viewerDownloads?: boolean;
+}
+
+export class DeleteWorkspaceDto {
+  @ApiProperty({ description: 'Nom exact de l’espace, en confirmation' })
+  @IsString()
+  @Length(1, 80)
+  confirm: string;
 }
 
 const INVITABLE_ROLES = [WorkspaceRole.EDITOR, WorkspaceRole.VIEWER] as const;

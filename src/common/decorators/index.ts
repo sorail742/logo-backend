@@ -19,6 +19,8 @@ export interface WorkspaceAccessOptions {
   staff?: PlatformRole;
   /** Autoriser l'accès à un projet dans la corbeille (restauration). */
   includeDeleted?: boolean;
+  /** Téléchargement : un Lecteur passe aussi si l'espace autorise les téléchargements (§3). */
+  download?: boolean;
 }
 export const WorkspaceAccess = (
   role: WorkspaceRole,
@@ -29,6 +31,7 @@ export const WorkspaceAccess = (
     // Par défaut, le support a accès en lecture (§3) ; `staff: undefined` explicite le retire.
     staff: 'staff' in opts ? opts.staff : role === 'VIEWER' ? PlatformRole.SUPPORT : undefined,
     includeDeleted: opts.includeDeleted,
+    download: opts.download,
   } satisfies WorkspaceAccessOptions);
 
 export const CurrentUser = createParamDecorator(

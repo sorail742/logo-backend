@@ -20,6 +20,8 @@ import {
   AdminUpdateUserDto,
   AuditQueryDto,
   BlockedTermDto,
+  CreditRequestDecisionDto,
+  ListCreditRequestsDto,
   ReviewSignatureDto,
 } from './admin.dto';
 import { AdminService } from './admin.service';
@@ -47,7 +49,9 @@ export class AdminController {
     return this.admin.getUser(uid);
   }
 
+  /** Suspension, 2FA et rôle : admin au moins (le rôle, super admin), sur un rang inférieur. */
   @Patch('users/:uid')
+  @Roles('ADMIN')
   updateUser(
     @CurrentUser() actor: AuthUser,
     @Param('uid', ParseUUIDPipe) uid: string,
@@ -62,6 +66,28 @@ export class AdminController {
   @HttpCode(HttpStatus.OK)
   adjust(@CurrentUser() actor: AuthUser, @Body() dto: AdjustCreditsDto, @ClientIp() ip: string) {
     return this.admin.adjustCredits(actor, dto, ip);
+  }
+
+  /** Le support propose un ajustement ; un admin le valide ou le refuse (§3). */
+  @Post('credits/requests')
+  requestCredits(@CurrentUser() actor: AuthUser, @Body() dto: AdjustCreditsDto, @ClientIp() ip: string) {
+    return this.admin.requestCreditAdjustment(actor, dto, ip);
+  }
+
+  @Get('credits/requests')
+  creditRequests(@Query() q: ListCreditRequestsDto) {
+    return this.admin.creditRequests(q);
+  }
+
+  @Patch('credits/requests/:id')
+  @Roles('ADMIN')
+  decideCredits(
+    @CurrentUser() actor: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: CreditRequestDecisionDto,
+    @ClientIp() ip: string,
+  ) {
+    return this.admin.decideCreditRequest(actor, id, dto, ip);
   }
 
   @Get('blocked-terms')
@@ -94,8 +120,8 @@ export class AdminController {
     return this.admin.moderationQueue();
   }
 
+  /** Modération d'un contenu signalé : support compris (§3). */
   @Patch('signatures/:sid/review')
-  @Roles('ADMIN')
   @HttpCode(HttpStatus.NO_CONTENT)
   reviewSignature(
     @CurrentUser() actor: AuthUser,

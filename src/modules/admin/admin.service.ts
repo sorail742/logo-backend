@@ -9,7 +9,7 @@ import {
   SignatureStatus,
   WorkspaceRole,
 } from '@prisma/client';
-import { AuthUser } from '../../common/auth-user';
+import { AuthUser, PLATFORM_ROLE_RANK } from '../../common/auth-user';
 import { cursorArgs, toPage } from '../../common/dto/pagination.dto';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { StorageService } from '../../common/storage/storage.service';
@@ -25,6 +25,8 @@ import {
   AdminUpdateUserDto,
   AuditQueryDto,
   BlockedTermDto,
+  CreditRequestDecisionDto,
+  ListCreditRequestsDto,
   ReviewSignatureDto,
 } from './admin.dto';
 
@@ -164,14 +166,19 @@ export class AdminService {
     if (dto.role !== undefined && actor.role !== PlatformRole.SUPER_ADMIN) {
       throw new ForbiddenException('Seul un super admin peut changer un rôle plateforme');
     }
-    if ((dto.resetTwoFactor || dto.role !== undefined) && actor.role === PlatformRole.SUPPORT) {
-      throw new ForbiddenException('Action réservée aux administrateurs');
-    }
     if (userId === actor.id && (dto.suspended || dto.role !== undefined)) {
       throw new ForbiddenException('Action impossible sur votre propre compte');
     }
 
     const before = await this.prisma.user.findUniqueOrThrow({ where: { id: userId }, select: USER_SELECT });
+    // Hiérarchie : on n'agit que sur un rôle inférieur au sien (le super admin agit sur tous).
+    if (
+      userId !== actor.id &&
+      actor.role !== PlatformRole.SUPER_ADMIN &&
+      PLATFORM_ROLE_RANK[before.role] >= PLATFORM_ROLE_RANK[actor.role]
+    ) {
+      throw new ForbiddenException('Action impossible sur un compte de rang égal ou supérieur');
+    }
     const data: Prisma.UserUpdateInput = {};
     if (dto.suspended !== undefined) data.suspendedAt = dto.suspended ? new Date() : null;
     if (dto.resetTwoFactor) {
@@ -229,6 +236,93 @@ export class AdminService {
       );
       return after;
     });
+  }
+
+  // ─── Ajustements proposés par le support (§3 : « avec validation ») ───
+
+  async requestCreditAdjustment(actor: AuthUser, dto: AdjustCreditsDto, ip: string) {
+    await this.prisma.workspace.findUniqueOrThrow({ where: { id: dto.workspaceId }, select: { id: true } });
+    const request = await this.prisma.creditAdjustmentRequest.create({
+      data: { workspaceId: dto.workspaceId, delta: dto.delta, reason: dto.reason, requestedById: actor.id },
+    });
+    await this.audit.log({
+      actorId: actor.id,
+      action: 'credits.request',
+      entityType: 'Workspace',
+      entityId: dto.workspaceId,
+      after: { requestId: request.id, delta: dto.delta, reason: dto.reason },
+      ip,
+    });
+    return this.presentCreditRequest(request.id);
+  }
+
+  async creditRequests(q: ListCreditRequestsDto) {
+    const rows = await this.prisma.creditAdjustmentRequest.findMany({
+      where: { ...(q.status && { status: q.status }) },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+      select: { id: true },
+    });
+    return Promise.all(rows.map((r) => this.presentCreditRequest(r.id)));
+  }
+
+  /** Décision d'un admin, distinct du demandeur (double regard) ; une demande ne se décide qu'une fois. */
+  async decideCreditRequest(actor: AuthUser, id: string, dto: CreditRequestDecisionDto, ip: string) {
+    const request = await this.prisma.creditAdjustmentRequest.findUniqueOrThrow({ where: { id } });
+    if (request.status !== 'PENDING') throw new ConflictException('Cette demande a déjà été traitée');
+    if (request.requestedById === actor.id) {
+      throw new ForbiddenException('Une demande est validée par un autre administrateur que son auteur');
+    }
+    if (dto.approve) {
+      await this.adjustCredits(
+        actor,
+        { workspaceId: request.workspaceId, delta: request.delta, reason: `Demande du support validée : ${request.reason}` },
+        ip,
+      );
+    }
+    await this.prisma.creditAdjustmentRequest.update({
+      where: { id },
+      data: {
+        status: dto.approve ? 'APPROVED' : 'REJECTED',
+        decidedById: actor.id,
+        decisionNote: dto.note,
+        decidedAt: new Date(),
+      },
+    });
+    await this.audit.log({
+      actorId: actor.id,
+      action: dto.approve ? 'credits.request.approve' : 'credits.request.reject',
+      entityType: 'Workspace',
+      entityId: request.workspaceId,
+      after: { requestId: id, delta: request.delta, note: dto.note },
+      ip,
+    });
+    return this.presentCreditRequest(id);
+  }
+
+  private async presentCreditRequest(id: string) {
+    const r = await this.prisma.creditAdjustmentRequest.findUniqueOrThrow({
+      where: { id },
+      include: { workspace: { select: { name: true } } },
+    });
+    const people = await this.prisma.user.findMany({
+      where: { id: { in: [r.requestedById, r.decidedById].filter((x): x is string => !!x) } },
+      select: { id: true, fullName: true },
+    });
+    const nameOf = (uid: string | null) => people.find((p) => p.id === uid)?.fullName ?? null;
+    return {
+      id: r.id,
+      workspaceId: r.workspaceId,
+      workspaceName: r.workspace.name,
+      delta: r.delta,
+      reason: r.reason,
+      status: r.status,
+      requestedBy: nameOf(r.requestedById),
+      decidedBy: nameOf(r.decidedById),
+      decisionNote: r.decisionNote,
+      decidedAt: r.decidedAt,
+      createdAt: r.createdAt,
+    };
   }
 
   async auditLogs(q: AuditQueryDto) {

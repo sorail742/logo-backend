@@ -26,8 +26,9 @@ export class BillingController {
   }
 
   @ApiBearerAuth()
+  /** Solde et offre : visibles par tout membre (un éditeur consomme des crédits) ; le grand livre reste au propriétaire. */
   @Get('workspaces/:wid/credits')
-  @WorkspaceAccess('OWNER', { staff: 'SUPPORT' })
+  @WorkspaceAccess('VIEWER')
   async credits(@Param('wid', ParseUUIDPipe) wid: string) {
     const ws = await this.prisma.workspace.findUniqueOrThrow({
       where: { id: wid },
