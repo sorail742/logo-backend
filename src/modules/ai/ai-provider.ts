@@ -29,6 +29,8 @@ export interface AiImagesResult {
  */
 export abstract class AiProvider {
   abstract readonly name: string;
+  /** Fournisseur de démonstration : propositions simulées, sans modèle génératif. */
+  abstract readonly demo: boolean;
   abstract generateNames(input: NameGenerationInput): Promise<AiCallResult>;
   /** Moteur A (§5.1) : choix d'icône, de police, de palette et de disposition par proposition. */
   abstract composeLogos(input: LogoGenerationInput): Promise<AiCallResult>;

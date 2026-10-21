@@ -107,6 +107,7 @@ const STYLE_FONTS: Record<LogoStyle, string[]> = {
 @Injectable()
 export class MockAiProvider extends AiProvider {
   readonly name = 'mock';
+  readonly demo = true;
 
   async generateNames(input: NameGenerationInput): Promise<AiCallResult> {
     const { brief } = input;
@@ -284,7 +285,7 @@ export class MockAiProvider extends AiProvider {
       const svg = renderArtwork({ style, palette: input.palette, width, height, seed: seed + i * 7919 });
       return { data: svgToPng(svg, { size: Math.max(width, height) }), width, height };
     });
-    return Promise.resolve({ images, provider: this.name, promptVersion: 'artwork-v1', costUsdMicros: 0, demo: true });
+    return Promise.resolve({ images, provider: this.name, promptVersion: 'artwork-v1', costUsdMicros: 0, demo: this.demo });
   }
 }
 
