@@ -67,7 +67,10 @@ export class LogoExportService {
     });
 
     const slug = slugify(job.project.chosenName?.value ?? job.project.title) || 'logo';
-    const entries = await buildExportEntries(logoSource(version.logo, version), slug, input);
+    const entries = await buildExportEntries(logoSource(version.logo, version), slug, {
+      ...input,
+      mockups: input.social,
+    });
     const zip = createZip(entries);
 
     const fileName = `${slug}-logo-v${version.number}.zip`;

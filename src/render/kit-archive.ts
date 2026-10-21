@@ -63,7 +63,10 @@ function readme(input: KitArchiveInput, paths: string[]) {
     has('logo/png/') && 'logo/png        Logos sur fond transparent : documents, présentations',
     has('logo/jpg/') && 'logo/jpg        Logo sur fond plein',
     has('icones-app/') && 'icones-app      Favicon et icônes d’application (iOS, Android)',
-    has('reseaux-sociaux/') && 'reseaux-sociaux Photo de profil et bannières',
+    has('reseaux-sociaux/') &&
+      'reseaux-sociaux Photos de profil, bannières et story aux formats de chaque réseau',
+    has('mises-en-situation/') &&
+      'mises-en-situation Le logo en devanture, sur t-shirt, mugs, cartes, téléphone, véhicule, sacs et stand',
     has('signatures/') && 'signatures      Signature e-mail, slogan, cachet et paraphe',
     has('supports/') && 'supports        Carte de visite et papier à en-tête prêts à imprimer',
     has('charte.pdf') && 'charte.pdf      Règles d’utilisation de la marque',
@@ -85,6 +88,7 @@ export async function buildKitArchive(input: KitArchiveInput): Promise<ZipEntry[
     sizes: restricted ? [512] : [512, 1024, 2048],
     iconPack: !restricted,
     social: !restricted,
+    mockups: !restricted,
     watermark: input.watermark,
   });
   const entries: ZipEntry[] = [];

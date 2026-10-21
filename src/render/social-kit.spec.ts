@@ -1,7 +1,8 @@
 import { renderLogoSvg } from './logo';
 import { DEFAULT_SPEC, type LogoSpec } from './logo-spec';
 import { svgToPng } from './raster';
-import { SOCIAL_KIT, socialKitSvg, type SocialKitInput } from './social-kit';
+import type { BrandAssets } from './compose';
+import { SOCIAL_KIT, socialKitSvg } from './social-kit';
 
 const spec: LogoSpec = {
   ...DEFAULT_SPEC,
@@ -9,12 +10,13 @@ const spec: LogoSpec = {
   colors: { primary: '#0f6b5c', secondary: '#f2b705', text: '#14281d', background: '#f6fbf4' },
 };
 
-function input(): SocialKitInput {
+function brandInput(): BrandAssets {
   const icon = { ...spec, iconFrame: 'circle' as const };
   return {
     logo: {
       color: renderLogoSvg(spec, { variant: 'color', withBackground: false }),
       white: renderLogoSvg(spec, { variant: 'white', withBackground: false }),
+      black: renderLogoSvg(spec, { variant: 'black' }),
     },
     mark: {
       color: renderLogoSvg(icon, { layout: 'icon' }),
@@ -41,7 +43,7 @@ describe('kit réseaux sociaux', () => {
   });
 
   it('rend chaque format en SVG tramable, sans identifiant en double', () => {
-    const kit = input();
+    const kit = brandInput();
     for (const format of SOCIAL_KIT) {
       const svg = socialKitSvg(kit, format);
       expect(svg).toMatch(new RegExp(`^<svg [^>]*viewBox="0 0 ${format.width} ${format.height}"`));
@@ -53,7 +55,7 @@ describe('kit réseaux sociaux', () => {
 
   it('place le logo dans la zone sûre de la bannière YouTube', () => {
     const youtube = SOCIAL_KIT.find((f) => f.id === 'youtube')!;
-    const svg = socialKitSvg(input(), youtube);
+    const svg = socialKitSvg(brandInput(), youtube);
     const placed = [
       ...svg.matchAll(/<svg[^>]* x="([\d.]+)" y="([\d.]+)" width="([\d.]+)" height="([\d.]+)"/g),
     ].at(-1)!;

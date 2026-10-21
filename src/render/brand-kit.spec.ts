@@ -199,6 +199,7 @@ describe('archive du kit (KIT-03)', () => {
       'logo/jpg/kolabo-couleur-512.jpg',
       'icones-app/favicon.ico',
       'reseaux-sociaux/profil-1080x1080.png',
+      'mises-en-situation/devanture.jpg',
       'signatures/signature-email.html',
       'signatures/slogan.txt',
       'signatures/cachet.png',
@@ -230,7 +231,7 @@ describe('archive du kit (KIT-03)', () => {
     expect(
       paths.filter((p) => p.startsWith('logo/')).every((p) => /^logo\/png\/.+-512\.png$/.test(p)),
     ).toBe(true);
-    expect(paths.some((p) => /icones-app|reseaux-sociaux|supports|charte/.test(p))).toBe(false);
+    expect(paths.some((p) => /icones-app|reseaux-sociaux|mises-en-situation|supports|charte/.test(p))).toBe(false);
     expect(String(entries.find((e) => e.path.endsWith('LISEZMOI.txt'))!.data)).toContain(
       'Offre gratuite',
     );

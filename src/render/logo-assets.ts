@@ -5,7 +5,9 @@ import { LOGO_VARIANTS, renderLogoSvg, type LogoVariant } from './logo';
 import type { LogoSpec } from './logo-spec';
 import { svgToPdf } from './pdf';
 import { buildIco, svgToJpeg, svgToPng } from './raster';
-import { SOCIAL_KIT, socialKitSvg, type SocialKitInput } from './social-kit';
+import type { BrandAssets } from './compose';
+import { MOCKUP_SCENES, MOCKUP_WIDTH, mockupSvg } from './mockups';
+import { SOCIAL_KIT, socialKitSvg } from './social-kit';
 import { frameSvg, optimizeSvg, recolorSvg, svgSize } from './svg';
 import type { ZipEntry } from './zip';
 
@@ -41,6 +43,8 @@ export interface ExportOptions {
   sizes: number[];
   iconPack: boolean;
   social: boolean;
+  /** Mises en situation (devanture, t-shirt, mugs…), en JPG. */
+  mockups?: boolean;
   /** Filigrane sur les PNG (offre gratuite, LOGO-24). */
   watermark: string | null;
 }
@@ -98,7 +102,8 @@ function background(source: LogoSource) {
 }
 
 /** Logo, symbole et couleurs pour le kit réseaux sociaux (LOGO-23). */
-function socialInput(source: LogoSource): SocialKitInput {
+/** Logo et symbole dans toutes leurs couleurs, pour les visuels composés (réseaux sociaux, mises en situation). */
+function brandAssets(source: LogoSource): BrandAssets {
   if (source.kind === 'svg') {
     const size = svgSize(source.svg);
     const color = { svg: source.svg, ...size };
@@ -106,7 +111,7 @@ function socialInput(source: LogoSource): SocialKitInput {
     const black = { svg: recolorSvg(source.svg, '#111111'), ...size };
     const primary = readableOn(source.background) === '#ffffff' ? source.background : '#111827';
     return {
-      logo: { color, white },
+      logo: { color, white, black },
       mark: { color, white, black },
       colors: { primary, secondary: mix(primary, '#ffffff', 0.4), background: source.background },
       name: source.title,
@@ -119,6 +124,7 @@ function socialInput(source: LogoSource): SocialKitInput {
     logo: {
       color: renderLogoSvg(spec, { variant: 'color', withBackground: false, layout }),
       white: renderLogoSvg(spec, { variant: 'white', withBackground: false, layout }),
+      black: renderLogoSvg(spec, { variant: 'black', layout }),
     },
     mark: {
       color: renderLogoSvg(icon, { layout: 'icon' }),
@@ -152,6 +158,31 @@ export function licencesText(source: LogoSource) {
     'Nous recommandons un dépôt de marque auprès de l’OAPI pour sécuriser le nom et le logo.',
   );
   return lines.join('\n');
+}
+
+/** Visuels composés : kit réseaux sociaux (PNG) et mises en situation (JPG). */
+function composedEntries(source: LogoSource, options: ExportOptions): ZipEntry[] {
+  const input = brandAssets(source);
+  const entries: ZipEntry[] = [];
+  if (options.social) {
+    for (const format of SOCIAL_KIT) {
+      entries.push({
+        path: `reseaux-sociaux/${format.file}.png`,
+        data: svgToPng(socialKitSvg(input, format), {
+          size: Math.max(format.width, format.height),
+        }),
+      });
+    }
+  }
+  if (options.mockups) {
+    for (const scene of MOCKUP_SCENES) {
+      entries.push({
+        path: `mises-en-situation/${scene.file}.jpg`,
+        data: svgToJpeg(mockupSvg(input, scene), { size: MOCKUP_WIDTH, quality: 88 }),
+      });
+    }
+  }
+  return entries;
 }
 
 /** Fichiers de l'export (LOGO-21 à 24), chemins relatifs à la racine de l'archive. */
@@ -209,17 +240,7 @@ export async function buildExportEntries(
     }
   }
 
-  if (options.social) {
-    const input = socialInput(source);
-    for (const format of SOCIAL_KIT) {
-      entries.push({
-        path: `reseaux-sociaux/${format.file}.png`,
-        data: svgToPng(socialKitSvg(input, format), {
-          size: Math.max(format.width, format.height),
-        }),
-      });
-    }
-  }
+  if (options.social || options.mockups) entries.push(...composedEntries(source, options));
 
   entries.push({ path: 'LICENCES.txt', data: licencesText(source) });
   return entries.map((entry) => ({ ...entry, path: `${slug}/${entry.path}` }));
