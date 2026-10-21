@@ -44,7 +44,10 @@ export function isLibraryFont(id: string) {
 /** Plus proche graisse disponible. */
 export function closestWeight(id: string, weight: number) {
   const { weights } = getFont(id);
-  return weights.reduce((best, w) => (Math.abs(w - weight) < Math.abs(best - weight) ? w : best));
+  return weights.reduce(
+    (best, w) => (Math.abs(w - weight) < Math.abs(best - weight) ? w : best),
+    weights[0],
+  );
 }
 
 function load(file: string) {

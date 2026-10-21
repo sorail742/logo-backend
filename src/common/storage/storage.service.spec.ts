@@ -43,7 +43,7 @@ describe('StorageService (disque local)', () => {
       contentType: 'application/pdf',
       inline: true,
     });
-    expect(file!.path).toBe(join(dir, 'kits/w1/charte.pdf'));
+    expect(file).toMatchObject({ key: 'kits/w1/charte.pdf', root: dir });
 
     expect(storage.resolveSigned({ ...queryOf(url), sig: 'faux' })).toBeNull();
     expect(storage.resolveSigned({ ...queryOf(url), key: 'kits/w2/charte.pdf' })).toBeNull();

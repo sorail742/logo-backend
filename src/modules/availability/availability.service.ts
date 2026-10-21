@@ -125,7 +125,7 @@ export class AvailabilityService {
         // Seul GitHub expose une API publique fiable ; les autres réseaux bloquent les vérifications.
         if (network !== 'github') return { kind: 'SOCIAL', target: network, status: 'UNKNOWN', details };
         try {
-          const res = await fetch(`https://api.github.com/users/${handle}`, {
+          const res = await fetch(`https://api.github.com/users/${encodeURIComponent(handle)}`, {
             headers: { 'User-Agent': 'logo-backend' },
             signal: AbortSignal.timeout(3000),
           });

@@ -38,7 +38,9 @@ export interface SignedFileQuery {
 }
 
 export interface ResolvedFile {
-  path: string;
+  /** Clé relative au dossier de stockage (`root`), servie sans pouvoir en sortir. */
+  key: string;
+  root: string;
   fileName: string;
   contentType: string;
   inline: boolean;
@@ -174,7 +176,8 @@ export class StorageService {
     const given = Buffer.from(sig, 'base64url');
     if (given.length !== expected.length || !timingSafeEqual(given, expected)) return null;
     return {
-      path: this.localPath(key),
+      key: checkKey(key),
+      root: this.root,
       fileName: name,
       contentType: contentTypeOf(key),
       inline: d === 'inline',

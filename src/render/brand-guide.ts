@@ -107,8 +107,10 @@ function offPaletteColor(primary: string) {
     const [r2, g2, b2] = hexToRgb(hex);
     return (r - r2) ** 2 + (g - g2) ** 2 + (b - b2) ** 2;
   };
-  return ['#e11d48', '#16a34a', '#7c3aed', '#f97316'].reduce((best, color) =>
-    distance(color) > distance(best) ? color : best,
+  const candidates = ['#e11d48', '#16a34a', '#7c3aed', '#f97316'];
+  return candidates.reduce(
+    (best, color) => (distance(color) > distance(best) ? color : best),
+    candidates[0],
   );
 }
 

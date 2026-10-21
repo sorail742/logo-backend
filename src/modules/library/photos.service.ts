@@ -171,7 +171,10 @@ export class PhotosService {
 
   /** Fichier d'une photo, téléchargé depuis Pexels (hôte, type et poids contrôlés). */
   async file(id: number): Promise<{ data: Buffer; contentType: string }> {
-    const photo = pexelsPhoto.safeParse(await this.call(`/photos/${id}`, PHOTO_TTL_S));
+    if (!Number.isSafeInteger(id) || id <= 0) throw new NotFoundException('Photo introuvable');
+    const photo = pexelsPhoto.safeParse(
+      await this.call(`/photos/${encodeURIComponent(String(id))}`, PHOTO_TTL_S),
+    );
     if (!photo.success)
       throw new BadGatewayException({
         message: 'Réponse inattendue de la banque de photos',

@@ -105,7 +105,7 @@ describe('banque de photos (Pexels)', () => {
     expect(first.hasMore).toBe(false);
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url, init] = fetchMock.mock.calls[0]!;
-    expect(String(url)).toBe(
+    expect(url).toBe(
       'https://api.pexels.com/v1/search?per_page=24&page=1&query=march%C3%A9&locale=fr-FR&orientation=portrait',
     );
     expect((init?.headers as Record<string, string>).Authorization).toBe('cle-pexels');
@@ -115,7 +115,7 @@ describe('banque de photos (Pexels)', () => {
     const { photos } = service('cle-pexels');
     fetchMock.mockResolvedValueOnce(json({ code: 'rate' }, 429));
     await expect(photos.search({})).rejects.toBeInstanceOf(ServiceUnavailableException);
-    expect(String(fetchMock.mock.calls[0]![0])).toBe(
+    expect(fetchMock.mock.calls[0]![0]).toBe(
       'https://api.pexels.com/v1/curated?per_page=24&page=1',
     );
   });
@@ -134,7 +134,7 @@ describe('banque de photos (Pexels)', () => {
     const file = await photos.file(7);
     expect(file.contentType).toBe('image/jpeg');
     expect(file.data.equals(jpeg)).toBe(true);
-    expect(String(fetchMock.mock.calls[1]![0])).toContain(
+    expect(fetchMock.mock.calls[1]![0]).toContain(
       'https://images.pexels.com/photos/7/pexels-photo-7.jpeg?auto=compress',
     );
 

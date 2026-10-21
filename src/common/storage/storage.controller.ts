@@ -1,7 +1,6 @@
-import { Controller, Get, NotFoundException, Query, Res } from '@nestjs/common';
+import { Controller, Get, HttpStatus, NotFoundException, Query, Req, Res } from '@nestjs/common';
 import { ApiExcludeController } from '@nestjs/swagger';
-import type { Response } from 'express';
-import { stat } from 'node:fs/promises';
+import type { Request, Response } from 'express';
 import { Public } from '../decorators';
 import { contentDisposition, StorageService, type SignedFileQuery } from './storage.service';
 
@@ -16,16 +15,34 @@ export class StorageController {
   constructor(private readonly storage: StorageService) {}
 
   @Get()
-  async download(@Query() query: SignedFileQuery, @Res() res: Response) {
+  download(@Query() query: SignedFileQuery, @Req() req: Request, @Res() res: Response) {
     const file = this.storage.resolveSigned(query);
     // Lien invalide, falsifié ou expiré : même réponse qu'un fichier absent.
-    if (!file || !(await stat(file.path).catch(() => null))?.isFile())
-      throw new NotFoundException();
-    res.setHeader('Content-Type', file.contentType);
-    res.setHeader('Content-Disposition', contentDisposition(file.fileName, file.inline));
-    res.setHeader('Cache-Control', 'private, no-store');
-    // Le front (autre origine) peut afficher un cachet ou une charte servis par ce lien.
-    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-    res.sendFile(file.path);
+    if (!file) throw new NotFoundException();
+    // Fichier servi relativement au dossier de stockage : Express refuse toute sortie de `root`.
+    res.sendFile(
+      file.key,
+      {
+        root: file.root,
+        dotfiles: 'deny',
+        headers: {
+          'Content-Type': file.contentType,
+          'Content-Disposition': contentDisposition(file.fileName, file.inline),
+          'Cache-Control': 'private, no-store',
+          // Le front (autre origine) peut afficher un cachet ou une charte servis par ce lien.
+          'Cross-Origin-Resource-Policy': 'cross-origin',
+        },
+      },
+      (error) => {
+        if (!error || res.headersSent) return;
+        res.status(HttpStatus.NOT_FOUND).type('application/problem+json').json({
+          type: 'about:blank',
+          title: HttpStatus[HttpStatus.NOT_FOUND],
+          status: HttpStatus.NOT_FOUND,
+          detail: 'Fichier introuvable',
+          instance: req.originalUrl,
+        });
+      },
+    );
   }
 }

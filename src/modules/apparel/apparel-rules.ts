@@ -85,7 +85,7 @@ export interface Issue {
 
 // ─── Adaptation des zones à la taille (TEX-03) ───
 
-export const isChildSize = (s: Size) => /ans|yrs|y$/i.test(s.label);
+export const isChildSize = (s: Size) => /(?:ans|yrs|y)$/i.test(s.label);
 
 /** Facteur d'échelle d'une zone pour une taille, relativement à la taille de référence. */
 export function zoneScale(zone: Pick<Zone, 'scaling'>, size: Size, ref: Size): number {

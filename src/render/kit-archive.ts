@@ -73,7 +73,7 @@ function readme(input: KitArchiveInput, paths: string[]) {
       'Offre gratuite : logos en PNG 512 px filigranés. Les formats vectoriels, la charte et les supports sont inclus dans les offres payantes.',
     has('supports/') &&
       'Cartes : fond perdu de 3 mm de chaque côté, zone de coupe indiquée dans le PDF (TrimBox).',
-  ].filter((line) => line !== false && line !== null && line !== undefined);
+  ].filter((line): line is string => typeof line === 'string');
   return `${lines.join('\n')}\n`;
 }
 

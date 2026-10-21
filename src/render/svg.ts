@@ -75,9 +75,15 @@ function cleanCss(css: string) {
 const sanitizePlugin: CustomPlugin = {
   name: 'sanitize',
   fn: () => ({
-    doctype: { enter: (_node, parent) => void (parent.children = []) },
+    doctype: {
+      enter: (_node, parent) => {
+        parent.children = [];
+      },
+    },
     instruction: {
-      enter: (node, parent) => void (parent.children = parent.children.filter((c) => c !== node)),
+      enter: (node, parent) => {
+        parent.children = parent.children.filter((c) => c !== node);
+      },
     },
     element: {
       enter: (node, parent) => {
@@ -156,8 +162,8 @@ export function recolorSvg(svg: string, color: string): string {
         enter: (node) => {
           if (node.name === 'svg') node.attributes.fill ??= color;
           for (const attr of ['fill', 'stroke', 'stop-color', 'flood-color', 'color']) {
-            if (node.attributes[attr] !== undefined)
-              node.attributes[attr] = paint(node.attributes[attr]);
+            const value = Object.hasOwn(node.attributes, attr) ? node.attributes[attr] : null;
+            if (typeof value === 'string') node.attributes[attr] = paint(value);
           }
           if (node.attributes.style) {
             node.attributes.style = node.attributes.style.replace(
