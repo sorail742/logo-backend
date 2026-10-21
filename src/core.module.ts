@@ -12,6 +12,7 @@ import { CreditsModule } from './modules/credits/credits.module';
 import { JobsModule } from './modules/jobs/jobs.module';
 import { MailModule } from './modules/mail/mail.module';
 import { ModerationModule } from './modules/moderation/moderation.module';
+import { StorageModule } from './modules/storage/storage.module';
 
 /** Socle partagé par l'API et les workers : configuration, logs, base, Redis, files, services transverses. */
 @Module({
@@ -23,7 +24,9 @@ import { ModerationModule } from './modules/moderation/moderation.module';
         pinoHttp: {
           level: config.get('NODE_ENV') === 'production' ? 'info' : 'debug',
           transport:
-            config.get('NODE_ENV') === 'development' ? { target: 'pino-pretty', options: { singleLine: true } } : undefined,
+            config.get('NODE_ENV') === 'development'
+              ? { target: 'pino-pretty', options: { singleLine: true } }
+              : undefined,
           redact: ['req.headers.authorization', 'req.headers.cookie', 'res.headers["set-cookie"]'],
           autoLogging: { ignore: (req) => req.url?.includes('/health') ?? false },
         },
@@ -42,6 +45,7 @@ import { ModerationModule } from './modules/moderation/moderation.module';
     MailModule,
     AiModule,
     ModerationModule,
+    StorageModule,
     JobsModule,
   ],
 })

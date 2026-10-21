@@ -30,7 +30,7 @@ interface CheckResult {
 export function toHandle(name: string): string {
   return name
     .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
+    .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
     .replace(/[^a-z0-9]/g, '');
 }
@@ -103,7 +103,12 @@ export class AvailabilityService {
         const domain = `${handle}.${tld}`;
         const result = await this.rdap.lookup(domain);
         if (result.status !== 'UNKNOWN') {
-          return { kind: 'DOMAIN', target: domain, status: result.status, details: { source: result.server } };
+          return {
+            kind: 'DOMAIN',
+            target: domain,
+            status: result.status,
+            details: { source: result.server },
+          };
         }
         return {
           kind: 'DOMAIN',
@@ -122,13 +127,15 @@ export class AvailabilityService {
       Object.entries(SOCIAL_NETWORKS).map(async ([network, url]): Promise<CheckResult> => {
         const details = { url: url(handle), indicative: true };
         // Seul GitHub expose une API publique fiable ; les autres réseaux bloquent les vérifications.
-        if (network !== 'github') return { kind: 'SOCIAL', target: network, status: 'UNKNOWN', details };
+        if (network !== 'github')
+          return { kind: 'SOCIAL', target: network, status: 'UNKNOWN', details };
         try {
-          const res = await fetch(`https://api.github.com/users/${handle}`, {
+          const res = await fetch(`https://api.github.com/users/${encodeURIComponent(handle)}`, {
             headers: { 'User-Agent': 'logo-backend' },
             signal: AbortSignal.timeout(3000),
           });
-          const status: CheckStatus = res.status === 404 ? 'AVAILABLE' : res.ok ? 'TAKEN' : 'UNKNOWN';
+          const status: CheckStatus =
+            res.status === 404 ? 'AVAILABLE' : res.ok ? 'TAKEN' : 'UNKNOWN';
           return { kind: 'SOCIAL', target: network, status, details };
         } catch {
           return { kind: 'SOCIAL', target: network, status: 'UNKNOWN', details };
@@ -146,13 +153,18 @@ export class AvailabilityService {
         kind: 'TRADEMARK',
         target: 'wipo-gbd',
         status: 'UNKNOWN',
-        details: { url: `https://branddb.wipo.int/fr/similarname/results?sort=score%20desc&strategy=concept&brandName=${q}` },
+        details: {
+          url: `https://branddb.wipo.int/fr/similarname/results?sort=score%20desc&strategy=concept&brandName=${q}`,
+        },
       },
       {
         kind: 'TRADEMARK',
         target: 'oapi',
         status: 'UNKNOWN',
-        details: { url: 'https://www.oapi.int/', hint: `Rechercher « ${name} » dans la base des marques OAPI` },
+        details: {
+          url: 'https://www.oapi.int/',
+          hint: `Rechercher « ${name} » dans la base des marques OAPI`,
+        },
       },
     ];
   }
@@ -165,7 +177,10 @@ export class AvailabilityService {
       select: { value: true },
       take: 5000,
     });
-    const similar = chosen.map((c) => c.value).filter((v) => soundsSimilar(v, value)).slice(0, 5);
+    const similar = chosen
+      .map((c) => c.value)
+      .filter((v) => soundsSimilar(v, value))
+      .slice(0, 5);
     return [
       {
         kind: 'PHONETIC',

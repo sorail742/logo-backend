@@ -14,7 +14,13 @@ import {
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import type { AuthUser } from '../../common/auth-user';
 import { ClientIp, CurrentUser, Roles } from '../../common/decorators';
-import { AdjustCreditsDto, AdminListUsersDto, AdminUpdateUserDto, AuditQueryDto, BlockedTermDto } from './admin.dto';
+import {
+  AdjustCreditsDto,
+  AdminListUsersDto,
+  AdminUpdateUserDto,
+  AuditQueryDto,
+  BlockedTermDto,
+} from './admin.dto';
 import { AdminService } from './admin.service';
 
 /** Back-office (§9, §13.9). Toutes les routes exigent un rôle interne et une session 2FA. */
@@ -65,7 +71,11 @@ export class AdminController {
 
   @Post('blocked-terms')
   @Roles('ADMIN')
-  addBlockedTerm(@CurrentUser() actor: AuthUser, @Body() dto: BlockedTermDto, @ClientIp() ip: string) {
+  addBlockedTerm(
+    @CurrentUser() actor: AuthUser,
+    @Body() dto: BlockedTermDto,
+    @ClientIp() ip: string,
+  ) {
     return this.admin.addBlockedTerm(actor, dto, ip);
   }
 

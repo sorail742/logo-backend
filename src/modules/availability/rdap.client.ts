@@ -5,8 +5,7 @@ const BOOTSTRAP_TTL_MS = 24 * 3600_000;
 const LOOKUP_TIMEOUT_MS = 8000;
 
 export type RdapResult =
-  | { status: 'AVAILABLE' | 'TAKEN'; server: string }
-  | { status: 'UNKNOWN'; reason: string };
+  { status: 'AVAILABLE' | 'TAKEN'; server: string } | { status: 'UNKNOWN'; reason: string };
 
 interface Bootstrap {
   services: [string[], string[]][];
@@ -28,7 +27,7 @@ export class RdapClient {
     if (!server) return { status: 'UNKNOWN', reason: `Pas de serveur RDAP pour .${tld}` };
 
     try {
-      const res = await fetch(`${server.replace(/\/?$/, '/')}domain/${domain}`, {
+      const res = await fetch(`${server.replace(/\/?$/, '/')}domain/${encodeURIComponent(domain)}`, {
         headers: { Accept: 'application/rdap+json' },
         signal: AbortSignal.timeout(LOOKUP_TIMEOUT_MS),
       });
@@ -46,7 +45,9 @@ export class RdapClient {
       return this.bootstrap.servers;
     }
     try {
-      const res = await fetch(IANA_BOOTSTRAP_URL, { signal: AbortSignal.timeout(LOOKUP_TIMEOUT_MS) });
+      const res = await fetch(IANA_BOOTSTRAP_URL, {
+        signal: AbortSignal.timeout(LOOKUP_TIMEOUT_MS),
+      });
       const data = (await res.json()) as Bootstrap;
       const servers = new Map<string, string>();
       for (const [tlds, urls] of data.services) {

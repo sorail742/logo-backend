@@ -7,7 +7,13 @@ import { AuditService } from '../audit/audit.service';
 import { SessionService } from '../auth/session.service';
 import { CreditsService } from '../credits/credits.service';
 import { ModerationService } from '../moderation/moderation.service';
-import { AdjustCreditsDto, AdminListUsersDto, AdminUpdateUserDto, AuditQueryDto, BlockedTermDto } from './admin.dto';
+import {
+  AdjustCreditsDto,
+  AdminListUsersDto,
+  AdminUpdateUserDto,
+  AuditQueryDto,
+  BlockedTermDto,
+} from './admin.dto';
 
 const USER_SELECT = {
   id: true,
@@ -84,7 +90,12 @@ export class AdminService {
       where: { id: userId },
       select: {
         ...USER_SELECT,
-        memberships: { select: { role: true, workspace: { select: { id: true, name: true, creditBalance: true } } } },
+        memberships: {
+          select: {
+            role: true,
+            workspace: { select: { id: true, name: true, creditBalance: true } },
+          },
+        },
       },
     });
   }
@@ -100,13 +111,20 @@ export class AdminService {
       throw new ForbiddenException('Action impossible sur votre propre compte');
     }
 
-    const before = await this.prisma.user.findUniqueOrThrow({ where: { id: userId }, select: USER_SELECT });
+    const before = await this.prisma.user.findUniqueOrThrow({
+      where: { id: userId },
+      select: USER_SELECT,
+    });
     const data: Prisma.UserUpdateInput = {};
     if (dto.suspended !== undefined) data.suspendedAt = dto.suspended ? new Date() : null;
     if (dto.resetTwoFactor) data.totpSecret = null;
     if (dto.role !== undefined) data.role = dto.role;
 
-    const after = await this.prisma.user.update({ where: { id: userId }, data, select: USER_SELECT });
+    const after = await this.prisma.user.update({
+      where: { id: userId },
+      data,
+      select: USER_SELECT,
+    });
     if (dto.suspended || dto.resetTwoFactor) await this.sessions.revokeAll(userId);
 
     await this.audit.log({
@@ -178,13 +196,27 @@ export class AdminService {
   async addBlockedTerm(actor: AuthUser, dto: BlockedTermDto, ip: string) {
     const term = await this.prisma.blockedTerm.create({ data: dto });
     this.moderation.invalidate();
-    await this.audit.log({ actorId: actor.id, action: 'blocked-term.create', entityType: 'BlockedTerm', entityId: term.id, after: term, ip });
+    await this.audit.log({
+      actorId: actor.id,
+      action: 'blocked-term.create',
+      entityType: 'BlockedTerm',
+      entityId: term.id,
+      after: term,
+      ip,
+    });
     return term;
   }
 
   async removeBlockedTerm(actor: AuthUser, id: string, ip: string) {
     const term = await this.prisma.blockedTerm.delete({ where: { id } });
     this.moderation.invalidate();
-    await this.audit.log({ actorId: actor.id, action: 'blocked-term.delete', entityType: 'BlockedTerm', entityId: id, before: term, ip });
+    await this.audit.log({
+      actorId: actor.id,
+      action: 'blocked-term.delete',
+      entityType: 'BlockedTerm',
+      entityId: id,
+      before: term,
+      ip,
+    });
   }
 }

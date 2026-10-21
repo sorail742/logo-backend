@@ -4,6 +4,8 @@
  * X positif = côté gauche du porteur (TEX-02).
  */
 import type { DesignElementKind, PrintTechnique, SizeScaling } from '@prisma/client';
+import { contrastRatio, relativeLuminance } from '../../shared/color';
+import { parseCsv } from '../../shared/csv';
 
 // ─── Types ───
 
@@ -85,7 +87,7 @@ export interface Issue {
 
 // ─── Adaptation des zones à la taille (TEX-03) ───
 
-export const isChildSize = (s: Size) => /ans|yrs|y$/i.test(s.label);
+export const isChildSize = (s: Size) => /(?:ans|yrs|y)$/i.test(s.label);
 
 /** Facteur d'échelle d'une zone pour une taille, relativement à la taille de référence. */
 export function zoneScale(zone: Pick<Zone, 'scaling'>, size: Size, ref: Size): number {
@@ -172,21 +174,9 @@ export const MIN_RASTER_DPI = 300;
 export const MIN_EMBROIDERY_TEXT_MM = 5;
 export const MIN_GARMENT_CONTRAST = 3;
 
-// ─── Couleurs ───
+// ─── Couleurs : voir shared/color ───
 
-export function relativeLuminance(hex: string): number {
-  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
-  if (!m) return NaN;
-  const [r, g, b] = [0, 2, 4].map((i) => parseInt(m[1].slice(i, i + 2), 16) / 255);
-  const lin = (c: number) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
-  return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
-}
-
-export function contrastRatio(a: string, b: string): number {
-  const [la, lb] = [relativeLuminance(a), relativeLuminance(b)];
-  if (Number.isNaN(la) || Number.isNaN(lb)) return NaN;
-  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
-}
+export { contrastRatio, relativeLuminance };
 
 // ─── Contrôle de conformité (TEX-10, TEX-34, TEX-35, §16.7, §16.9) ───
 
@@ -589,28 +579,18 @@ const CSV_COLUMNS = ['nom', 'nom_imprime', 'numero', 'taille', 'poste', 'quantit
 
 /** Analyse le CSV d'effectif (séparateur , ou ;, guillemets gérés). */
 export function parseRosterCsv(csv: string): { rows: RosterRow[]; errors: string[] } {
-  const lines = (csv.charCodeAt(0) === 0xfeff ? csv.slice(1) : csv)
-    .split(/\r?\n/)
-    .filter((l) => l.trim());
-  if (!lines.length) return { rows: [], errors: ['Fichier vide'] };
-  const sep = (lines[0].match(/;/g)?.length ?? 0) > (lines[0].match(/,/g)?.length ?? 0) ? ';' : ',';
-  const header = splitCsvLine(lines[0], sep).map((h) => h.trim().toLowerCase());
+  const { header, rows: lines } = parseCsv(csv);
+  if (!header.length) return { rows: [], errors: ['Fichier vide'] };
   const missing = CSV_COLUMNS.filter(
     (c) => c !== 'poste' && c !== 'quantite' && !header.includes(c),
   );
   if (missing.length) return { rows: [], errors: [`Colonnes manquantes : ${missing.join(', ')}`] };
 
-  const idx = Object.fromEntries(CSV_COLUMNS.map((c) => [c, header.indexOf(c)])) as Record<
-    (typeof CSV_COLUMNS)[number],
-    number
-  >;
   const rows: RosterRow[] = [];
   const errors: string[] = [];
-  lines.slice(1).forEach((line, i) => {
-    const cells = splitCsvLine(line, sep).map((c) => c.trim());
-    const get = (k: (typeof CSV_COLUMNS)[number]) => (idx[k] >= 0 ? (cells[idx[k]] ?? '') : '');
-    const quantity = get('quantite') ? Number(get('quantite')) : 1;
-    if (!get('nom')) {
+  lines.forEach((get, i) => {
+    const quantity = get.quantite ? Number(get.quantite) : 1;
+    if (!get.nom) {
       errors.push(`Ligne ${i + 2} : nom manquant`);
       return;
     }
@@ -619,44 +599,22 @@ export function parseRosterCsv(csv: string): { rows: RosterRow[]; errors: string
       return;
     }
     rows.push({
-      playerName: get('nom'),
-      displayName: get('nom_imprime') || get('nom').toUpperCase(),
-      number: get('numero') || null,
-      size: get('taille').toUpperCase(),
+      playerName: get.nom,
+      displayName: get.nom_imprime || get.nom.toUpperCase(),
+      number: get.numero || null,
+      size: (get.taille ?? '').toUpperCase(),
       quantity,
-      role: get('poste') || null,
+      role: get.poste || null,
     });
   });
   return { rows, errors };
-}
-
-function splitCsvLine(line: string, sep: string): string[] {
-  const out: string[] = [];
-  let cur = '';
-  let quoted = false;
-  for (let i = 0; i < line.length; i++) {
-    const ch = line[i];
-    if (quoted) {
-      if (ch === '"' && line[i + 1] === '"') {
-        cur += '"';
-        i++;
-      } else if (ch === '"') quoted = false;
-      else cur += ch;
-    } else if (ch === '"') quoted = true;
-    else if (ch === sep) {
-      out.push(cur);
-      cur = '';
-    } else cur += ch;
-  }
-  out.push(cur);
-  return out;
 }
 
 /** Nom de fichier atelier : NUMERO_NOM_TAILLE (§16.8). */
 export function productionFileName(row: RosterRow): string {
   const name = row.displayName
     .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
+    .replace(/[\u0300-\u036f]/g, '')
     .toUpperCase()
     .replace(/[^A-Z0-9]+/g, '-')
     .replace(/^-|-$/g, '');

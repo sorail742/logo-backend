@@ -14,7 +14,13 @@ import {
 import { ApiBearerAuth, ApiHeader, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import type { AuthUser, WorkspaceContext } from '../../common/auth-user';
-import { ClientIp, CurrentUser, CurrentWorkspace, Public, WorkspaceAccess } from '../../common/decorators';
+import {
+  ClientIp,
+  CurrentUser,
+  CurrentWorkspace,
+  Public,
+  WorkspaceAccess,
+} from '../../common/decorators';
 import { AvailabilityService } from '../availability/availability.service';
 import {
   ChooseNameDto,
@@ -76,7 +82,11 @@ export class NamesController {
   @Post('names/:nid/votes')
   @WorkspaceAccess('VIEWER', { staff: undefined })
   @HttpCode(HttpStatus.OK)
-  vote(@Param('nid', ParseUUIDPipe) nid: string, @CurrentUser() user: AuthUser, @Body() dto: VoteDto) {
+  vote(
+    @Param('nid', ParseUUIDPipe) nid: string,
+    @CurrentUser() user: AuthUser,
+    @Body() dto: VoteDto,
+  ) {
     return this.names.vote(nid, user.id, dto.value);
   }
 
@@ -84,7 +94,7 @@ export class NamesController {
   @WorkspaceAccess('EDITOR')
   @HttpCode(HttpStatus.OK)
   choose(@Param('pid', ParseUUIDPipe) pid: string, @Body() dto: ChooseNameDto) {
-    return this.names.choose(pid, dto.nameId);
+    return this.names.choose(pid, dto);
   }
 
   @Public()

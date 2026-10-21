@@ -21,7 +21,9 @@ export class GenerateNamesDto {
   @MaxLength(200)
   feedback?: string;
 
-  @ApiPropertyOptional({ description: '« Plus proche de celui-ci » : identifiant d’un nom du projet' })
+  @ApiPropertyOptional({
+    description: '« Plus proche de celui-ci » : identifiant d’un nom du projet',
+  })
   @IsOptional()
   @IsUUID()
   likeNameId?: string;
@@ -67,10 +69,24 @@ export class VoteDto {
   value: 1 | -1;
 }
 
+/** Choix du nom final : un nom proposé (nameId) ou un nom déjà existant saisi (value, §2.2). */
 export class ChooseNameDto {
-  @ApiProperty()
+  @ApiPropertyOptional()
+  @IsOptional()
   @IsUUID()
-  nameId: string;
+  nameId?: string;
+
+  @ApiPropertyOptional({ example: 'Jeunesse Verte', description: 'Parcours « J’ai déjà un nom »' })
+  @IsOptional()
+  @IsString()
+  @Length(2, 40)
+  value?: string;
+
+  @ApiPropertyOptional({ example: 'AJV' })
+  @IsOptional()
+  @IsString()
+  @Length(1, 12)
+  acronym?: string;
 }
 
 /** Essai sans compte : brief minimal (§13.4). */

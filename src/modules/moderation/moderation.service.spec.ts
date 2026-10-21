@@ -12,7 +12,9 @@ describe('ModerationService', () => {
   const service = new ModerationService(prisma as never);
 
   it('détecte un terme officiel sans tenir compte des accents ni de la casse', async () => {
-    expect(await service.findBlocked('Cachet de la REPUBLIQUE de Guinée', 'STAMP')).toEqual(['République']);
+    expect(await service.findBlocked('Cachet de la REPUBLIQUE de Guinée', 'STAMP')).toEqual([
+      'République',
+    ]);
   });
 
   it('ne déclenche que sur des mots entiers', () => {

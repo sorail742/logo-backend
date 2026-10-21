@@ -22,7 +22,8 @@ const RULES: [RegExp, string][] = [
   [/W/g, 'V'],
   [/EAU|AU/g, 'O'],
   [/OU/g, 'U'],
-  [/AI|EI|ET$/g, 'E'],
+  [/AI|EI/g, 'E'],
+  [/ET$/, 'E'],
   [/EN|AN|AM|EM/g, 'AN'],
   [/IN|EIN|AIN|UN/g, 'IN'],
   [/ON|OM/g, 'ON'],
@@ -33,7 +34,7 @@ const RULES: [RegExp, string][] = [
 export function phoneticKey(input: string): string {
   let s = input
     .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
+    .replace(/[\u0300-\u036f]/g, '')
     .toUpperCase()
     .replace(/[^A-Z]/g, '');
   if (!s) return '';

@@ -377,6 +377,7 @@ model Slogan {
   text       String
   kind       String   @default("SLOGAN") // SLOGAN | DEVISE | MISSION
   tone       String?
+  similarTo  String? // slogan connu trop proche (SIG-04)
   isFavorite Boolean  @default(false)
   isChosen   Boolean  @default(false)
   createdAt  DateTime @default(now())
@@ -429,6 +430,7 @@ model GenerationJob {
   promptVersion String?
   costCredits   Int
   costUsdMicros Int? // coût IA réel
+  output        Json? // résultat (ex. clé de l'archive d'export)
   error         String?
   startedAt     DateTime?
   finishedAt    DateTime?

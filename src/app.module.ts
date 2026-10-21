@@ -13,9 +13,12 @@ import { ApparelModule } from './modules/apparel/apparel.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { BillingModule } from './modules/billing/billing.module';
 import { HealthModule } from './modules/health/health.module';
+import { LogosModule } from './modules/logos/logos.module';
 import { NamesModule } from './modules/names/names.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { ProjectsModule } from './modules/projects/projects.module';
+import { SignaturesModule } from './modules/signatures/signatures.module';
+import { SlogansModule } from './modules/slogans/slogans.module';
 import { UsersModule } from './modules/users/users.module';
 import { WorkspacesModule } from './modules/workspaces/workspaces.module';
 
@@ -38,6 +41,9 @@ import { WorkspacesModule } from './modules/workspaces/workspaces.module';
     WorkspacesModule,
     ProjectsModule,
     NamesModule,
+    LogosModule,
+    SlogansModule,
+    SignaturesModule,
     BillingModule,
     NotificationsModule,
     AdminModule,

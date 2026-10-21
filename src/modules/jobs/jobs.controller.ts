@@ -29,7 +29,10 @@ export class JobsController {
       switchMap((job) => {
         const initial = { jobId: job.id, status: job.status, error: job.error ?? undefined };
         if (this.jobs.isTerminal(job.status)) return of(initial);
-        return concat(of(initial), live$.pipe(takeWhile((e) => !this.jobs.isTerminal(e.status), true)));
+        return concat(
+          of(initial),
+          live$.pipe(takeWhile((e) => !this.jobs.isTerminal(e.status), true)),
+        );
       }),
       map((data) => ({ type: 'job', data })),
     );

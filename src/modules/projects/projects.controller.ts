@@ -63,7 +63,13 @@ export class ProjectsController {
   ) {
     await this.projects.softDelete(pid);
     if (ws.role === null) {
-      await this.audit.log({ actorId: user.id, action: 'project.delete', entityType: 'Project', entityId: pid, ip });
+      await this.audit.log({
+        actorId: user.id,
+        action: 'project.delete',
+        entityType: 'Project',
+        entityId: pid,
+        ip,
+      });
     }
   }
 
@@ -77,7 +83,13 @@ export class ProjectsController {
   ) {
     const project = await this.projects.restore(pid);
     if (ws.role === null) {
-      await this.audit.log({ actorId: user.id, action: 'project.restore', entityType: 'Project', entityId: pid, ip });
+      await this.audit.log({
+        actorId: user.id,
+        action: 'project.restore',
+        entityType: 'Project',
+        entityId: pid,
+        ip,
+      });
     }
     return project;
   }

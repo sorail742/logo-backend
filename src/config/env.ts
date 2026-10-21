@@ -4,6 +4,8 @@ const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().default(3001),
   APP_URL: z.string().url().default('http://localhost:3000'),
+  /** Nom de la plateforme (à définir, §1.4), affiché dans les mentions de l'offre gratuite. */
+  PLATFORM_NAME: z.string().default('Plateforme'),
   API_URL: z.string().url().default('http://localhost:3001'),
 
   DATABASE_URL: z.string().min(1),
@@ -23,6 +25,16 @@ const envSchema = z.object({
   MAIL_FROM: z.string().default('Plateforme <no-reply@example.com>'),
 
   AI_PROVIDER: z.enum(['mock']).default('mock'),
+
+  S3_ENDPOINT: z.string().optional(), // vide = AWS S3
+  S3_REGION: z.string().default('us-east-1'),
+  S3_BUCKET: z.string().default('logo-platform'),
+  S3_ACCESS_KEY: z.string().min(1),
+  S3_SECRET_KEY: z.string().min(1),
+  S3_FORCE_PATH_STYLE: z
+    .enum(['true', 'false'])
+    .default('true')
+    .transform((v) => v === 'true'),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -30,7 +42,9 @@ export type Env = z.infer<typeof envSchema>;
 export function validateEnv(raw: Record<string, unknown>): Env {
   const parsed = envSchema.safeParse(raw);
   if (!parsed.success) {
-    const issues = parsed.error.issues.map((i) => `  - ${i.path.join('.')}: ${i.message}`).join('\n');
+    const issues = parsed.error.issues
+      .map((i) => `  - ${i.path.join('.')}: ${i.message}`)
+      .join('\n');
     throw new Error(`Configuration invalide :\n${issues}`);
   }
   return parsed.data;

@@ -1,5 +1,13 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEmail, IsOptional, IsString, Length, Matches, MaxLength, MinLength } from 'class-validator';
+import {
+  IsEmail,
+  IsOptional,
+  IsString,
+  Length,
+  Matches,
+  MaxLength,
+  MinLength,
+} from 'class-validator';
 
 export class RegisterDto {
   @ApiProperty({ example: 'aissatou@example.org' })
@@ -33,7 +41,9 @@ export class LoginDto {
   @MaxLength(128)
   password: string;
 
-  @ApiPropertyOptional({ description: 'Code TOTP à 6 chiffres si la double authentification est active' })
+  @ApiPropertyOptional({
+    description: 'Code TOTP à 6 chiffres si la double authentification est active',
+  })
   @IsOptional()
   @Matches(/^\d{6}$/)
   totpCode?: string;

@@ -20,7 +20,10 @@ export interface WorkspaceAccessOptions {
   /** Autoriser l'accès à un projet dans la corbeille (restauration). */
   includeDeleted?: boolean;
 }
-export const WorkspaceAccess = (role: WorkspaceRole, opts: Omit<WorkspaceAccessOptions, 'role'> = {}) =>
+export const WorkspaceAccess = (
+  role: WorkspaceRole,
+  opts: Omit<WorkspaceAccessOptions, 'role'> = {},
+) =>
   SetMetadata(WORKSPACE_ACCESS, {
     role,
     // Par défaut, le support a accès en lecture (§3) ; `staff: undefined` explicite le retire.
