@@ -198,7 +198,7 @@ describe('archive du kit (KIT-03)', () => {
       'logo/png/kolabo-blanc-2048.png',
       'logo/jpg/kolabo-couleur-512.jpg',
       'icones-app/favicon.ico',
-      'reseaux-sociaux/photo-de-profil-400.png',
+      'reseaux-sociaux/profil-1080x1080.png',
       'signatures/signature-email.html',
       'signatures/slogan.txt',
       'signatures/cachet.png',

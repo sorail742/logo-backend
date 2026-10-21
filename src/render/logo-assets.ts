@@ -1,10 +1,11 @@
-import { readableOn } from './color';
+import { mix, readableOn } from './color';
 import { getFont } from './fonts';
 import { getIcon } from './icons';
 import { LOGO_VARIANTS, renderLogoSvg, type LogoVariant } from './logo';
 import type { LogoSpec } from './logo-spec';
 import { svgToPdf } from './pdf';
 import { buildIco, svgToJpeg, svgToPng } from './raster';
+import { SOCIAL_KIT, socialKitSvg, type SocialKitInput } from './social-kit';
 import { frameSvg, optimizeSvg, recolorSvg, svgSize } from './svg';
 import type { ZipEntry } from './zip';
 
@@ -33,13 +34,6 @@ export const APP_ICON_SIZES = [
   { file: 'android-chrome-192.png', size: 192 },
   { file: 'android-chrome-512.png', size: 512 },
   { file: 'ios-1024.png', size: 1024 },
-] as const;
-
-/** Formats réseaux sociaux (LOGO-23), en résolution double pour les bannières. */
-export const SOCIAL_FORMATS = [
-  { file: 'photo-de-profil-400.png', width: 400, height: 400, profile: true },
-  { file: 'facebook-couverture-1640x624.png', width: 1640, height: 624, profile: false },
-  { file: 'linkedin-banniere-1584x396.png', width: 1584, height: 396, profile: false },
 ] as const;
 
 export interface ExportOptions {
@@ -103,38 +97,37 @@ function background(source: LogoSource) {
   return source.kind === 'spec' ? source.spec.colors.background : source.background;
 }
 
-/** Logo centré sur un fond aux couleurs de la marque (LOGO-23). */
-function socialSvg(source: LogoSource, format: (typeof SOCIAL_FORMATS)[number]) {
+/** Logo, symbole et couleurs pour le kit réseaux sociaux (LOGO-23). */
+function socialInput(source: LogoSource): SocialKitInput {
   if (source.kind === 'svg') {
-    return frameSvg(source.svg, {
-      width: format.width,
-      height: format.height,
-      background: source.background,
-      fill: 0.6,
-    });
+    const size = svgSize(source.svg);
+    const color = { svg: source.svg, ...size };
+    const white = { svg: recolorSvg(source.svg, '#ffffff'), ...size };
+    const black = { svg: recolorSvg(source.svg, '#111111'), ...size };
+    const primary = readableOn(source.background) === '#ffffff' ? source.background : '#111827';
+    return {
+      logo: { color, white },
+      mark: { color, white, black },
+      colors: { primary, secondary: mix(primary, '#ffffff', 0.4), background: source.background },
+      name: source.title,
+    };
   }
   const { spec } = source;
-  if (format.profile) {
-    return frameSvg(markSvg(source), {
-      width: format.width,
-      height: format.height,
-      background: spec.colors.background,
-      fill: 0.86,
-    });
-  }
-  const color = spec.colors.primary;
-  const variant = readableOn(color) === '#ffffff' ? 'white' : 'color';
-  const logo = renderLogoSvg(spec, {
-    variant,
-    withBackground: false,
-    layout: spec.layout === 'vertical' ? 'horizontal' : undefined,
-  }).svg;
-  return frameSvg(logo, {
-    width: format.width,
-    height: format.height,
-    background: color,
-    fill: 0.6,
-  });
+  const layout = spec.layout === 'vertical' ? 'horizontal' : undefined;
+  const icon = iconSpec(spec);
+  return {
+    logo: {
+      color: renderLogoSvg(spec, { variant: 'color', withBackground: false, layout }),
+      white: renderLogoSvg(spec, { variant: 'white', withBackground: false, layout }),
+    },
+    mark: {
+      color: renderLogoSvg(icon, { layout: 'icon' }),
+      white: renderLogoSvg(icon, { layout: 'icon', variant: 'white', withBackground: false }),
+      black: renderLogoSvg(icon, { layout: 'icon', variant: 'black' }),
+    },
+    colors: spec.colors,
+    name: spec.text,
+  };
 }
 
 /** LICENCES.txt : chaque police et icône avec sa licence (§14.2). */
@@ -217,10 +210,13 @@ export async function buildExportEntries(
   }
 
   if (options.social) {
-    for (const format of SOCIAL_FORMATS) {
+    const input = socialInput(source);
+    for (const format of SOCIAL_KIT) {
       entries.push({
-        path: `reseaux-sociaux/${format.file}`,
-        data: svgToPng(socialSvg(source, format), { size: format.width }),
+        path: `reseaux-sociaux/${format.file}.png`,
+        data: svgToPng(socialKitSvg(input, format), {
+          size: Math.max(format.width, format.height),
+        }),
       });
     }
   }

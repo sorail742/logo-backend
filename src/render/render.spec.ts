@@ -254,7 +254,7 @@ describe('variantes et exports (§5.4)', () => {
       },
     );
     const paths = entries.map((e) => e.path);
-    expect(paths).toHaveLength(6 * 5 + 3 + 5 + 3 + 1);
+    expect(paths).toHaveLength(6 * 5 + 3 + 5 + 8 + 1);
     expect(paths).toContain('kalossa/svg/kalossa-couleur.svg');
     expect(paths).toContain('kalossa/pdf/kalossa-vertical.pdf');
     expect(paths).toContain('kalossa/png/kalossa-blanc-2048.png');
