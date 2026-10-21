@@ -3,6 +3,7 @@ import { mix, readableOn, type LogoColors } from './color';
 import { letterheadDocx } from './docx';
 import type { LogoSource } from './logo-assets';
 import { createPdf, drawSvg, fitSize, MM, registerTextFonts, writeText } from './pdf';
+import { qrSvg, vcard } from './qr';
 import { svgToPng } from './raster';
 
 // Supports prêts à imprimer (KIT-04) : carte de visite et carte de membre avec fond perdu de
@@ -50,6 +51,26 @@ function contactLines(contact: ContactDetails | null) {
     .filter((line): line is string => !!line);
 }
 
+/**
+ * QR code de la fiche contact (vCard) : un scan ajoute la personne au répertoire. Niveau L et
+ * marge d'un module (la carte est blanche autour) : des modules d'au moins 0,35 mm à 20 mm.
+ */
+function contactQr(input: SupportsInput) {
+  const { contact } = input;
+  if (!contact || !(contact.phone || contact.email || contact.website)) return null;
+  return qrSvg(
+    vcard({
+      fullName: contact.fullName?.trim() || input.content.name,
+      organization: input.content.name,
+      title: contact.jobTitle,
+      phone: contact.phone,
+      email: contact.email,
+      website: contact.website,
+    }),
+    { level: 'L', margin: 1, color: INK },
+  );
+}
+
 /** Carte de visite 85 × 55 mm, recto (logo et coordonnées) et verso (couleur de la marque). */
 export function businessCardPdf(input: SupportsInput): Promise<Buffer> {
   const trimW = 85 * MM;
@@ -92,6 +113,8 @@ export function businessCardPdf(input: SupportsInput): Promise<Buffer> {
       });
     }
     const right = width - safe;
+    const qr = contactQr(input);
+    if (qr) drawSvg(doc, qr, right - 20 * MM, safe, 20 * MM, 20 * MM);
     lines.slice(0, 4).forEach((line, index) => {
       writeText(doc, line, right - 36 * MM, safe + 22 * MM + index * 10, {
         size: 6.5,
