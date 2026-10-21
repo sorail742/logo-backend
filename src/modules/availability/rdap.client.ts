@@ -27,7 +27,7 @@ export class RdapClient {
     if (!server) return { status: 'UNKNOWN', reason: `Pas de serveur RDAP pour .${tld}` };
 
     try {
-      const res = await fetch(`${server.replace(/\/?$/, '/')}domain/${domain}`, {
+      const res = await fetch(`${server.replace(/\/?$/, '/')}domain/${encodeURIComponent(domain)}`, {
         headers: { Accept: 'application/rdap+json' },
         signal: AbortSignal.timeout(LOOKUP_TIMEOUT_MS),
       });

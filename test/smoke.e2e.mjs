@@ -192,7 +192,9 @@ async function waitJob(jobId, timeoutMs = 30000) {
   while (Date.now() < deadline) {
     const j = await call('GET', `/jobs/${jobId}`, { token });
     if (['SUCCEEDED', 'FAILED'].includes(j.json.status)) return j.json;
-    await new Promise((r) => setTimeout(r, 400));
+    await new Promise((r) => {
+      setTimeout(r, 400);
+    });
   }
   return { status: 'TIMEOUT' };
 }

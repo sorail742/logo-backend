@@ -130,7 +130,7 @@ export class AvailabilityService {
         if (network !== 'github')
           return { kind: 'SOCIAL', target: network, status: 'UNKNOWN', details };
         try {
-          const res = await fetch(`https://api.github.com/users/${handle}`, {
+          const res = await fetch(`https://api.github.com/users/${encodeURIComponent(handle)}`, {
             headers: { 'User-Agent': 'logo-backend' },
             signal: AbortSignal.timeout(3000),
           });

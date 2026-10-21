@@ -23,7 +23,9 @@ const wait = async (token, id) => {
   for (let i = 0; i < 100; i++) {
     const j = await call('GET', `/jobs/${id}`, { token });
     if (['SUCCEEDED', 'FAILED'].includes(j.json.status)) return j.json;
-    await new Promise((r) => setTimeout(r, 300));
+    await new Promise((r) => {
+      setTimeout(r, 300);
+    });
   }
   return {};
 };

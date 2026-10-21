@@ -69,7 +69,7 @@ export class LogoExportService {
       key,
       fileName,
       sizeBytes: zip.length,
-      files: Object.keys(files).sort(),
+      files: Object.keys(files).sort((a, b) => a.localeCompare(b)),
       watermarked: !paid,
       expiresAt: new Date(Date.now() + EXPORT_RETENTION_DAYS * 86_400_000).toISOString(),
     };

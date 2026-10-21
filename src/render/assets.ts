@@ -177,8 +177,9 @@ export function fontInfo(id: string): FontInfo | undefined {
 
 /** Graisse disponible la plus proche de celle demandée. */
 export function nearestWeight(info: FontInfo, weight: number): number {
-  return info.weights.reduce((best, w) =>
-    Math.abs(w - weight) < Math.abs(best - weight) ? w : best,
+  return info.weights.reduce(
+    (best, w) => (Math.abs(w - weight) < Math.abs(best - weight) ? w : best),
+    info.weights[0],
   );
 }
 
@@ -186,10 +187,14 @@ export function loadFont(id: string, weight = 400): opentype.Font {
   const info = fontInfo(id);
   if (!info) throw new Error(`Police inconnue : ${id}`);
   const w = nearestWeight(info, weight);
-  const key = `${id}:${w}`;
+  const key = `${info.id}:${w}`;
   let font = fontCache.get(key);
   if (!font) {
-    const file = join(packageDir(`@fontsource/${id}`), 'files', `${id}-latin-${w}-normal.woff`);
+    const file = join(
+      packageDir(`@fontsource/${info.id}`),
+      'files',
+      `${info.id}-latin-${w}-normal.woff`,
+    );
     const buf = readFileSync(file);
     font = opentype.parse(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength));
     fontCache.set(key, font);
