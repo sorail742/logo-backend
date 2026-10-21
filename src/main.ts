@@ -30,7 +30,9 @@ async function bootstrap() {
 
   const doc = new DocumentBuilder()
     .setTitle('Plateforme d’identité de marque — API')
-    .setDescription('Noms, logos, signatures et kits de marque. Erreurs au format application/problem+json.')
+    .setDescription(
+      'Noms, logos, signatures et kits de marque. Erreurs au format application/problem+json.',
+    )
     .setVersion('1.0')
     .addBearerAuth()
     .build();

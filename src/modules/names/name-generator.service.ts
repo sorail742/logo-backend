@@ -41,7 +41,10 @@ export class NameGeneratorService {
     for (const name of parsed.names) {
       if (exclude.has(name.value.toLowerCase())) continue;
       if (input.brief.mustAvoid.some((w) => containsTerm(name.value, w))) continue;
-      const blocked = await this.moderation.findBlocked(`${name.value} ${name.expandedForm ?? ''}`, 'NAME');
+      const blocked = await this.moderation.findBlocked(
+        `${name.value} ${name.expandedForm ?? ''}`,
+        'NAME',
+      );
       if (blocked.length) {
         this.logger.debug(`Nom filtré « ${name.value} » : ${blocked.join(', ')}`);
         continue;
@@ -49,7 +52,10 @@ export class NameGeneratorService {
       exclude.add(name.value.toLowerCase());
       kept.push({
         ...name,
-        score: scoreName({ value: name.value, briefWords: [...input.brief.values, input.brief.sector] }),
+        score: scoreName({
+          value: name.value,
+          briefWords: [...input.brief.values, input.brief.sector],
+        }),
       });
     }
 

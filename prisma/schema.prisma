@@ -383,6 +383,7 @@ model Slogan {
   text       String
   kind       String   @default("SLOGAN") // SLOGAN | DEVISE | MISSION
   tone       String?
+  similarTo  String? // slogan connu trop proche (SIG-04)
   isFavorite Boolean  @default(false)
   isChosen   Boolean  @default(false)
   createdAt  DateTime @default(now())
@@ -455,6 +456,7 @@ model GenerationJob {
   promptVersion String?
   costCredits   Int
   costUsdMicros Int? // coût IA réel
+  output        Json? // colonne de la première version des exports, remplacée par result
   error         String?
   result        Json? // sortie d'une tâche sans entité dédiée (export : fichier et lien)
   requestedById String? // auteur de la demande, prévenu quand un export est prêt (COL-03)

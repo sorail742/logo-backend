@@ -8,7 +8,7 @@ Le cahier des charges complet se trouve dans [docs/cahier-des-charges.md](docs/c
 
 NestJS 11 · Prisma 6 · PostgreSQL · Redis + BullMQ · Swagger · pino · argon2id · JWT + cookie de rafraîchissement · TOTP
 
-Rendu : opentype.js (texte en tracés) · SVGO · resvg (PNG) · pdfkit + svg-to-pdfkit (PDF vectoriel) · jpeg-js · stockage S3 (MinIO) ou disque local
+Rendu : opentype.js (texte en tracés) · SVGO · resvg (PNG) · pdfkit + svg-to-pdfkit (PDF vectoriel) · jpeg-js · stockage S3 (RustFS en développement) ou disque local
 
 Un seul code source, deux points d'entrée :
 
@@ -23,7 +23,7 @@ Un seul code source, deux points d'entrée :
 
 ```bash
 cp .env.example .env               # puis ajuster les secrets
-docker compose up -d               # PostgreSQL, Redis, MinIO, Mailpit
+docker compose up -d               # PostgreSQL, Redis, stockage S3 (RustFS), Mailpit
 npm install
 npx prisma migrate dev             # crée le schéma
 npm run prisma:seed                # offres, liste noire, modèles
@@ -39,7 +39,7 @@ Test de bout en bout, API et worker lancés : `npm run test:smoke` (inscription,
 
 Banque de photos du Studio : facultative, activée par une clé gratuite [Pexels](https://www.pexels.com/api/) dans `PEXELS_API_KEY`.
 
-Fichiers générés : par défaut sur disque (`STORAGE_DIR`, servis par URL signée `/api/v1/files`) ; `STORAGE_DRIVER=s3` utilise le MinIO de docker-compose ou tout stockage S3 (URL présignées).
+Fichiers générés : par défaut sur disque (`STORAGE_DIR`, servis par URL signée `/api/v1/files`) ; `STORAGE_DRIVER=s3` utilise le stockage S3 de docker-compose (RustFS, console sur http://localhost:9001) ou tout stockage S3 (URL présignées).
 
 ## Structure
 

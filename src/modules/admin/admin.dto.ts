@@ -1,7 +1,18 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { PlatformRole } from '@prisma/client';
 import { Transform, Type } from 'class-transformer';
-import { IsBoolean, IsEnum, IsIn, IsInt, IsOptional, IsString, IsUUID, Length, MaxLength, NotEquals } from 'class-validator';
+import {
+  IsBoolean,
+  IsEnum,
+  IsIn,
+  IsInt,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Length,
+  MaxLength,
+  NotEquals,
+} from 'class-validator';
 import { CursorPaginationDto } from '../../common/dto/pagination.dto';
 
 export class AdminListUsersDto extends CursorPaginationDto {

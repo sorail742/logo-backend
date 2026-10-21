@@ -21,7 +21,9 @@ export class GenerateNamesDto {
   @MaxLength(200)
   feedback?: string;
 
-  @ApiPropertyOptional({ description: '« Plus proche de celui-ci » : identifiant d’un nom du projet' })
+  @ApiPropertyOptional({
+    description: '« Plus proche de celui-ci » : identifiant d’un nom du projet',
+  })
   @IsOptional()
   @IsUUID()
   referenceNameId?: string;

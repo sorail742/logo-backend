@@ -19,7 +19,10 @@ export class UsersService {
     });
     const workspaces = await this.prisma.membership.findMany({
       where: { userId },
-      select: { role: true, workspace: { select: { id: true, name: true, slug: true, kind: true } } },
+      select: {
+        role: true,
+        workspace: { select: { id: true, name: true, slug: true, kind: true } },
+      },
     });
     return { ...toUserDto(user), workspaces };
   }

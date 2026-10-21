@@ -28,7 +28,12 @@ export class ProblemDetailsFilter implements ExceptionFilter {
       if (typeof body === 'string') {
         detail = body;
       } else {
-        const { message, error: _error, statusCode: _sc, ...rest } = body as Record<string, unknown>;
+        const {
+          message,
+          error: _error,
+          statusCode: _sc,
+          ...rest
+        } = body as Record<string, unknown>;
         if (Array.isArray(message)) {
           detail = 'Données invalides';
           extra.errors = message;

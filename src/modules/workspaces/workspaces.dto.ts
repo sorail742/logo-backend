@@ -21,7 +21,9 @@ export class UpdateWorkspaceDto {
 const INVITABLE_ROLES = [WorkspaceRole.EDITOR, WorkspaceRole.VIEWER] as const;
 
 export class CreateInvitationDto {
-  @ApiPropertyOptional({ description: 'Absent : crée un lien d’invitation réutilisable jusqu’à expiration' })
+  @ApiPropertyOptional({
+    description: 'Absent : crée un lien d’invitation réutilisable jusqu’à expiration',
+  })
   @IsOptional()
   @Transform(({ value }: { value: unknown }) => (value === '' ? undefined : value))
   @IsEmail()
