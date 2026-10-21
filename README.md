@@ -35,7 +35,9 @@ E-mails de développement : http://localhost:8025 (Mailpit).
 
 Sous Windows, Hyper-V réserve souvent des plages de ports (`netsh interface ipv4 show excludedportrange protocol=tcp`). Si 6379 ou 5432 est refusé, définissez `REDIS_PORT` / `POSTGRES_PORT` dans `.env` (par ex. `REDIS_PORT=16379` et `REDIS_URL=redis://localhost:16379`).
 
-Test de bout en bout, API et worker lancés : `npm run test:smoke` (inscription, rotation de session, brief, génération + SSE, disponibilité, vote, choix du nom, quota gratuit, droits, logos : génération, édition, variantes, export, import nettoyé ; historique, espaces et invitations, 2FA et codes de secours, textile, corbeille, essai public). Il lit la base (`DATABASE_URL`) pour poser un abonnement, les paiements n'existant pas encore.
+Test de bout en bout, API et worker lancés : `npm run test:smoke` (inscription, rotation de session, brief, génération + SSE, disponibilité, vote, choix du nom, quota gratuit, droits, logos : génération, édition, variantes, export, import nettoyé ; historique, espaces et invitations, 2FA et codes de secours, textile, Studio : créations, exports, avis épinglés, images générées, banque de photos ; corbeille, essai public). Il lit la base (`DATABASE_URL`) pour poser un abonnement, les paiements n'existant pas encore.
+
+Banque de photos du Studio : facultative, activée par une clé gratuite [Pexels](https://www.pexels.com/api/) dans `PEXELS_API_KEY`.
 
 Fichiers générés : par défaut sur disque (`STORAGE_DIR`, servis par URL signée `/api/v1/files`) ; `STORAGE_DRIVER=s3` utilise le MinIO de docker-compose ou tout stockage S3 (URL présignées).
 
@@ -70,7 +72,7 @@ src/
     brand-kits/         kit de marque : versions, charte PDF et archive (worker), partage public
     comments/           commentaires et mentions @
     studio/             Studio de création : documents (pages et éléments), sauvegarde, exports (worker)
-    library/            bibliothèque : icônes, polices, modèles
+    library/            bibliothèque : icônes, polices, modèles, banque de photos (Pexels), capacités
     availability/       domaines (RDAP), réseaux, marques, comparaison phonétique
     jobs/               file de génération, idempotence, SSE
     credits/            grand livre de crédits
@@ -158,7 +160,7 @@ Moteur B (image IA + vectorisation, « Devrait ») : la route répond 501 tant q
 - **Supports imprimables** (KIT-04, dans l'archive) : carte de visite recto verso et carte de membre d'association avec fond perdu de 3 mm (TrimBox renseignée), papier à en-tête A4 en PDF et en Word (OOXML écrit sans dépendance, logo en en-tête). Les coordonnées viennent de la signature e-mail du projet.
 - **Fichiers** : stockés en privé, servis par URL signée de 15 minutes (`guidePdfUrl`, `zipUrl`, `result.downloadUrl`), purgés après 7 jours puis régénérables.
 - **Partage** (KIT-05, `POST /brand-kits/:kid/share`) : lien en lecture seule, mot de passe (argon2id) et date d'expiration facultatifs, révocable. `GET /public/kits/:token` (20 requêtes par minute) renvoie le kit et ses liens de téléchargement.
-- **Commentaires** (COL-02, `GET|POST /projects/:pid/comments`, `DELETE /comments/:cid`) : sur le projet, un nom, un logo, une signature, un slogan ou le kit ; tout membre, lecteur compris. Mentions `@Prénom`, `@PrénomNom` ou `@partie-locale-de-l-e-mail`, sans casse ni accents.
+- **Commentaires** (COL-02, `GET|POST /projects/:pid/comments`, `DELETE /comments/:cid`) : sur le projet, un nom, un logo, une signature, un slogan, le kit ou une création du Studio ; tout membre, lecteur compris. Mentions `@Prénom`, `@PrénomNom` ou `@partie-locale-de-l-e-mail`, sans casse ni accents. Fils à un niveau (`parentId`) ; `PATCH /comments/:cid` `{ resolved }` résout ou rouvre un fil (son auteur, un Éditeur ou le Propriétaire), une réponse le rouvre.
 - **Notifications** (COL-03) : dans l'application et par e-mail pour une mention, une charte ou une archive prête, des crédits bas (seuil de 5, une fois au franchissement) ; dans l'application pour une réponse dans une discussion, une invitation reçue par un utilisateur inscrit, un export de logo ou un lot de signatures prêt.
 
 ## Studio de création
@@ -185,6 +187,24 @@ produit les fichiers définitifs.
   (ombres, fusion, filtres) est tramée à 300 dpi. SVG d'une page, ou ZIP pour plusieurs.
 - **Logos** : `POST /logos/:lid/variants` avec `transparent: true` livre la version blanche sans
   fond, pour la poser sur une création.
+- **Avis épinglés** : un commentaire `targetType: "DESIGN"` peut porter une épingle
+  `anchor: { pageId, x, y }` (proportions de la page, 0 à 1), refusée sur une autre cible ou une
+  page absente de la création. Le lien de la notification ouvre le fil (`/studio/:sdid?commentaire=`).
+- **Images générées** : `POST /projects/:pid/studio-images` (`prompt` de 3 à 300 caractères,
+  `style` `auto` ou l'un de `abstract`, `gradient`, `geometric`, `waves`, `wax`, `bogolan`,
+  `confetti`, `aspect` `square`, `portrait` ou `landscape`, `palette` facultative, sinon celle du
+  logo favori) : 202, `Idempotency-Key` obligatoire, tâche `STUDIO_IMAGES` (1 crédit, 2 lots
+  gratuits par jour), description passée par la liste noire (422 `TERM_BLOCKED`). Le résultat
+  donne 4 PNG (`images[].url` signées, `width`, `height`) et `demo`. Le fournisseur de
+  démonstration compose des visuels génératifs déterministes à partir de la palette
+  ([src/render/artwork.ts](src/render/artwork.ts), même moteur que le front) ; un vrai modèle
+  d'images se branche en implémentant `AiProvider.generateImages`.
+- **Banque de photos** : `GET /library/photos?q=&page=&orientation=&locale=` (recherche Pexels,
+  ou sélection du moment sans `q` ; résultats validés, mis en cache une heure dans Redis) et
+  `GET /library/photos/:id/file` (fichier relayé par l'API : hôte `images.pexels.com` seul,
+  JPEG, PNG ou WebP de 15 Mo au plus, ramené à 2 400 px). Sans `PEXELS_API_KEY` : 501
+  `NOT_AVAILABLE`, sans appel sortant. `GET /library/capabilities` indique au front le
+  fournisseur d'images (`aiImages.demo`) et la disponibilité des photos.
 
 ## Module 5 — décoration textile (§16)
 

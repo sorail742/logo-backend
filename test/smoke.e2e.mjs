@@ -1,4 +1,4 @@
-// Test de fumée de bout en bout (phases 1 à 5, module 5, Studio) contre une API et un worker lancés localement.
+// Test de fumée de bout en bout (phases 1 à 5, module 5, Studio, avis, images et photos) contre une API et un worker lancés localement.
 // Usage : npm run test:smoke   (API=http://hote/api/v1 pour une autre cible)
 import { PrismaClient } from '@prisma/client';
 import otplib from 'otplib';
@@ -639,6 +639,44 @@ const whiteLogo = transparentVariants.json.variants?.find((v) => v.id === 'white
 check('Studio : logo blanc sans fond', transparentVariants.status === 200 && !!whiteLogo && !/<path fill="#1{3,6}" d="M0 0h[\d.]+v[\d.]+H0z"/.test(whiteLogo));
 const studioActivity = await call('GET', `/projects/${pid}/activity`, { token });
 check('historique : créations et exports du Studio', ['studio.create', 'studio.export'].every((code) => studioActivity.json.some((a) => a.code === code)));
+
+// ─── Studio : avis épinglés, images générées, bibliothèque ───
+const pin = await call('POST', `/projects/${pid}/comments`, { token, body: { targetType: 'DESIGN', targetId: sdid, body: 'Le titre touche presque le bord.', anchor: { pageId: 'p1', x: 0.12, y: 0.3 } } });
+check('avis épinglé sur une création', pin.status === 201 && pin.json.anchor?.pageId === 'p1' && pin.json.anchor.x === 0.12, pin.json);
+const badPin = await call('POST', `/projects/${pid}/comments`, { token, body: { targetType: 'DESIGN', targetId: sdid, body: 'Ailleurs', anchor: { pageId: 'inconnue', x: 0.5, y: 0.5 } } });
+const projectPin = await call('POST', `/projects/${pid}/comments`, { token, body: { targetType: 'PROJECT', targetId: pid, body: 'Épinglé ?', anchor: { pageId: 'p1', x: 0.5, y: 0.5 } } });
+check('épingle refusée : page inconnue ou cible sans page', badPin.status === 400 && projectPin.status === 400, [badPin.status, projectPin.status]);
+const pinReply = await call('POST', `/projects/${pid}/comments`, { token, body: { targetType: 'DESIGN', targetId: sdid, body: 'Corrigé, marge de 60 px.', parentId: pin.json.id } });
+const nestedReply = await call('POST', `/projects/${pid}/comments`, { token, body: { targetType: 'DESIGN', targetId: sdid, body: 'Réponse à la réponse', parentId: pinReply.json.id } });
+check('réponse dans le fil (un seul niveau)', pinReply.status === 201 && pinReply.json.parentId === pin.json.id && nestedReply.status === 400, [pinReply.status, nestedReply.status]);
+const resolved = await call('PATCH', `/comments/${pin.json.id}`, { token, body: { resolved: true } });
+const resolveReply = await call('PATCH', `/comments/${pinReply.json.id}`, { token, body: { resolved: true } });
+check('fil résolu (seulement par son premier message)', resolved.status === 200 && !!resolved.json.resolvedAt && resolveReply.status === 400, [resolved.status, resolveReply.status]);
+const designThread = await call('GET', `/projects/${pid}/comments?targetType=DESIGN&targetId=${sdid}`, { token });
+check('avis de la création', designThread.status === 200 && designThread.json.length === 2, designThread.json.length);
+
+const imagesNoKey = await call('POST', `/projects/${pid}/studio-images`, { token, body: { prompt: 'Motif wax pour une affiche', style: 'auto', aspect: 'portrait' } });
+const blockedPrompt = await call('POST', `/projects/${pid}/studio-images`, { token, body: { prompt: 'Affiche avec un symbole nazi', style: 'auto', aspect: 'square' }, headers: { 'idempotency-key': crypto.randomUUID() } });
+check('images : clé d’idempotence exigée, terme refusé', imagesNoKey.status === 400 && blockedPrompt.status === 422 && blockedPrompt.json.code === 'TERM_BLOCKED', [imagesNoKey.status, blockedPrompt.status]);
+const images = await call('POST', `/projects/${pid}/studio-images`, { token, body: { prompt: 'Motif wax pour une affiche', style: 'auto', aspect: 'portrait' }, headers: { 'idempotency-key': crypto.randomUUID() } });
+check('images : lot demandé', images.status === 202 && !!images.json.jobId, images.json);
+check('images : lot terminé', (await waitJob(images.json.jobId, token, 60000)) === 'SUCCEEDED');
+const imagesJob = await call('GET', `/jobs/${images.json.jobId}`, { token });
+const generated = imagesJob.json.result?.images ?? [];
+const firstImage = generated[0] ? await fetch(generated[0].url) : null;
+check(
+  'images : 4 PNG portrait servis par URL signée',
+  generated.length === 4 && generated.every((i) => i.width === 1280 && i.height === 1600) && firstImage?.status === 200 && firstImage.headers.get('content-type') === 'image/png' && !('storageKey' in generated[0]),
+  { count: generated.length, status: firstImage?.status },
+);
+
+const caps = await call('GET', '/library/capabilities', { token });
+check('bibliothèque : capacités', caps.status === 200 && caps.json.aiImages?.demo === true && typeof caps.json.photos === 'boolean', caps.json);
+const photos = await call('GET', '/library/photos?q=march%C3%A9', { token });
+check('banque de photos : 501 sans clé, résultats avec', caps.json.photos ? photos.status === 200 && Array.isArray(photos.json.photos) : photos.status === 501 && photos.json.code === 'NOT_AVAILABLE', photos.status);
+check('banque de photos : identifiant numérique exigé', (await call('GET', '/library/photos/abc/file', { token })).status === 400);
+const studioImagesActivity = await call('GET', `/projects/${pid}/activity`, { token });
+check('historique : images du Studio', studioImagesActivity.json.some((a) => a.code === 'studio.images'));
 
 const del = await call('DELETE', `/projects/${pid}`, { token });
 const gone = await call('GET', `/projects/${pid}`, { token });
