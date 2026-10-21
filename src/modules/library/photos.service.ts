@@ -73,9 +73,14 @@ const pexelsPage = z.object({
   next_page: z.string().nullish(),
 });
 
-const onHost = (url: string, host: string) => {
+// Listes autorisées : seules les adresses HTTPS de Pexels sont relayées ou téléchargées.
+const SECURE_PROTOCOLS = ['https:'];
+const IMAGE_HOSTS = ['images.pexels.com'];
+const PAGE_HOSTS = ['www.pexels.com'];
+
+const onHost = (url: string, hosts: string[]) => {
   const parsed = new URL(url);
-  return parsed.protocol === 'https:' && parsed.hostname === host;
+  return SECURE_PROTOCOLS.includes(parsed.protocol) && hosts.includes(parsed.hostname);
 };
 
 function normalize(raw: unknown): LibraryPhoto | null {
@@ -83,7 +88,7 @@ function normalize(raw: unknown): LibraryPhoto | null {
   if (!parsed.success) return null;
   const p = parsed.data;
   // Seules les adresses de Pexels sont relayées au navigateur.
-  if (!onHost(p.src.medium, 'images.pexels.com') || !onHost(p.url, 'www.pexels.com')) return null;
+  if (!onHost(p.src.medium, IMAGE_HOSTS) || !onHost(p.url, PAGE_HOSTS)) return null;
   return {
     id: String(p.id),
     width: p.width,
@@ -92,7 +97,7 @@ function normalize(raw: unknown): LibraryPhoto | null {
     color: p.avg_color ?? null,
     thumbUrl: p.src.medium,
     author: p.photographer,
-    authorUrl: onHost(p.photographer_url, 'www.pexels.com') ? p.photographer_url : p.url,
+    authorUrl: onHost(p.photographer_url, PAGE_HOSTS) ? p.photographer_url : p.url,
     pageUrl: p.url,
     source: 'pexels',
   };
@@ -115,7 +120,7 @@ export function normalizePage(raw: unknown): PhotoPage {
 
 /** Adresse de téléchargement : l'original, ramené à 2 400 px au plus sur le grand côté. */
 export function downloadUrl(original: string) {
-  if (!onHost(original, 'images.pexels.com'))
+  if (!onHost(original, IMAGE_HOSTS))
     throw new BadGatewayException({
       message: 'Adresse de photo refusée',
       code: 'PHOTOS_UNAVAILABLE',
@@ -185,7 +190,7 @@ export class PhotosService {
 
   private async download(photo: PexelsPhoto) {
     const response = await this.fetch(downloadUrl(photo.src.original), {}, 'follow');
-    if (!onHost(response.url, 'images.pexels.com'))
+    if (!onHost(response.url, IMAGE_HOSTS))
       throw new BadGatewayException({
         message: 'Adresse de photo refusée',
         code: 'PHOTOS_UNAVAILABLE',
