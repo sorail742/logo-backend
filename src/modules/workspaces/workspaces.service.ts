@@ -10,60 +10,128 @@ import { WorkspaceKind, WorkspaceRole } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { randomToken, sha256 } from '../../common/utils/crypto.util';
 import { uniqueSlug } from '../../common/utils/slug.util';
+import { AuditService } from '../audit/audit.service';
 import { MailService } from '../mail/mail.service';
-import { CreateInvitationDto, CreateWorkspaceDto, UpdateWorkspaceDto } from './workspaces.dto';
+import { NotificationsService } from '../notifications/notifications.service';
+import {
+  LINK_INVITATION_EMAIL,
+  toInvitationDto,
+  toWorkspaceDto,
+  workspaceSelect,
+} from './workspace.presenter';
+import {
+  CreateInvitationDto,
+  CreateWorkspaceDto,
+  DeleteWorkspaceDto,
+  UpdateWorkspaceDto,
+} from './workspaces.dto';
 
 const INVITATION_TTL_DAYS = 7;
-/** Invitation par lien : pas d'adresse cible, réutilisable jusqu'à expiration. */
-const LINK_INVITATION_EMAIL = '*';
+
+const ROLE_LABELS: Record<WorkspaceRole, string> = {
+  OWNER: 'propriétaire',
+  EDITOR: 'éditeur',
+  VIEWER: 'lecteur',
+};
 
 @Injectable()
 export class WorkspacesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly mail: MailService,
+    private readonly notifications: NotificationsService,
+    private readonly audit: AuditService,
   ) {}
 
-  list(userId: string) {
-    return this.prisma.workspace.findMany({
-      where: { members: { some: { userId } } },
+  async list(userId: string) {
+    const rows = await this.prisma.workspace.findMany({
+      where: { members: { some: { userId } }, deletedAt: null },
       select: {
-        id: true,
-        name: true,
-        slug: true,
-        kind: true,
-        creditBalance: true,
-        members: { where: { userId }, select: { role: true } },
+        ...workspaceSelect(userId),
         _count: { select: { projects: { where: { deletedAt: null } } } },
       },
       orderBy: { createdAt: 'asc' },
     });
+    return rows.map(({ _count, ...ws }) => ({
+      ...toWorkspaceDto(ws),
+      projectCount: _count.projects,
+    }));
   }
 
-  create(userId: string, dto: CreateWorkspaceDto) {
-    return this.prisma.workspace.create({
+  async create(userId: string, dto: CreateWorkspaceDto) {
+    const ws = await this.prisma.workspace.create({
       data: {
         name: dto.name,
         slug: uniqueSlug(dto.name),
         kind: WorkspaceKind.ORGANIZATION,
         members: { create: { userId, role: WorkspaceRole.OWNER } },
       },
+      select: workspaceSelect(userId),
     });
+    return toWorkspaceDto(ws);
   }
 
-  async get(workspaceId: string) {
-    return this.prisma.workspace.findUniqueOrThrow({
+  /** Espace vu par un membre (type Workspace du front) ; rôle null pour le support ou un admin. */
+  async get(workspaceId: string, userId: string, role: WorkspaceRole | null) {
+    const ws = await this.prisma.workspace.findUniqueOrThrow({
       where: { id: workspaceId },
-      include: { subscription: { include: { plan: true } } },
+      select: workspaceSelect(userId),
+    });
+    return toWorkspaceDto(ws, role);
+  }
+
+  async update(workspaceId: string, userId: string, dto: UpdateWorkspaceDto) {
+    const ws = await this.prisma.workspace.update({
+      where: { id: workspaceId },
+      data: dto,
+      select: workspaceSelect(userId),
+    });
+    await this.audit.log({
+      actorId: userId,
+      action: 'workspace.update',
+      entityType: 'Workspace',
+      entityId: workspaceId,
+      after: dto,
+    });
+    return toWorkspaceDto(ws);
+  }
+
+  /**
+   * Suppression d'un espace d'organisation (§3 : propriétaire ou admin), confirmée par son nom.
+   * L'espace disparaît, ses projets partent à la corbeille (purge à 30 jours) ; le grand livre,
+   * les paiements et l'abonnement restent conservés.
+   */
+  async remove(workspaceId: string, actorId: string, dto: DeleteWorkspaceDto) {
+    const ws = await this.prisma.workspace.findUniqueOrThrow({
+      where: { id: workspaceId },
+      select: { name: true, kind: true },
+    });
+    if (ws.kind === WorkspaceKind.PERSONAL) {
+      throw new BadRequestException(
+        'L’espace personnel disparaît avec le compte : supprimez votre compte depuis votre profil',
+      );
+    }
+    if (dto.confirm.trim() !== ws.name) {
+      throw new BadRequestException('Saisissez le nom exact de l’espace pour confirmer');
+    }
+    const now = new Date();
+    await this.prisma.$transaction([
+      this.prisma.project.updateMany({ where: { workspaceId, deletedAt: null }, data: { deletedAt: now } }),
+      this.prisma.invitation.deleteMany({ where: { workspaceId, acceptedAt: null } }),
+      this.prisma.workspace.update({ where: { id: workspaceId }, data: { deletedAt: now } }),
+    ]);
+    await this.audit.log({
+      actorId,
+      action: 'workspace.delete',
+      entityType: 'Workspace',
+      entityId: workspaceId,
+      before: { name: ws.name },
     });
   }
 
-  update(workspaceId: string, dto: UpdateWorkspaceDto) {
-    return this.prisma.workspace.update({ where: { id: workspaceId }, data: dto });
-  }
-
-  members(workspaceId: string) {
-    return this.prisma.membership.findMany({
+  /** Membres (type Member du front). */
+  async members(workspaceId: string) {
+    const rows = await this.prisma.membership.findMany({
       where: { workspaceId },
       select: {
         role: true,
@@ -72,20 +140,64 @@ export class WorkspacesService {
       },
       orderBy: { createdAt: 'asc' },
     });
+    return rows.map(({ role, createdAt, user }) => ({
+      userId: user.id,
+      fullName: user.fullName,
+      email: user.email,
+      avatarUrl: user.avatarUrl,
+      role,
+      joinedAt: createdAt,
+    }));
   }
 
-  async updateMember(workspaceId: string, userId: string, role: WorkspaceRole) {
+  /** Invitations en attente (ni acceptées ni expirées). */
+  async invitations(workspaceId: string) {
+    const rows = await this.prisma.invitation.findMany({
+      where: { workspaceId, acceptedAt: null, expiresAt: { gt: new Date() } },
+      orderBy: { expiresAt: 'desc' },
+    });
+    return rows.map((invitation) => toInvitationDto(invitation));
+  }
+
+  async updateMember(workspaceId: string, userId: string, role: WorkspaceRole, actorId: string) {
     const member = await this.findMember(workspaceId, userId);
     if (member.role === WorkspaceRole.OWNER && role !== WorkspaceRole.OWNER) {
       await this.assertAnotherOwner(workspaceId);
     }
-    return this.prisma.membership.update({ where: { id: member.id }, data: { role } });
+    const updated = await this.prisma.membership.update({ where: { id: member.id }, data: { role } });
+    await this.audit.log({
+      actorId,
+      action: 'workspace.member.update',
+      entityType: 'Workspace',
+      entityId: workspaceId,
+      before: { userId, role: member.role },
+      after: { userId, role },
+    });
+    return updated;
   }
 
-  async removeMember(workspaceId: string, userId: string) {
+  /**
+   * Retrait d'un membre par un propriétaire, ou départ volontaire de n'importe quel membre.
+   * L'espace garde toujours au moins un propriétaire.
+   */
+  async removeMember(
+    workspaceId: string,
+    userId: string,
+    actor: { id: string; role: WorkspaceRole | null },
+  ) {
+    if (userId !== actor.id && actor.role !== WorkspaceRole.OWNER) {
+      throw new ForbiddenException('Seul un propriétaire peut retirer un autre membre');
+    }
     const member = await this.findMember(workspaceId, userId);
     if (member.role === WorkspaceRole.OWNER) await this.assertAnotherOwner(workspaceId);
     await this.prisma.membership.delete({ where: { id: member.id } });
+    await this.audit.log({
+      actorId: actor.id,
+      action: userId === actor.id ? 'workspace.member.leave' : 'workspace.member.remove',
+      entityType: 'Workspace',
+      entityId: workspaceId,
+      before: { userId, role: member.role },
+    });
   }
 
   // ─── Invitations (COL-01) ───
@@ -98,7 +210,7 @@ export class WorkspacesService {
     await this.assertSeatAvailable(workspaceId);
 
     const token = randomToken(24);
-    const email = dto.email?.toLowerCase() ?? LINK_INVITATION_EMAIL;
+    const email = dto.asLink || !dto.email ? LINK_INVITATION_EMAIL : dto.email.toLowerCase();
     const invitation = await this.prisma.invitation.create({
       data: {
         workspaceId,
@@ -108,15 +220,26 @@ export class WorkspacesService {
         expiresAt: new Date(Date.now() + INVITATION_TTL_DAYS * 86_400_000),
       },
     });
-    if (dto.email) await this.mail.sendInvitation(dto.email, ws.name, token);
+    if (email !== LINK_INVITATION_EMAIL) {
+      await this.mail.sendInvitation(email, ws.name, token);
+      // Invité déjà inscrit : l'invitation apparaît aussi dans ses notifications (COL-03).
+      const invitee = await this.prisma.user.findUnique({ where: { email }, select: { id: true } });
+      if (invitee) {
+        await this.notifications.notify([invitee.id], {
+          type: 'INVITATION',
+          title: `Invitation à rejoindre « ${ws.name} »`,
+          body: `Vous êtes invité comme ${ROLE_LABELS[dto.role]}.`,
+          href: `/invitation/${encodeURIComponent(token)}`,
+        });
+      }
+    }
 
-    return { id: invitation.id, role: invitation.role, expiresAt: invitation.expiresAt, token };
+    return toInvitationDto(invitation, token);
   }
 
   async accept(token: string, user: { id: string }) {
     const invitation = await this.prisma.invitation.findUnique({
       where: { tokenHash: sha256(token) },
-      include: { workspace: { select: { id: true, name: true } } },
     });
     if (!invitation) throw new NotFoundException('Invitation introuvable');
     if (invitation.expiresAt < new Date()) throw new GoneException('Invitation expirée');
@@ -133,7 +256,7 @@ export class WorkspacesService {
     const existing = await this.prisma.membership.findUnique({
       where: { userId_workspaceId: { userId: user.id, workspaceId: invitation.workspaceId } },
     });
-    if (existing) return { workspace: invitation.workspace, role: existing.role };
+    if (existing) return this.forMember(invitation.workspaceId, user.id);
 
     await this.assertSeatAvailable(invitation.workspaceId);
     await this.prisma.$transaction([
@@ -149,7 +272,15 @@ export class WorkspacesService {
             }),
           ]),
     ]);
-    return { workspace: invitation.workspace, role: invitation.role };
+    return this.forMember(invitation.workspaceId, user.id);
+  }
+
+  private async forMember(workspaceId: string, userId: string) {
+    const ws = await this.prisma.workspace.findUniqueOrThrow({
+      where: { id: workspaceId },
+      select: workspaceSelect(userId),
+    });
+    return toWorkspaceDto(ws);
   }
 
   // ─── Règles ───
@@ -176,7 +307,7 @@ export class WorkspacesService {
       include: { plan: true },
     });
     const plan =
-      sub && sub.status === 'ACTIVE'
+      sub?.status === 'ACTIVE'
         ? sub.plan
         : await this.prisma.plan.findUnique({ where: { code: 'FREE' } });
     const max = plan?.maxMembers ?? 1;

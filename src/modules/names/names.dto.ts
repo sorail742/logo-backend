@@ -26,7 +26,7 @@ export class GenerateNamesDto {
   })
   @IsOptional()
   @IsUUID()
-  likeNameId?: string;
+  referenceNameId?: string;
 }
 
 export class ListNamesDto {
@@ -69,24 +69,10 @@ export class VoteDto {
   value: 1 | -1;
 }
 
-/** Choix du nom final : un nom proposé (nameId) ou un nom déjà existant saisi (value, §2.2). */
 export class ChooseNameDto {
-  @ApiPropertyOptional()
-  @IsOptional()
+  @ApiProperty()
   @IsUUID()
-  nameId?: string;
-
-  @ApiPropertyOptional({ example: 'Jeunesse Verte', description: 'Parcours « J’ai déjà un nom »' })
-  @IsOptional()
-  @IsString()
-  @Length(2, 40)
-  value?: string;
-
-  @ApiPropertyOptional({ example: 'AJV' })
-  @IsOptional()
-  @IsString()
-  @Length(1, 12)
-  acronym?: string;
+  nameId: string;
 }
 
 /** Essai sans compte : brief minimal (§13.4). */
@@ -100,10 +86,11 @@ export class PublicNameTryDto {
   @Length(1, 120)
   sector: string;
 
-  @ApiProperty()
+  @ApiPropertyOptional({ description: 'Mission en une phrase ; à défaut, les mots-clés' })
+  @IsOptional()
   @IsString()
   @MaxLength(500)
-  mission: string;
+  mission?: string;
 
   @ApiPropertyOptional({ type: [String] })
   @IsOptional()
@@ -112,6 +99,14 @@ export class PublicNameTryDto {
   @IsString({ each: true })
   @MaxLength(40, { each: true })
   values?: string[];
+
+  @ApiPropertyOptional({ type: [String], description: 'Mots-clés du formulaire d’essai' })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(10)
+  @IsString({ each: true })
+  @MaxLength(40, { each: true })
+  keywords?: string[];
 
   @ApiPropertyOptional({ enum: NameStyle, isArray: true })
   @IsOptional()

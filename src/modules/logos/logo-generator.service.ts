@@ -1,30 +1,29 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { LogoEngine, Prisma } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
-import { fontInfo, iconExists } from '../../render/assets';
-import { composeLogo } from '../../render/compose';
-import { EXCLUSIVITY_MAX_DISTANCE, hammingDistance, perceptualHash } from '../../render/export';
+import { hammingDistance, perceptualHash } from '../../render/raster';
+import type { LogoSpec } from '../../render/logo-spec';
 import {
-  generatedLogosSchema,
+  logoCompositionsSchema,
   LogoGenerationInput,
   logoGenerationInputSchema,
-  LogoSpec,
-  logoSpecSchema,
-} from '../../shared/logo-spec';
+} from '../../shared/ai-schemas';
 import { AiProvider } from '../ai/ai-provider';
+import { parseSpec, specToSvg } from './logo-source';
 
-/** Spécification utilisable : police et icône présentes dans la bibliothèque interne (§5.5). */
-export function assertLibraryAssets(spec: LogoSpec) {
-  if (!fontInfo(spec.font.id)) throw new Error(`Police hors bibliothèque : ${spec.font.id}`);
-  if (spec.taglineFont && !fontInfo(spec.taglineFont.id))
-    throw new Error(`Police hors bibliothèque : ${spec.taglineFont.id}`);
-  if (spec.icon && !iconExists(spec.icon.id))
-    throw new Error(`Icône hors bibliothèque : ${spec.icon.id}`);
+/** Distance de Hamming en deçà de laquelle un logo est jugé copié d'un autre (pHash 64 bits). */
+const SIMILARITY_THRESHOLD = 6;
+
+interface Proposal {
+  spec: LogoSpec;
+  svg: string;
+  phash: string;
 }
 
 /**
- * Étape 4 du cycle (§11.4) pour les logos, moteur A : l'IA propose des spécifications,
- * le serveur les valide, les rend, écarte celles trop proches d'un logo exclusif, enregistre.
+ * Étape 4 du cycle de génération (§11.4) pour les logos, moteur A (§5.1) : l'IA choisit icône,
+ * police, palette et disposition ; le serveur valide, compose le SVG et écarte les doublons et
+ * les logos trop proches d'un logo exclusif d'un autre client (§5.5).
  */
 @Injectable()
 export class LogoGeneratorService {
@@ -35,75 +34,101 @@ export class LogoGeneratorService {
     private readonly prisma: PrismaService,
   ) {}
 
-  async runJob(jobId: string): Promise<number> {
-    const job = await this.prisma.generationJob.findUniqueOrThrow({ where: { id: jobId } });
-    const input: LogoGenerationInput = logoGenerationInputSchema.parse(job.input);
-
-    // Quelques candidats de plus pour compenser ceux écartés par les contrôles.
-    const result = await this.ai.composeLogos(input, input.count + 4);
-    const { logos } = generatedLogosSchema.parse(result.raw);
+  async generate(rawInput: unknown, projectId: string) {
+    const input: LogoGenerationInput = logoGenerationInputSchema.parse(rawInput);
+    // Quelques compositions de plus que nécessaire : certaines peuvent être écartées.
+    const result = await this.ai.composeLogos({ ...input, count: Math.min(input.count + 4, 16) });
+    const { compositions } = logoCompositionsSchema.parse(result.raw);
 
     const exclusive = await this.prisma.logo.findMany({
-      where: { isExclusive: true, phash: { not: null }, projectId: { not: job.projectId } },
+      where: { isExclusive: true, phash: { not: null }, projectId: { not: projectId } },
       select: { phash: true },
+      take: 10_000,
     });
+    const taken = exclusive.map((l) => l.phash!);
 
-    const accepted: { spec: LogoSpec; svg: string; phash: string }[] = [];
-    for (const raw of logos) {
-      if (accepted.length >= input.count) break;
+    const proposals: Proposal[] = [];
+    const seen = new Set<string>();
+    for (const { withTagline, rationale: _rationale, ...composition } of compositions) {
+      const candidate = {
+        ...composition,
+        type: input.type,
+        text: input.text,
+        tagline: withTagline ? input.tagline : '',
+        iconId: input.type === 'MONOGRAM' ? null : composition.iconId,
+        layout: input.type === 'WORDMARK' ? ('text' as const) : composition.layout,
+        iconScale: 1,
+      };
+      let spec: LogoSpec;
       try {
-        // Le texte affiché (nom, sigle, signature) vient du projet, jamais de l'IA.
-        const spec = logoSpecSchema.parse({
-          ...raw,
-          text: input.text,
-          acronym: input.acronym && input.acronym.length <= 6 ? input.acronym : null,
-          tagline: input.tagline ?? null,
-        });
-        assertLibraryAssets(spec);
-        const { svg } = composeLogo(spec);
-        const phash = perceptualHash(svg);
-        if (exclusive.some((e) => hammingDistance(e.phash!, phash) <= EXCLUSIVITY_MAX_DISTANCE)) {
-          this.logger.debug('Proposition écartée : trop proche d’un logo exclusif');
-          continue;
-        }
-        if (accepted.some((a) => hammingDistance(a.phash, phash) <= 2)) continue; // quasi-doublon du lot
-        accepted.push({ spec, svg, phash });
-      } catch (err) {
-        this.logger.warn(`Proposition invalide ignorée : ${String(err)}`);
+        spec = parseSpec(candidate);
+      } catch {
+        this.logger.debug(
+          `Composition écartée (icône ou police hors bibliothèque) : ${JSON.stringify(composition)}`,
+        );
+        continue;
       }
+      const key = JSON.stringify(spec);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const svg = specToSvg(spec);
+      const phash = perceptualHash(svg);
+      if (taken.some((other) => hammingDistance(other, phash) <= SIMILARITY_THRESHOLD)) continue;
+      proposals.push({ spec, svg, phash });
+      if (proposals.length === input.count) break;
     }
-    if (accepted.length === 0) throw new Error('Aucune proposition de logo valide');
+
+    return {
+      input,
+      proposals,
+      provider: result.provider,
+      promptVersion: result.promptVersion,
+      costUsdMicros: result.costUsdMicros,
+    };
+  }
+
+  /** Exécution d'une tâche LOGOS par le worker : enregistre les propositions (LOGO-04). */
+  async runJob(jobId: string) {
+    const job = await this.prisma.generationJob.findUniqueOrThrow({ where: { id: jobId } });
+    const outcome = await this.generate(job.input, job.projectId);
+    if (outcome.proposals.length === 0) throw new Error('Aucune proposition de logo valide');
 
     await this.prisma.$transaction(async (tx) => {
-      for (const a of accepted) {
-        await tx.logo.create({
-          data: {
-            projectId: job.projectId,
-            jobId,
-            type: a.spec.type,
-            engine: LogoEngine.SVG_COMPOSER,
-            style: input.style,
-            phash: a.phash,
-            versions: {
-              create: {
-                number: 1,
-                label: 'Proposition',
-                spec: a.spec as Prisma.InputJsonValue,
-                svg: a.svg,
+      // Créations dans l'ordre des propositions : l'affichage suit la date de création.
+      await outcome.proposals.reduce<Promise<unknown>>(
+        (previous, proposal) =>
+          previous.then(() =>
+            tx.logo.create({
+              data: {
+                projectId: job.projectId,
+                jobId,
+                type: outcome.input.type,
+                engine: LogoEngine.SVG_COMPOSER,
+                style: outcome.input.style,
+                phash: proposal.phash,
+                versions: {
+                  create: {
+                    number: 1,
+                    label: 'Proposition',
+                    spec: proposal.spec as unknown as Prisma.InputJsonValue,
+                    svg: proposal.svg,
+                  },
+                },
               },
-            },
-          },
-        });
-      }
+            }),
+          ),
+        Promise.resolve(),
+      );
       await tx.generationJob.update({
         where: { id: jobId },
         data: {
-          provider: result.provider,
-          promptVersion: result.promptVersion,
-          costUsdMicros: result.costUsdMicros,
+          provider: outcome.provider,
+          promptVersion: outcome.promptVersion,
+          costUsdMicros: outcome.costUsdMicros,
+          result: { created: outcome.proposals.length },
         },
       });
     });
-    return accepted.length;
+    return outcome.proposals.length;
   }
 }

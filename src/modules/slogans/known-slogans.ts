@@ -1,87 +1,65 @@
-/**
- * Liste de référence interne de slogans connus (SIG-04), complétée par l'administration au fil
- * du temps. Un slogan généré trop proche est signalé, pas supprimé : l'utilisateur décide.
- */
-import { words } from '../../shared/text';
+import { normalizeText } from '../moderation/moderation.service';
 
+/**
+ * Liste de référence interne des slogans connus (SIG-04) : une proposition trop proche est
+ * écartée. Le contrôle IA complémentaire viendra avec le fournisseur réel.
+ */
 export const KNOWN_SLOGANS = [
-  'Just do it',
-  'Impossible is nothing',
-  'Think different',
-  "I'm lovin' it",
-  'Because you are worth it',
-  'Parce que vous le valez bien',
-  'Connecting people',
-  'Open happiness',
-  'Taste the feeling',
-  'The best a man can get',
-  'Il faut que ça change',
-  'Venez comme vous êtes',
-  "C'est bon la vie",
-  'Ensemble, tout devient possible',
-  'Le meilleur est à venir',
-  "L'avenir appartient à ceux qui se lèvent tôt",
-  'Unis pour le meilleur',
-  'Ensemble, on va plus loin',
-  "Plus qu'une passion",
-  'Your potential, our passion',
-  'Empowering people',
-  'Making the world a better place',
-  'Every little helps',
-  'Have it your way',
-  'The happiest place on earth',
-  'Melts in your mouth, not in your hands',
-  'Travail Justice Solidarité',
-  'Liberté Égalité Fraternité',
-  'Union Discipline Travail',
-  'Paix Travail Patrie',
+  'just do it',
+  'impossible is nothing',
+  'think different',
+  'i m lovin it',
+  'because you re worth it',
+  'connecting people',
+  'the best a man can get',
+  'open happiness',
+  'taste the feeling',
+  'have it your way',
+  'finger lickin good',
+  'the ultimate driving machine',
+  'every little helps',
+  'belong anywhere',
+  'do what you can t',
+  'be moved',
+  'everyone s invited',
+  'la vie la vraie',
+  'parce que vous le valez bien',
+  'venez comme vous etes',
+  'le meilleur est a venir',
+  'ensemble tout devient possible',
+  'la banque d un monde qui change',
+  'c est bon la france',
+  'what else',
 ];
 
-/** Similarité de Jaccard sur les mots (sans accents, ponctuation ni mots vides). */
-const STOP = new Set([
-  'le',
-  'la',
-  'les',
-  'de',
-  'des',
-  'du',
-  'un',
-  'une',
-  'et',
-  'a',
-  'the',
-  'of',
-  'to',
-  'it',
-  'is',
-  'en',
-  'pour',
-  'your',
-  'our',
-]);
-
-function tokens(s: string): Set<string> {
-  return new Set(words(s).filter((w) => !STOP.has(w)));
+function words(text: string) {
+  return normalizeText(text).trim().split(' ').filter(Boolean);
 }
 
-export function similarity(a: string, b: string): number {
-  const [ta, tb] = [tokens(a), tokens(b)];
-  if (!ta.size || !tb.size) return 0;
-  const inter = [...ta].filter((t) => tb.has(t)).length;
-  return inter / (ta.size + tb.size - inter);
+/**
+ * Similarité de Jaccard sur les bigrammes de mots, ou sur les mots seuls dès qu'un des deux
+ * textes est court.
+ */
+function similarity(a: string[], b: string[]) {
+  const short = a.length < 3 || b.length < 3;
+  const grams = (w: string[]) =>
+    new Set(short ? w : w.slice(1).map((word, i) => `${w[i]} ${word}`));
+  const x = grams(a);
+  const y = grams(b);
+  const common = [...x].filter((g) => y.has(g)).length;
+  return common / Math.max(x.size + y.size - common, 1);
 }
 
-export const SIMILARITY_THRESHOLD = 0.6;
-
-/** Slogan connu le plus proche au-delà du seuil, sinon null. */
-export function closestKnownSlogan(
-  text: string,
-  reference: string[] = KNOWN_SLOGANS,
-): string | null {
-  let best: { s: string; score: number } | null = null;
-  for (const s of reference) {
-    const score = similarity(text, s);
-    if (score >= SIMILARITY_THRESHOLD && (!best || score > best.score)) best = { s, score };
+/** Slogan connu dont la proposition est trop proche, ou null. */
+export function closeKnownSlogan(text: string, threshold = 0.6): string | null {
+  const w = words(text);
+  const joined = w.join(' ');
+  for (const known of KNOWN_SLOGANS) {
+    const k = words(known);
+    if (joined === k.join(' ')) return known;
+    // Un slogan connu de trois mots ou plus repris tel quel dans la proposition.
+    if (k.length >= 3 && ` ${joined} `.includes(` ${k.join(' ')} `)) return known;
+    if (similarity(w, k) >= threshold) return known;
   }
-  return best?.s ?? null;
+  return null;
 }

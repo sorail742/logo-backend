@@ -1,54 +1,32 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { LogoType } from '@prisma/client';
-import { Transform } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   ArrayMinSize,
   IsArray,
   IsBoolean,
-  IsEnum,
   IsIn,
   IsObject,
   IsOptional,
   IsString,
   IsUUID,
-  Length,
   Matches,
   MaxLength,
 } from 'class-validator';
-import { VARIANTS } from '../../render/variants';
-import { EXPORT_FORMATS, PNG_SIZES } from './logo-export.service';
+import { EXPORT_FORMATS, PNG_SIZES, type ExportFormat } from '../../render/logo-assets';
+import { LOGO_STYLES, LOGO_TYPES, type LogoType } from '../../render/logo-spec';
+import type { LogoStyle } from '../../render/color';
 
-export const LOGO_STYLES = [
-  'MINIMALIST',
-  'MODERN',
-  'CLASSIC',
-  'INSTITUTIONAL',
-  'PLAYFUL',
-  'AFRICAN',
-] as const;
+const HEX = /^#[0-9a-fA-F]{6}$/;
 
 export class GenerateLogosDto {
-  @ApiProperty({ enum: LogoType, isArray: true, description: 'LOGO-01' })
-  @IsArray()
-  @ArrayMinSize(1)
-  @IsEnum(LogoType, { each: true })
-  types: LogoType[];
+  @ApiProperty({ enum: LOGO_TYPES, description: 'LOGO-01' })
+  @IsIn(LOGO_TYPES)
+  type: LogoType;
 
   @ApiProperty({ enum: LOGO_STYLES, description: 'LOGO-02' })
   @IsIn(LOGO_STYLES)
-  style: (typeof LOGO_STYLES)[number];
-
-  @ApiPropertyOptional({
-    example: ['#0E7C66', '#F2A541'],
-    description: '2 à 4 couleurs ; absent = proposée par l’IA (LOGO-03)',
-  })
-  @IsOptional()
-  @IsArray()
-  @ArrayMinSize(2)
-  @ArrayMaxSize(4)
-  @Matches(/^#[0-9A-Fa-f]{6}$/, { each: true })
-  palette?: string[];
+  style: LogoStyle;
 
   @ApiPropertyOptional({ enum: ['SVG_COMPOSER', 'IMAGE_VECTORIZE'], default: 'SVG_COMPOSER' })
   @IsOptional()
@@ -56,37 +34,50 @@ export class GenerateLogosDto {
   engine?: 'SVG_COMPOSER' | 'IMAGE_VECTORIZE';
 
   @ApiPropertyOptional({
-    example: 'mêmes couleurs',
-    description: 'LOGO-06 : « plus simple », « autre icône », « mêmes couleurs »',
+    example: ['#0f766e', '#f59e0b'],
+    description: '2 à 4 couleurs ; sinon palette proposée selon le style (LOGO-03)',
   })
+  @IsOptional()
+  @IsArray()
+  @ArrayMinSize(2)
+  @ArrayMaxSize(4)
+  @Matches(HEX, { each: true })
+  palette?: string[];
+
+  @ApiPropertyOptional({ example: 'plus simple', description: 'Retour pour relancer (LOGO-06)' })
   @IsOptional()
   @IsString()
   @MaxLength(200)
   feedback?: string;
 
-  @ApiPropertyOptional({ description: 'Logo de référence pour la relance' })
+  @ApiPropertyOptional({ description: 'Logo du projet servant de référence à la relance' })
   @IsOptional()
   @IsUUID()
-  fromLogoId?: string;
-
-  @ApiPropertyOptional({ description: 'Signature affichée sous le nom' })
-  @IsOptional()
-  @IsString()
-  @MaxLength(80)
-  tagline?: string;
+  referenceLogoId?: string;
 }
 
 export class ImportLogoDto {
-  @ApiProperty({ description: 'Fichier SVG ou PNG encodé en base64 (5 Mo maximum)' })
-  @IsString()
-  @MaxLength(7_000_000)
-  fileBase64: string;
-
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ description: 'Source SVG (1 Mo au plus), nettoyée côté serveur' })
   @IsOptional()
   @IsString()
-  @Length(1, 120)
-  fileName?: string;
+  @MaxLength(1_000_000)
+  svg?: string;
+
+  @ApiPropertyOptional({ description: 'Image PNG en data URL (2 Mo au plus)' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(2_800_000)
+  @Matches(/^data:image\/png;base64,/)
+  pngDataUrl?: string;
+
+  @ApiPropertyOptional({
+    description: 'Palette extraite par le front ; sinon extraite ici (LOGO-07)',
+  })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(4)
+  @Matches(HEX, { each: true })
+  palette?: string[];
 }
 
 export class ListLogosDto {
@@ -105,53 +96,57 @@ export class UpdateLogoDto {
 }
 
 export class SaveVersionDto {
-  @ApiProperty({ description: 'LogoSpec complète (texte, police, couleurs, icône, disposition)' })
+  @ApiProperty({ description: 'Spécification du logo (LogoSpec), validée côté serveur' })
   @IsObject()
   spec: Record<string, unknown>;
 
-  @ApiPropertyOptional({ example: 'Version validée par le bureau' })
+  @ApiPropertyOptional({ example: 'Version validée par le bureau', description: 'LOGO-13' })
   @IsOptional()
   @IsString()
-  @Length(1, 80)
+  @MaxLength(60)
   label?: string;
 }
 
-export class VariantsQueryDto {
-  @ApiPropertyOptional()
+export class VariantsDto {
+  @ApiPropertyOptional({ description: 'Version à décliner (par défaut : la dernière)' })
   @IsOptional()
   @IsUUID()
   versionId?: string;
 }
 
-export class ExportLogoDto {
-  @ApiPropertyOptional({ description: 'Version à exporter ; par défaut la plus récente' })
-  @IsOptional()
-  @IsUUID()
-  versionId?: string;
-
-  @ApiProperty({ enum: EXPORT_FORMATS, isArray: true })
-  @IsArray()
-  @ArrayMinSize(1)
-  @IsIn(EXPORT_FORMATS, { each: true })
-  formats: (typeof EXPORT_FORMATS)[number][];
-
-  @ApiPropertyOptional({ enum: PNG_SIZES, isArray: true, default: [512, 1024, 2048] })
-  @IsOptional()
-  @IsArray()
-  @IsIn(PNG_SIZES, { each: true })
-  pngSizes?: (typeof PNG_SIZES)[number][];
-
-  @ApiPropertyOptional({ enum: VARIANTS, isArray: true, default: ['color'] })
-  @IsOptional()
-  @IsArray()
-  @ArrayMinSize(1)
-  @IsIn(VARIANTS, { each: true })
-  variants?: (typeof VARIANTS)[number][];
-
+export class LogoVariantsDto extends VariantsDto {
   @ApiPropertyOptional({
-    description: 'Pack icônes d’app : favicon, Apple, Android, iOS (LOGO-22)',
+    description: 'Version blanche sans fond (pose sur une création du Studio)',
+    default: false,
   })
   @IsOptional()
   @IsBoolean()
-  appIcons?: boolean;
+  transparent?: boolean;
+}
+
+export class ExportLogoDto extends VariantsDto {
+  @ApiPropertyOptional({ enum: EXPORT_FORMATS, isArray: true, default: EXPORT_FORMATS })
+  @IsOptional()
+  @IsArray()
+  @ArrayMinSize(1)
+  @IsIn(EXPORT_FORMATS, { each: true })
+  formats?: ExportFormat[];
+
+  @ApiPropertyOptional({ enum: PNG_SIZES, isArray: true, default: PNG_SIZES })
+  @IsOptional()
+  @IsArray()
+  @ArrayMinSize(1)
+  @Type(() => Number)
+  @IsIn(PNG_SIZES, { each: true })
+  sizes?: number[];
+
+  @ApiPropertyOptional({ default: true, description: 'Pack icônes d’app (LOGO-22)' })
+  @IsOptional()
+  @IsBoolean()
+  iconPack?: boolean;
+
+  @ApiPropertyOptional({ default: true, description: 'Formats réseaux sociaux (LOGO-23)' })
+  @IsOptional()
+  @IsBoolean()
+  social?: boolean;
 }

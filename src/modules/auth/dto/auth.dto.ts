@@ -1,13 +1,8 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import {
-  IsEmail,
-  IsOptional,
-  IsString,
-  Length,
-  Matches,
-  MaxLength,
-  MinLength,
-} from 'class-validator';
+import { IsEmail, IsOptional, IsString, Length, Matches, MaxLength, MinLength } from 'class-validator';
+
+/** Code TOTP (6 chiffres) ou code de secours (8 caractères, tiret facultatif). */
+const TOTP_OR_BACKUP_CODE = /^(\s*\d{3}\s?\d{3}\s*|[0-9a-z]{4}-?[0-9a-z]{4})$/i;
 
 export class RegisterDto {
   @ApiProperty({ example: 'aissatou@example.org' })
@@ -42,10 +37,10 @@ export class LoginDto {
   password: string;
 
   @ApiPropertyOptional({
-    description: 'Code TOTP à 6 chiffres si la double authentification est active',
+    description: 'Code TOTP à 6 chiffres, ou code de secours xxxx-xxxx, si la double authentification est active',
   })
   @IsOptional()
-  @Matches(/^\d{6}$/)
+  @Matches(TOTP_OR_BACKUP_CODE)
   totpCode?: string;
 }
 
@@ -56,7 +51,7 @@ export class GoogleLoginDto {
 
   @ApiPropertyOptional()
   @IsOptional()
-  @Matches(/^\d{6}$/)
+  @Matches(TOTP_OR_BACKUP_CODE)
   totpCode?: string;
 }
 

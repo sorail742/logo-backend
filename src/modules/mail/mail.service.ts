@@ -35,7 +35,7 @@ export class MailService {
   }
 
   sendPasswordReset(to: string, token: string) {
-    const url = this.link(`/mot-de-passe/reinitialiser?token=${encodeURIComponent(token)}`);
+    const url = this.link(`/reinitialiser-mot-de-passe?token=${encodeURIComponent(token)}`);
     return this.send({
       to,
       subject: 'Réinitialisation de votre mot de passe',
@@ -45,7 +45,7 @@ export class MailService {
   }
 
   sendInvitation(to: string, workspaceName: string, token: string) {
-    const url = this.link(`/invitations/${encodeURIComponent(token)}`);
+    const url = this.link(`/invitation/${encodeURIComponent(token)}`);
     return this.send({
       to,
       subject: `Invitation à rejoindre « ${workspaceName} »`,
@@ -53,8 +53,20 @@ export class MailService {
       text: `Rejoindre l'espace ${workspaceName} : ${url}`,
     });
   }
+
+  /** Notification par e-mail (COL-03) : titre, texte et lien vers l'application. */
+  sendNotification(to: string, content: { title: string; body: string; href: string | null }) {
+    const url = content.href ? this.link(content.href) : null;
+    const action = url ? `<p><a href="${escapeHtml(url)}">Ouvrir dans l’application</a></p>` : '';
+    return this.send({
+      to,
+      subject: content.title,
+      html: `<p><strong>${escapeHtml(content.title)}</strong></p><p>${escapeHtml(content.body)}</p>${action}`,
+      text: url ? `${content.body}\n\n${url}` : content.body,
+    });
+  }
 }
 
 export function escapeHtml(s: string): string {
-  return s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+  return s.replace(/[&<>"']/g, (c) => `&#${c.codePointAt(0)};`);
 }

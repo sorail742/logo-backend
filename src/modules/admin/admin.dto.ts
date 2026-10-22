@@ -68,6 +68,25 @@ export class AdjustCreditsDto {
   reason: string;
 }
 
+export class CreditRequestDecisionDto {
+  @ApiProperty({ description: 'true : appliquer l’ajustement ; false : le refuser' })
+  @IsBoolean()
+  approve: boolean;
+
+  @ApiPropertyOptional({ description: 'Note de décision (motif d’un refus)' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  note?: string;
+}
+
+export class ListCreditRequestsDto {
+  @ApiPropertyOptional({ enum: ['PENDING', 'APPROVED', 'REJECTED'] })
+  @IsOptional()
+  @IsIn(['PENDING', 'APPROVED', 'REJECTED'])
+  status?: 'PENDING' | 'APPROVED' | 'REJECTED';
+}
+
 export class BlockedTermDto {
   @ApiProperty()
   @IsString()
@@ -102,4 +121,16 @@ export class AuditQueryDto extends CursorPaginationDto {
   @IsString()
   @MaxLength(80)
   entityId?: string;
+}
+
+export class ReviewSignatureDto {
+  @ApiProperty({ enum: ['APPROVE', 'REJECT'] })
+  @IsIn(['APPROVE', 'REJECT'])
+  decision: 'APPROVE' | 'REJECT';
+
+  @ApiPropertyOptional({ description: 'Motif transmis à l’espace (obligatoire en pratique pour un refus)' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  note?: string;
 }

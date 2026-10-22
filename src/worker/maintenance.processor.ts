@@ -1,18 +1,21 @@
 import { InjectQueue, Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger, OnApplicationBootstrap } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { AssetKind } from '@prisma/client';
 import { Job, Queue } from 'bullmq';
 import { PrismaService } from '../common/prisma/prisma.service';
+import { StorageService } from '../common/storage/storage.service';
 import { MAINTENANCE_QUEUE } from '../shared/queues';
 import { CreditsService } from '../modules/credits/credits.service';
 import { EXPORT_RETENTION_DAYS } from '../modules/logos/logo-export.service';
-import { StorageService } from '../modules/storage/storage.service';
 import { TRASH_RETENTION_DAYS } from '../modules/projects/projects.service';
 
 const ACCOUNT_RETENTION_DAYS = 30;
 const REFRESH_TOKEN_GRACE_DAYS = 7;
 
-/** Tâches nocturnes : purge de la corbeille et des comptes supprimés, contrôle des soldes (§12.1, §14.3). */
+/**
+ * Tâches nocturnes : purge de la corbeille, des comptes supprimés et des exports expirés,
+ * contrôle des soldes (§12.1, §14.3).
+ */
 @Processor(MAINTENANCE_QUEUE)
 export class MaintenanceProcessor extends WorkerHost implements OnApplicationBootstrap {
   private readonly logger = new Logger(MaintenanceProcessor.name);
@@ -50,47 +53,55 @@ export class MaintenanceProcessor extends WorkerHost implements OnApplicationBoo
       },
       select: { id: true },
     });
-    for (const { id } of users) {
-      await this.prisma.$transaction([
-        this.prisma.oAuthAccount.deleteMany({ where: { userId: id } }),
-        this.prisma.refreshToken.deleteMany({ where: { userId: id } }),
-        this.prisma.membership.deleteMany({ where: { userId: id } }),
-        this.prisma.user.update({
-          where: { id },
-          data: {
-            email: null,
-            phone: null,
-            passwordHash: null,
-            totpSecret: null,
-            avatarUrl: null,
-            fullName: 'Compte supprimé',
-          },
-        }),
-      ]);
-    }
+    await Promise.all(
+      users.map(({ id }) =>
+        this.prisma.$transaction([
+          this.prisma.oAuthAccount.deleteMany({ where: { userId: id } }),
+          this.prisma.refreshToken.deleteMany({ where: { userId: id } }),
+          this.prisma.membership.deleteMany({ where: { userId: id } }),
+          this.prisma.user.update({
+            where: { id },
+            data: {
+              email: null,
+              phone: null,
+              passwordHash: null,
+              totpSecret: null,
+              avatarUrl: null,
+              fullName: 'Compte supprimé',
+            },
+          }),
+        ]),
+      ),
+    );
 
     const tokens = await this.prisma.refreshToken.deleteMany({
       where: { expiresAt: { lt: new Date(now - REFRESH_TOKEN_GRACE_DAYS * day) } },
     });
 
-    // Archives d'export : lien valable 7 jours, puis suppression ; l'export reste régénérable (§7.4).
-    const oldExports = await this.prisma.generationJob.findMany({
+    // Exports mis à disposition 7 jours : fichier puis enregistrement.
+    const exports = await this.prisma.asset.findMany({
       where: {
-        kind: 'EXPORT_ZIP',
-        finishedAt: { lt: new Date(now - EXPORT_RETENTION_DAYS * day) },
-        output: { not: Prisma.DbNull },
+        kind: AssetKind.EXPORT,
+        createdAt: { lt: new Date(now - EXPORT_RETENTION_DAYS * day) },
       },
-      select: { id: true, output: true },
+      select: { id: true, storageKey: true },
     });
-    for (const job of oldExports) {
-      const key = (job.output as { key?: string } | null)?.key;
-      if (key)
-        await this.storage
-          .delete(key)
-          .catch((err) => this.logger.warn(`Suppression ${key} : ${String(err)}`));
-      await this.prisma.generationJob.update({
-        where: { id: job.id },
-        data: { output: Prisma.DbNull },
+    // Fichier supprimé d'abord ; la ligne ne disparaît que si le fichier est bien parti.
+    const deletions = await Promise.allSettled(
+      exports.map((asset) => this.storage.delete(asset.storageKey)),
+    );
+    const purged = exports.filter((_, i) => deletions[i].status === 'fulfilled');
+    await this.prisma.asset.deleteMany({ where: { id: { in: purged.map((asset) => asset.id) } } });
+    // Kits dont la charte ou l'archive vient d'être purgée : régénérables sans coût (§7.4).
+    const purgedKeys = purged.map((asset) => asset.storageKey);
+    if (purgedKeys.length) {
+      await this.prisma.brandKit.updateMany({
+        where: { guidePdfKey: { in: purgedKeys } },
+        data: { guidePdfKey: null },
+      });
+      await this.prisma.brandKit.updateMany({
+        where: { zipKey: { in: purgedKeys } },
+        data: { zipKey: null },
       });
     }
 
@@ -101,7 +112,7 @@ export class MaintenanceProcessor extends WorkerHost implements OnApplicationBoo
       purgedProjects: projects.count,
       anonymizedUsers: users.length,
       purgedTokens: tokens.count,
-      purgedExports: oldExports.length,
+      purgedExports: purged.length,
       balanceDrift: drift.length,
     };
     this.logger.log(summary, 'Maintenance nocturne terminée');

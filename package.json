@@ -19,12 +19,13 @@
     "test": "jest",
     "test:cov": "jest --coverage",
     "test:smoke": "node test/smoke.e2e.mjs",
+    "test:permissions": "node test/permissions.e2e.mjs",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
     "prisma:seed": "prisma db seed",
-    "postinstall": "prisma generate",
-    "test:smoke:paid": "node test/paid-flows.e2e.cjs"
+    "fonts:fetch": "node scripts/fetch-fonts.mjs",
+    "postinstall": "prisma generate"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
@@ -32,22 +33,6 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1152.0",
     "@aws-sdk/s3-request-presigner": "^3.1152.0",
-    "@fontsource/archivo-black": "^5.3.0",
-    "@fontsource/bebas-neue": "^5.3.0",
-    "@fontsource/dancing-script": "^5.3.0",
-    "@fontsource/great-vibes": "^5.3.0",
-    "@fontsource/inter": "^5.3.0",
-    "@fontsource/josefin-sans": "^5.3.0",
-    "@fontsource/lora": "^5.3.0",
-    "@fontsource/merriweather": "^5.3.0",
-    "@fontsource/montserrat": "^5.3.0",
-    "@fontsource/nunito": "^5.3.0",
-    "@fontsource/oswald": "^5.3.0",
-    "@fontsource/pacifico": "^5.3.0",
-    "@fontsource/playfair-display": "^5.3.0",
-    "@fontsource/poppins": "^5.3.0",
-    "@fontsource/raleway": "^5.3.0",
-    "@fontsource/roboto-slab": "^5.3.0",
     "@nestjs/bullmq": "^11.0.5",
     "@nestjs/common": "^11.1.0",
     "@nestjs/config": "^4.0.4",
@@ -59,8 +44,6 @@
     "@nestjs/throttler": "^6.4.0",
     "@prisma/client": "^6.19.0",
     "@resvg/resvg-js": "^2.6.2",
-    "@tabler/icons": "^3.49.0",
-    "archiver": "^7.0.1",
     "argon2": "^0.41.1",
     "bullmq": "^5.56.0",
     "class-transformer": "^0.5.1",
@@ -69,17 +52,17 @@
     "google-auth-library": "^9.15.1",
     "helmet": "^8.1.0",
     "ioredis": "^5.6.1",
+    "jpeg-js": "^0.4.4",
     "nestjs-pino": "^4.4.0",
     "nodemailer": "^6.10.1",
     "opentype.js": "^1.3.4",
     "otplib": "^12.0.1",
-    "pdfkit": "^0.17.2",
+    "pdfkit": "^0.20.2",
     "pino-http": "^10.5.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
-    "sharp": "^0.34.5",
     "svg-to-pdfkit": "^0.1.8",
-    "svgo": "^3.3.5",
+    "svgo": "^4.1.0",
     "zod": "^3.25.0"
   },
   "devDependencies": {
@@ -87,7 +70,6 @@
     "@nestjs/cli": "^11.0.7",
     "@nestjs/schematics": "^11.0.5",
     "@nestjs/testing": "^11.1.0",
-    "@types/archiver": "^6.0.4",
     "@types/cookie-parser": "^1.4.9",
     "@types/express": "^5.0.3",
     "@types/jest": "^29.5.14",
@@ -110,23 +92,14 @@
     "typescript-eslint": "^8.35.0"
   },
   "jest": {
-    "moduleFileExtensions": [
-      "js",
-      "json",
-      "ts"
-    ],
+    "moduleFileExtensions": ["js", "json", "ts"],
     "rootDir": "src",
     "testRegex": ".*\\.spec\\.ts$",
     "transform": {
       "^.+\\.ts$": "ts-jest"
     },
-    "collectCoverageFrom": [
-      "**/*.service.ts",
-      "**/*.util.ts",
-      "shared/**/*.ts"
-    ],
+    "collectCoverageFrom": ["**/*.service.ts", "**/*.util.ts", "shared/**/*.ts", "render/**/*.ts"],
     "coverageDirectory": "../coverage",
-    "testEnvironment": "node",
-    "testTimeout": 30000
+    "testEnvironment": "node"
   }
 }

@@ -4,6 +4,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { LoggerModule } from 'nestjs-pino';
 import { PrismaModule } from './common/prisma/prisma.module';
 import { RedisModule } from './common/redis/redis.module';
+import { StorageModule } from './common/storage/storage.module';
 import { redisConnection } from './common/utils/redis-connection.util';
 import { validateEnv } from './config/env';
 import { AiModule } from './modules/ai/ai.module';
@@ -12,9 +13,9 @@ import { CreditsModule } from './modules/credits/credits.module';
 import { JobsModule } from './modules/jobs/jobs.module';
 import { MailModule } from './modules/mail/mail.module';
 import { ModerationModule } from './modules/moderation/moderation.module';
-import { StorageModule } from './modules/storage/storage.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
 
-/** Socle partagé par l'API et les workers : configuration, logs, base, Redis, files, services transverses. */
+/** Socle partagé par l'API et les workers : configuration, logs, base, Redis, files, stockage, services transverses. */
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, validate: validateEnv, cache: true }),
@@ -24,9 +25,7 @@ import { StorageModule } from './modules/storage/storage.module';
         pinoHttp: {
           level: config.get('NODE_ENV') === 'production' ? 'info' : 'debug',
           transport:
-            config.get('NODE_ENV') === 'development'
-              ? { target: 'pino-pretty', options: { singleLine: true } }
-              : undefined,
+            config.get('NODE_ENV') === 'development' ? { target: 'pino-pretty', options: { singleLine: true } } : undefined,
           redact: ['req.headers.authorization', 'req.headers.cookie', 'res.headers["set-cookie"]'],
           autoLogging: { ignore: (req) => req.url?.includes('/health') ?? false },
         },
@@ -40,12 +39,13 @@ import { StorageModule } from './modules/storage/storage.module';
     }),
     PrismaModule,
     RedisModule,
+    StorageModule,
     AuditModule,
     CreditsModule,
     MailModule,
     AiModule,
     ModerationModule,
-    StorageModule,
+    NotificationsModule,
     JobsModule,
   ],
 })

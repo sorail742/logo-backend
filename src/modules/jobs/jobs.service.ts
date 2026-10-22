@@ -12,10 +12,11 @@ import { Queue } from 'bullmq';
 import Redis from 'ioredis';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { REDIS } from '../../common/redis/redis.module';
+import { StorageService } from '../../common/storage/storage.service';
 import { FREE_DAILY_QUOTAS } from '../../shared/credit-costs';
 import { GENERATION_ATTEMPTS, GENERATION_QUEUE, GenerationJobData } from '../../shared/queues';
 import { CreditsService } from '../credits/credits.service';
-import { StorageService } from '../storage/storage.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 export interface EnqueueParams {
   workspaceId: string;
@@ -28,7 +29,7 @@ export interface EnqueueParams {
 }
 
 const IDEMPOTENCY_TTL_S = 24 * 3600;
-const TERMINAL: JobStatus[] = [JobStatus.SUCCEEDED, JobStatus.FAILED, JobStatus.CANCELED];
+const TERMINAL = new Set<JobStatus>([JobStatus.SUCCEEDED, JobStatus.FAILED, JobStatus.CANCELED]);
 
 @Injectable()
 export class JobsService {
@@ -38,6 +39,7 @@ export class JobsService {
     @InjectQueue(GENERATION_QUEUE) private readonly queue: Queue<GenerationJobData>,
     @Inject(REDIS) private readonly redis: Redis,
     private readonly storage: StorageService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   /**
@@ -68,6 +70,7 @@ export class JobsService {
             input: p.input,
             costCredits,
             status: JobStatus.QUEUED,
+            requestedById: p.actorId,
           },
         });
         // Décrément conditionnel : en cas de course, la transaction entière est annulée.
@@ -94,6 +97,14 @@ export class JobsService {
         },
       );
       await this.redis.set(redisKey, job.id, 'EX', IDEMPOTENCY_TTL_S);
+      if (job.costCredits > 0) {
+        const { creditBalance } = await this.credits.balance(p.workspaceId);
+        await this.notifications.creditsDebited(
+          p.workspaceId,
+          creditBalance + job.costCredits,
+          creditBalance,
+        );
+      }
       return { jobId: job.id, costCredits: job.costCredits };
     } catch (err) {
       await this.redis.del(redisKey);
@@ -125,13 +136,18 @@ export class JobsService {
     if (usedToday < quota) return 0;
 
     throw new HttpException(
-      { message: 'Crédits insuffisants et quota gratuit du jour atteint', quota, usedToday },
+      {
+        message: 'Crédits insuffisants et quota gratuit du jour atteint',
+        code: 'INSUFFICIENT_CREDITS',
+        quota,
+        usedToday,
+      },
       HttpStatus.PAYMENT_REQUIRED,
     );
   }
 
-  /** État d'une tâche ; pour un export prêt, lien de téléchargement signé de 15 minutes. */
-  async get(jobId: string) {
+  /** Tâche ; ses fichiers ne sont signés que pour qui peut télécharger (§3). */
+  async get(jobId: string, { canDownload = true }: { canDownload?: boolean } = {}) {
     const job = await this.prisma.generationJob.findUniqueOrThrow({
       where: { id: jobId },
       select: {
@@ -141,28 +157,51 @@ export class JobsService {
         status: true,
         costCredits: true,
         error: true,
+        result: true,
         createdAt: true,
         startedAt: true,
         finishedAt: true,
-        output: true,
       },
     });
-    const output = job.output as { key?: string; fileName?: string; expiresAt?: string } | null;
-    const { output: _o, ...rest } = job;
-    if (job.status !== JobStatus.SUCCEEDED || !output?.key) return { ...rest, result: output };
-    const expired = !!output.expiresAt && new Date(output.expiresAt) < new Date();
-    const { key: _k, ...publicOutput } = output;
     return {
-      ...rest,
-      result: publicOutput,
-      downloadUrl: expired
-        ? null
-        : await this.storage.signedUrl(output.key, { downloadName: output.fileName }),
+      ...job,
+      result: canDownload ? await this.publicResult(job.result) : withoutFiles(job.result),
     };
   }
 
+  /**
+   * Résultat exposé : un fichier produit est servi par une URL signée tant qu'il existe ; une
+   * liste d'images (Studio) l'est image par image.
+   */
+  private async publicResult(result: Prisma.JsonValue) {
+    if (!result || typeof result !== 'object' || Array.isArray(result)) return result;
+    const record = result as Record<string, Prisma.JsonValue>;
+    if (Array.isArray(record.images)) {
+      const images = await Promise.all(
+        (record.images as { assetId: string; storageKey: string; width: number; height: number }[]).map(
+          async ({ assetId, storageKey, width, height }) => {
+            const exists = await this.prisma.asset.count({ where: { id: assetId } });
+            return exists
+              ? { url: await this.storage.signedUrl(storageKey, { inline: true }), width, height }
+              : null;
+          },
+        ),
+      );
+      return { ...record, images: images.filter((i) => i !== null), expired: images.some((i) => !i) };
+    }
+    const { storageKey, assetId, ...rest } = record;
+    if (typeof storageKey !== 'string' || typeof assetId !== 'string') return result;
+    const asset = await this.prisma.asset.findUnique({
+      where: { id: assetId },
+      select: { name: true },
+    });
+    if (!asset) return { ...rest, expired: true };
+    const downloadUrl = await this.storage.signedUrl(storageKey, { fileName: asset.name });
+    return { ...rest, downloadUrl };
+  }
+
   isTerminal(status: JobStatus) {
-    return TERMINAL.includes(status);
+    return TERMINAL.has(status);
   }
 }
 
@@ -173,4 +212,11 @@ function validateIdempotencyKey(key: string | undefined): string {
     );
   }
   return key;
+}
+
+/** Résultat sans fichier ni lien : ce que voit un lecteur non autorisé à télécharger. */
+function withoutFiles(result: Prisma.JsonValue): Prisma.JsonValue {
+  if (!result || typeof result !== 'object' || Array.isArray(result)) return result;
+  const { storageKey: _key, assetId: _asset, images, ...rest } = result as Record<string, Prisma.JsonValue>;
+  return { ...rest, ...(Array.isArray(images) && { images: [] }), restricted: true };
 }

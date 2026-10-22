@@ -20,6 +20,9 @@ import {
   AdminUpdateUserDto,
   AuditQueryDto,
   BlockedTermDto,
+  CreditRequestDecisionDto,
+  ListCreditRequestsDto,
+  ReviewSignatureDto,
 } from './admin.dto';
 import { AdminService } from './admin.service';
 
@@ -46,7 +49,9 @@ export class AdminController {
     return this.admin.getUser(uid);
   }
 
+  /** Suspension, 2FA et rôle : admin au moins (le rôle, super admin), sur un rang inférieur. */
   @Patch('users/:uid')
+  @Roles('ADMIN')
   updateUser(
     @CurrentUser() actor: AuthUser,
     @Param('uid', ParseUUIDPipe) uid: string,
@@ -63,6 +68,28 @@ export class AdminController {
     return this.admin.adjustCredits(actor, dto, ip);
   }
 
+  /** Le support propose un ajustement ; un admin le valide ou le refuse (§3). */
+  @Post('credits/requests')
+  requestCredits(@CurrentUser() actor: AuthUser, @Body() dto: AdjustCreditsDto, @ClientIp() ip: string) {
+    return this.admin.requestCreditAdjustment(actor, dto, ip);
+  }
+
+  @Get('credits/requests')
+  creditRequests(@Query() q: ListCreditRequestsDto) {
+    return this.admin.creditRequests(q);
+  }
+
+  @Patch('credits/requests/:id')
+  @Roles('ADMIN')
+  decideCredits(
+    @CurrentUser() actor: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: CreditRequestDecisionDto,
+    @ClientIp() ip: string,
+  ) {
+    return this.admin.decideCreditRequest(actor, id, dto, ip);
+  }
+
   @Get('blocked-terms')
   @Roles('ADMIN')
   blockedTerms() {
@@ -71,11 +98,7 @@ export class AdminController {
 
   @Post('blocked-terms')
   @Roles('ADMIN')
-  addBlockedTerm(
-    @CurrentUser() actor: AuthUser,
-    @Body() dto: BlockedTermDto,
-    @ClientIp() ip: string,
-  ) {
+  addBlockedTerm(@CurrentUser() actor: AuthUser, @Body() dto: BlockedTermDto, @ClientIp() ip: string) {
     return this.admin.addBlockedTerm(actor, dto, ip);
   }
 
@@ -88,6 +111,25 @@ export class AdminController {
     @ClientIp() ip: string,
   ) {
     return this.admin.removeBlockedTerm(actor, id, ip);
+  }
+
+  // ─── Modération (§6.4, ADM-11) ───
+
+  @Get('moderation')
+  moderation() {
+    return this.admin.moderationQueue();
+  }
+
+  /** Modération d'un contenu signalé : support compris (§3). */
+  @Patch('signatures/:sid/review')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  reviewSignature(
+    @CurrentUser() actor: AuthUser,
+    @Param('sid', ParseUUIDPipe) sid: string,
+    @Body() dto: ReviewSignatureDto,
+    @ClientIp() ip: string,
+  ) {
+    return this.admin.reviewSignature(actor, sid, dto, ip);
   }
 
   @Get('audit-logs')

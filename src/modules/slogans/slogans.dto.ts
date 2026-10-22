@@ -1,62 +1,35 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Transform, Type } from 'class-transformer';
-import {
-  IsBoolean,
-  IsIn,
-  IsInt,
-  IsOptional,
-  IsString,
-  IsUUID,
-  Max,
-  MaxLength,
-  Min,
-} from 'class-validator';
-import { SLOGAN_TONES } from '../../shared/ai-schemas';
+import { ApiPropertyOptional } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
+import { IsBoolean, IsIn, IsInt, IsOptional, IsString, Length, Max, Min } from 'class-validator';
+import { SLOGAN_KINDS, SLOGAN_TONES } from '../../shared/ai-schemas';
 
 export class GenerateSlogansDto {
-  @ApiProperty({
-    enum: SLOGAN_TONES,
-    description: 'Inspirant, institutionnel, accrocheur, engagé (SIG-01)',
-  })
+  @ApiPropertyOptional({ enum: SLOGAN_TONES, default: 'INSPIRING' })
+  @IsOptional()
   @IsIn(SLOGAN_TONES)
-  tone: (typeof SLOGAN_TONES)[number];
+  tone?: (typeof SLOGAN_TONES)[number];
+
+  @ApiPropertyOptional({
+    enum: SLOGAN_KINDS,
+    default: 'SLOGAN',
+    description: 'DEVISE et MISSION : SIG-03',
+  })
+  @IsOptional()
+  @IsIn(SLOGAN_KINDS)
+  kind?: (typeof SLOGAN_KINDS)[number];
+
+  @ApiPropertyOptional({ default: 8, description: 'Nombre de mots au plus (SIG-02)' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(3)
+  @Max(20)
+  maxWords?: number;
 
   @ApiPropertyOptional({ enum: ['fr', 'en'], default: 'fr' })
   @IsOptional()
   @IsIn(['fr', 'en'])
   language?: 'fr' | 'en';
-
-  @ApiPropertyOptional({
-    default: 8,
-    minimum: 2,
-    maximum: 20,
-    description: 'Nombre de mots maximal (SIG-02)',
-  })
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(2)
-  @Max(20)
-  maxWords?: number;
-
-  @ApiPropertyOptional({ example: 'plus court' })
-  @IsOptional()
-  @IsString()
-  @MaxLength(200)
-  feedback?: string;
-}
-
-export class ListSlogansDto {
-  @ApiPropertyOptional({ enum: ['SLOGAN', 'DEVISE', 'MISSION'] })
-  @IsOptional()
-  @IsIn(['SLOGAN', 'DEVISE', 'MISSION'])
-  kind?: string;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @Transform(({ value }) => value === 'true' || value === true)
-  @IsBoolean()
-  favorites?: boolean;
 }
 
 export class UpdateSloganDto {
@@ -65,14 +38,16 @@ export class UpdateSloganDto {
   @IsBoolean()
   isFavorite?: boolean;
 
-  @ApiPropertyOptional({ description: 'Un seul slogan retenu par type (slogan, devise, mission)' })
+  @ApiPropertyOptional({
+    description: 'Retient ce slogan ; les autres du même type ne le sont plus',
+  })
   @IsOptional()
   @IsBoolean()
   isChosen?: boolean;
-}
 
-export class SloganLogoDto {
-  @ApiProperty({ description: 'Logo auquel ajouter le slogan comme signature (SIG-05)' })
-  @IsUUID()
-  logoId: string;
+  @ApiPropertyOptional({ description: 'Retouche du texte' })
+  @IsOptional()
+  @IsString()
+  @Length(2, 300)
+  text?: string;
 }

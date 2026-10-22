@@ -1,244 +1,275 @@
-import { contrastRatio } from '../shared/color';
+import { inflateRawSync } from 'node:zlib';
+import { contrastRatio, ensureContrast, extractPalette } from './color';
+import { closestWeight, shapeText } from './fonts';
+import { searchIcons } from './icons';
+import { buildExportEntries, renderVariants } from './logo-assets';
+import { initials, renderLogoSvg } from './logo';
+import { DEFAULT_SPEC, logoSpecSchema, type LogoSpec } from './logo-spec';
+import { svgToPdf } from './pdf';
 import {
-  generatedLogosSchema,
-  logoGenerationInputSchema,
-  LogoSpec,
-  logoSpecSchema,
-} from '../shared/logo-spec';
-import { mockComposeLogos } from '../modules/ai/providers/mock-logos';
-import { licences, zipFiles } from '../modules/logos/logo-export.service';
-import { FONTS, iconExists, loadFont, searchIcons } from './assets';
-import { composeLogo, initials } from './compose';
-import {
-  appIconPack,
+  buildIco,
   hammingDistance,
-  optimizeSvg,
   perceptualHash,
-  toIco,
-  toPng,
-  watermark,
-} from './export';
-import { sanitizeSvg, sniffImage, svgPalette } from './sanitize';
-import { renderMockups, renderVariant, VARIANTS } from './variants';
+  pngSize,
+  svgToJpeg,
+  svgToPixels,
+  svgToPng,
+} from './raster';
+import { optimizeSvg, recolorSvg, sanitizeSvg, svgSize } from './svg';
+import { createZip } from './zip';
 
-const spec = (over: Partial<LogoSpec> = {}): LogoSpec =>
-  logoSpecSchema.parse({
-    type: 'ICON_TEXT',
-    layout: 'horizontal',
-    text: 'Leso',
-    tagline: 'Jeunesse et avenir',
-    font: { id: 'montserrat', weight: 800 },
-    colors: { primary: '#0E7C66', secondary: '#F2A541', text: '#1F2937' },
-    icon: { id: 'leaf', container: 'circle' },
-    ...over,
+const spec = (patch: Partial<LogoSpec> = {}): LogoSpec => ({
+  ...DEFAULT_SPEC,
+  text: 'Kalossa',
+  ...patch,
+});
+
+describe('shapeText — texte en tracés', () => {
+  it('mesure le texte avec les métriques réelles et l’espacement', () => {
+    const tight = shapeText('Kalossa', { fontId: 'montserrat', weight: 700, size: 64 });
+    const spaced = shapeText('Kalossa', {
+      fontId: 'montserrat',
+      weight: 700,
+      size: 64,
+      letterSpacing: 10,
+    });
+    expect(tight.width).toBeGreaterThan(200);
+    expect(spaced.width).toBeCloseTo(tight.width + 60, 0);
   });
 
-const colorsIn = (svg: string) =>
-  new Set([...svg.matchAll(/(?:fill|stroke)="(#[0-9A-Fa-f]{6})"/g)].map((m) => m[1].toUpperCase()));
+  it('centre le tracé sur le point d’ancrage', () => {
+    const shaped = shapeText('AB', { fontId: 'oswald', weight: 700, size: 40 });
+    const xs = [...shaped.toPath(100, 50, 'middle').matchAll(/M([\d.]+)/g)].map((m) =>
+      Number(m[1]),
+    );
+    expect(Math.min(...xs)).toBeGreaterThan(100 - shaped.width / 2 - 1);
+    expect(Math.min(...xs)).toBeLessThan(100);
+  });
 
-describe('bibliothèque', () => {
-  it.each(FONTS.flatMap((f) => f.weights.map((w) => [f.id, w] as const)))(
-    'police %s %i chargeable',
-    (id, w) => {
-      expect(loadFont(id, w).unitsPerEm).toBeGreaterThan(0);
+  it('dessine les lettres d’Afrique de l’Ouest grâce au sous-ensemble latin étendu', () => {
+    const shaped = shapeText('Ɓantal ŋ', { fontId: 'playfair', weight: 700, size: 64 });
+    expect(shaped.toPath(0, 64).length).toBeGreaterThan(500);
+  });
+
+  it('choisit la graisse disponible la plus proche', () => {
+    expect(closestWeight('bebas-neue', 800)).toBe(400);
+    expect(closestWeight('montserrat', 750)).toBe(700);
+  });
+});
+
+describe('renderLogoSvg — moteur A', () => {
+  it.each(['horizontal', 'vertical', 'icon', 'text'] as const)(
+    'disposition %s sans élément <text>',
+    (layout) => {
+      const { svg, width, height } = renderLogoSvg(spec({ layout, tagline: 'Ensemble' }));
+      expect(svg).not.toContain('<text');
+      expect(svg).toContain(`viewBox="0 0 ${width} ${height}"`);
+      expect(svg).toContain('<title>Kalossa</title>');
     },
   );
 
-  it('les polices couvrent les accents français', () => {
-    const font = loadFont('montserrat', 700);
-    for (const ch of 'éèêàçùôîÉÇ') expect(font.charToGlyph(ch).index).toBeGreaterThan(0);
+  it('dispose un emblème en badge rond et un logotype sans symbole', () => {
+    const emblem = renderLogoSvg(spec({ type: 'EMBLEM' }));
+    expect(emblem.width).toBe(emblem.height);
+    const wordmark = renderLogoSvg(spec({ type: 'WORDMARK', layout: 'horizontal' }));
+    expect(wordmark.svg).not.toContain('<circle');
   });
 
-  it('recherche d’icônes par étiquette', () => {
-    expect(searchIcons('leaf', 5).map((i) => i.id)).toContain('leaf');
-    expect(iconExists('heart-handshake')).toBe(true);
+  it('corrige le contraste texte / fond à 4,5:1 (§5.5)', () => {
+    const { svg } = renderLogoSvg(
+      spec({
+        colors: {
+          primary: '#0f766e',
+          secondary: '#f59e0b',
+          text: '#dddddd',
+          background: '#ffffff',
+        },
+      }),
+    );
+    const fills = [...svg.matchAll(/<path d="[^"]+" fill="(#[0-9a-f]{6})"/g)].map((m) => m[1]);
+    expect(fills.length).toBeGreaterThan(0);
+    expect(contrastRatio(fills[0], '#ffffff')).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('ajoute le filigrane de l’offre gratuite', () => {
+    expect(renderLogoSvg(spec(), { watermark: 'APERÇU' }).svg).toContain('<use href="#wm"');
+  });
+
+  it('forme les initiales du monogramme comme l’aperçu du front', () => {
+    expect(initials('Kaloum Jeunesse Unie')).toBe('KJ');
+    expect(initials('AS de Kaloum')).toBe('AK');
+    expect(initials('Wouri Santé')).toBe('WS');
   });
 });
 
-describe('composeLogo', () => {
-  it('convertit tout le texte en tracés (§5.5)', () => {
-    const { svg, width, height } = composeLogo(spec());
-    expect(svg).not.toMatch(/<text[\s>]/);
-    expect(svg).toMatch(/viewBox="0 0 [\d.]+ [\d.]+"/);
-    expect(width).toBeGreaterThan(height);
+describe('logoSpecSchema', () => {
+  it('refuse une police ou une icône hors bibliothèque', () => {
+    expect(logoSpecSchema.safeParse(spec({ fontId: 'comic-sans' })).success).toBe(false);
+    expect(logoSpecSchema.safeParse(spec({ iconId: 'inconnue' })).success).toBe(false);
+    expect(logoSpecSchema.safeParse(spec()).success).toBe(true);
+  });
+});
+
+describe('couleurs', () => {
+  it('assombrit une couleur trop claire', () => {
+    expect(contrastRatio(ensureContrast('#fde68a', '#ffffff'), '#ffffff')).toBeGreaterThanOrEqual(
+      4.5,
+    );
   });
 
-  it('rend chaque type et chaque disposition', () => {
-    for (const type of ['WORDMARK', 'MONOGRAM', 'ICON_TEXT', 'EMBLEM'] as const) {
-      for (const layout of ['horizontal', 'vertical', 'icon', 'text'] as const) {
-        const s = spec({ type, layout, emblem: type === 'EMBLEM' ? { shape: 'shield' } : null });
-        expect(() => toPng(composeLogo(s).svg, 64)).not.toThrow();
-      }
-    }
+  it('extrait les couleurs dominantes en ignorant le fond blanc', () => {
+    const { data } = svgToPixels(
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><rect width="10" height="5" fill="#ce1126"/><rect y="5" width="10" height="5" fill="#ffffff"/></svg>',
+      { size: 64 },
+    );
+    expect(extractPalette(data)[0]).toBe('#ce1126');
+  });
+});
+
+describe('sanitizeSvg — import (§14.1)', () => {
+  const evil =
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" onload="x()"><script>x()</script>' +
+    '<foreignObject><iframe src="http://evil"/></foreignObject><a href="javascript:x()"><circle r="4" fill="#123456"/></a>' +
+    '<image href="http://evil/p.png"/><use href="http://evil/s.svg#a"/><rect width="2" height="2" style="fill:url(http://evil);stroke:#00ff00"/></svg>';
+
+  it('retire scripts, événements, liens et ressources externes en gardant le dessin', () => {
+    const clean = sanitizeSvg(evil)!;
+    expect(clean).not.toMatch(/script|onload|iframe|foreignObject|javascript|evil|<image|<use/i);
+    expect(clean).toContain('<circle');
+    expect(clean).toContain('stroke:#0f0');
   });
 
-  it('monogramme sans pastille', () => {
-    const s = spec({
-      type: 'MONOGRAM',
-      acronym: 'AJA',
-      icon: { id: 'leaf', container: 'none', scale: 1.4 },
+  it('refuse les DTD, le HTML et le texte quelconque', () => {
+    expect(sanitizeSvg('<!DOCTYPE svg [<!ENTITY a "b">]><svg/>')).toBeNull();
+    expect(sanitizeSvg('<html><body/></html>')).toBeNull();
+    expect(sanitizeSvg('pas du SVG <<')).toBeNull();
+  });
+
+  it('recolore un logo importé pour les variantes noir et blanc', () => {
+    const recolored = recolorSvg(
+      '<svg xmlns="http://www.w3.org/2000/svg"><path d="M0 0h4v4z" fill="#ff0000" stroke="none"/></svg>',
+      '#111111',
+    );
+    expect(recolored).toContain('fill="#111111"');
+    expect(recolored).toContain('stroke="none"');
+  });
+});
+
+describe('rendu matriciel et fichiers', () => {
+  const { svg } = renderLogoSvg(spec());
+
+  it('produit un PNG à la taille demandée, côté le plus long', () => {
+    const size = pngSize(svgToPng(svg, { size: 1024 }))!;
+    expect(Math.max(size.width, size.height)).toBe(1024);
+    expect(pngSize(svgToPng(svg, { size: 180, square: true, padding: 0.08 }))).toEqual({
+      width: 180,
+      height: 180,
     });
-    expect(() => toPng(composeLogo(s).svg, 64)).not.toThrow();
   });
 
-  it('corrige un texte trop peu contrasté (4,5:1)', () => {
-    const { svg } = composeLogo(spec({ colors: { primary: '#0E7C66', text: '#DDDDDD' } }));
-    const textColor = [...colorsIn(svg)].find((c) => c !== '#0E7C66' && c !== '#F2A541');
-    expect(contrastRatio(textColor!, '#FFFFFF')).toBeGreaterThanOrEqual(4.5);
+  it('produit un JPG', () => {
+    expect(svgToJpeg(svg, { size: 256 }).subarray(0, 3).toString('hex')).toBe('ffd8ff');
   });
 
-  it('initiales : sigle, sinon premières lettres', () => {
-    expect(initials({ text: 'Jeunesse Verte Guinée', acronym: null })).toBe('JVG');
-    expect(initials({ text: 'Leso', acronym: 'ajl' })).toBe('AJL');
-  });
-});
-
-describe('variantes (LOGO-20) et mises en situation (LOGO-05)', () => {
-  it('noir et blanc sont strictement monochromes', () => {
-    expect(colorsIn(renderVariant(spec(), 'black').svg)).toEqual(new Set(['#000000']));
-    expect(colorsIn(renderVariant(spec(), 'white').svg)).toEqual(new Set(['#FFFFFF']));
-  });
-
-  it('produit les six variantes et les quatre mises en situation', () => {
-    for (const v of VARIANTS) expect(renderVariant(spec(), v).svg).toContain('<svg');
-    const m = renderMockups(spec());
-    for (const svg of Object.values(m)) expect(() => toPng(svg, 100)).not.toThrow();
-  });
-});
-
-describe('exports', () => {
-  it('pack icônes : 7 PNG + favicon.ico multi-tailles (LOGO-22)', async () => {
-    const pack = appIconPack(renderVariant({ ...spec(), layout: 'icon' }, 'white'), '#0E7C66');
-    expect(Object.keys(pack)).toHaveLength(8);
-    const ico = pack['favicon.ico'];
+  it('assemble un favicon.ico 16/32/48 (LOGO-22)', () => {
+    const ico = buildIco(svg);
     expect(ico.readUInt16LE(2)).toBe(1);
     expect(ico.readUInt16LE(4)).toBe(3);
+    expect([ico[6], ico[22], ico[38]]).toEqual([16, 32, 48]);
   });
 
-  it('ICO : en-tête et entrées cohérents', () => {
-    const png = toPng(composeLogo(spec()).svg, 16);
-    const ico = toIco([{ size: 16, data: png }]);
-    expect(ico.readUInt32LE(6 + 8)).toBe(png.length);
-    expect(ico.readUInt32LE(6 + 12)).toBe(22);
+  it('produit un PDF vectoriel sans police embarquée', async () => {
+    const pdf = await svgToPdf(optimizeSvg(svg), { title: 'Kalossa' });
+    expect(pdf.subarray(0, 5).toString()).toBe('%PDF-');
+    expect(pdf.toString('latin1')).not.toContain('/FontFile');
   });
 
-  it('SVGO optimise sans planter, toutes icônes candidates (régression users-group)', () => {
-    for (const icon of [
-      'users-group',
-      'leaf',
-      'heart-handshake',
-      'school',
-      'device-mobile',
-      'building',
-    ]) {
-      for (const font of ['josefin-sans', 'montserrat', 'playfair-display']) {
-        const logo = composeLogo(
-          spec({
-            font: { id: font, weight: 700 },
-            icon: { id: icon, container: 'none', scale: 1.4 },
-          }),
-        );
-        const out = optimizeSvg(logo.svg);
-        expect(out).toContain('viewBox');
-        expect(out.length).toBeLessThanOrEqual(logo.svg.length);
-      }
-    }
+  it('écrit une archive ZIP lisible', () => {
+    const zip = createZip([
+      { path: 'a/LICENCES.txt', data: 'bonjour'.repeat(20) },
+      { path: 'a/logo.png', data: Buffer.from([1, 2, 3]) },
+    ]);
+    expect(zip.readUInt32LE(0)).toBe(0x04034b50);
+    const nameLength = zip.readUInt16LE(26);
+    const compressed = zip.readUInt32LE(18);
+    const body = zip.subarray(30 + nameLength, 30 + nameLength + compressed);
+    expect(inflateRawSync(body).toString()).toBe('bonjour'.repeat(20));
+    expect(zip.readUInt32LE(zip.length - 22)).toBe(0x06054b50);
+    expect(zip.readUInt16LE(zip.length - 12)).toBe(2);
   });
 
-  it('filigrane ajouté (LOGO-24)', () => {
-    const logo = composeLogo(spec());
-    expect(watermark(logo).length).toBeGreaterThan(logo.svg.length);
-  });
-
-  it('LICENCES.txt liste police et icône', () => {
-    const txt = licences(spec());
-    expect(txt).toContain('Montserrat');
-    expect(txt).toContain('OFL');
-    expect(txt).toContain('Tabler Icons');
-  });
-
-  it('archive ZIP valide', async () => {
-    const zip = await zipFiles({ 'a.txt': Buffer.from('x') });
-    expect(zip.subarray(0, 2).toString()).toBe('PK');
+  it('lit la taille d’un SVG', () => {
+    expect(svgSize('<svg viewBox="0 0 320 120"/>')).toEqual({ width: 320, height: 120 });
   });
 });
 
 describe('empreinte perceptuelle (§5.5)', () => {
-  it('stable pour un même logo, éloignée pour un logo différent', () => {
-    const a = perceptualHash(composeLogo(spec()).svg);
-    expect(perceptualHash(composeLogo(spec()).svg)).toBe(a);
-    const b = perceptualHash(
-      composeLogo(spec({ type: 'EMBLEM', emblem: { shape: 'shield' } })).svg,
-    );
-    expect(hammingDistance(a, b)).toBeGreaterThan(6);
-  });
-
-  it('proche pour une simple nuance de couleur', () => {
-    const a = perceptualHash(composeLogo(spec()).svg);
-    const b = perceptualHash(
-      composeLogo(spec({ colors: { primary: '#0F806A', secondary: '#F2A541', text: '#1F2937' } }))
-        .svg,
-    );
-    expect(hammingDistance(a, b)).toBeLessThanOrEqual(6);
+  it('rapproche deux rendus identiques et distingue deux logos différents', () => {
+    const a = perceptualHash(renderLogoSvg(spec()).svg);
+    const same = perceptualHash(renderLogoSvg(spec()).svg);
+    const other = perceptualHash(renderLogoSvg(spec({ type: 'EMBLEM', iconId: 'trophy' })).svg);
+    expect(hammingDistance(a, same)).toBe(0);
+    expect(hammingDistance(a, other)).toBeGreaterThan(10);
   });
 });
 
-describe('logos importés (§14.1)', () => {
-  it('retire scripts, gestionnaires, liens externes et foreignObject', () => {
-    const dirty = `<?xml version="1.0"?><svg xmlns="http://www.w3.org/2000/svg" onload="alert(1)"><script>alert(2)</script><foreignObject><div/></foreignObject><a href="javascript:alert(3)"><rect fill="#123456"/></a><image href="https://evil.example/x.png"/><use href="#ok"/><rect style="fill:url(https://evil.example/f)"/></svg>`;
-    const clean = sanitizeSvg(dirty);
-    expect(clean).not.toMatch(/script|onload|foreignObject|javascript|evil\.example/i);
-    expect(clean).toContain('href="#ok"');
+describe('variantes et exports (§5.4)', () => {
+  it('produit les 6 variantes d’un logo composé, 3 pour un logo importé', () => {
+    expect(renderVariants({ kind: 'spec', spec: spec() }).map((v) => v.id)).toEqual([
+      'color',
+      'black',
+      'white',
+      'icon',
+      'horizontal',
+      'vertical',
+    ]);
+    const imported = {
+      kind: 'svg' as const,
+      svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><circle cx="5" cy="5" r="4" fill="#123456"/></svg>',
+      title: 'X',
+      background: '#ffffff',
+    };
+    expect(renderVariants(imported).map((v) => v.id)).toEqual(['color', 'black', 'white']);
   });
 
-  it('refuse les entités XML', () => {
-    expect(() => sanitizeSvg('<!DOCTYPE x [<!ENTITY a "b">]><svg></svg>')).toThrow();
+  it('livre la version blanche sans fond pour le Studio', () => {
+    const white = (transparent: boolean) =>
+      renderVariants({ kind: 'spec', spec: spec() }, transparent).find((v) => v.id === 'white')!.svg;
+    // Fond plein de la taille du logo (rectangle, ou tracé une fois optimisé par SVGO).
+    const background = /<rect[^>]*fill="#1{3,6}"|<path fill="#1{3,6}" d="M0 0h[\d.]+v[\d.]+H0z"/i;
+    expect(white(false)).toMatch(background);
+    expect(white(true)).not.toMatch(background);
   });
 
-  it('identifie le type par signature binaire', () => {
-    expect(sniffImage(Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"/>'))).toBe('svg');
-    expect(sniffImage(toPng(composeLogo(spec()).svg, 16))).toBe('png');
-    expect(sniffImage(Buffer.from('GIF89a'))).toBeNull();
-  });
-
-  it('extrait la palette d’un SVG', () => {
-    expect(
-      svgPalette(
-        '<svg><rect fill="#0E7C66"/><rect fill="#0e7c66"/><path stroke="#F2A541"/><rect fill="#fff"/></svg>',
-      ),
-    ).toEqual(['#0E7C66', '#F2A541']);
+  it('range un export complet : SVG, PDF, PNG, JPG, icônes d’app, réseaux sociaux, licences', async () => {
+    const entries = await buildExportEntries(
+      { kind: 'spec', spec: spec({ iconId: 'graduation-cap' }) },
+      'kalossa',
+      {
+        formats: ['svg', 'pdf', 'png', 'jpg'],
+        sizes: [512, 1024, 2048],
+        iconPack: true,
+        social: true,
+        watermark: null,
+      },
+    );
+    const paths = entries.map((e) => e.path);
+    expect(paths).toHaveLength(6 * 5 + 3 + 5 + 8 + 1);
+    expect(paths).toContain('kalossa/svg/kalossa-couleur.svg');
+    expect(paths).toContain('kalossa/pdf/kalossa-vertical.pdf');
+    expect(paths).toContain('kalossa/png/kalossa-blanc-2048.png');
+    expect(paths).toContain('kalossa/jpg/kalossa-couleur-1024.jpg');
+    expect(paths).toContain('kalossa/icones-app/favicon.ico');
+    expect(paths).toContain('kalossa/reseaux-sociaux/linkedin-banniere-1584x396.png');
+    const licences = String(entries.find((e) => e.path.endsWith('LICENCES.txt'))!.data);
+    expect(licences).toMatch(/Montserrat — SIL Open Font License/);
+    expect(licences).toMatch(/graduation-cap — Lucide, licence ISC/);
   });
 });
 
-describe('fournisseur factice (moteur A)', () => {
-  const input = logoGenerationInputSchema.parse({
-    text: 'Jeunesse Verte',
-    acronym: 'AJV',
-    entityType: 'ASSOCIATION',
-    brief: {
-      sector: 'Environnement',
-      mission: 'Planter des arbres avec les jeunes',
-      values: ['écologie', 'solidarité'],
-    },
-    types: ['ICON_TEXT', 'MONOGRAM', 'WORDMARK', 'EMBLEM'],
-    style: 'AFRICAN',
-  });
-
-  it('produit des spécifications valides et rendables, avec des icônes pertinentes', () => {
-    const { logos } = generatedLogosSchema.parse({ logos: mockComposeLogos(input, 8) });
-    expect(logos).toHaveLength(8);
-    for (const l of logos) expect(() => composeLogo(l)).not.toThrow();
-    const icons = logos.map((l) => l.icon?.id).filter(Boolean);
-    expect(
-      icons.some((i) => ['leaf', 'trees', 'recycle', 'heart-handshake', 'tree'].includes(i!)),
-    ).toBe(true);
-  });
-
-  it('« mêmes couleurs » reprend la palette de référence', () => {
-    const reference = spec({
-      colors: { primary: '#AA0000', secondary: '#00AA00', text: '#111111' },
-    });
-    const logos = mockComposeLogos({ ...input, feedback: 'mêmes couleurs', reference }, 4);
-    expect(logos.every((l) => l.colors.primary === '#AA0000')).toBe(true);
+describe('bibliothèque', () => {
+  it('trouve une icône sans tenir compte des accents', () => {
+    expect(searchIcons('ecole').map((i) => i.id)).toContain('graduation-cap');
+    expect(searchIcons('').length).toBeGreaterThan(30);
   });
 });

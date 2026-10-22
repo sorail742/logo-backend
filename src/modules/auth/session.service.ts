@@ -11,6 +11,7 @@ export interface SessionMeta {
 }
 
 export interface IssuedSession {
+  userId: string;
   accessToken: string;
   refreshToken: string;
   refreshExpiresAt: Date;
@@ -51,7 +52,7 @@ export class SessionService {
     });
 
     const accessToken = await this.jwt.signAsync({ sub: user.id, role: user.role, mfa });
-    return { accessToken, refreshToken, refreshExpiresAt };
+    return { userId: user.id, accessToken, refreshToken, refreshExpiresAt };
   }
 
   async rotate(refreshToken: string, meta: SessionMeta): Promise<IssuedSession> {

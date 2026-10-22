@@ -93,6 +93,7 @@ enum SignatureStatus {
 enum JobKind {
   NAMES
   LOGOS
+  LOGO_EXPORT
   SLOGANS
   SIGNATURE
   BRAND_GUIDE
@@ -101,6 +102,8 @@ enum JobKind {
   APPAREL_MOCKUP
   PRODUCTION_PACK
   NUMBER_FONT
+  DESIGN_EXPORT
+  STUDIO_IMAGES
 }
 
 enum JobStatus {
@@ -148,6 +151,7 @@ enum AssetKind {
   EXPORT
   UPLOAD
   AVATAR
+  GENERATED
 }
 
 enum LicenseKind {
@@ -171,6 +175,7 @@ model User {
   role            PlatformRole @default(USER)
   emailVerifiedAt DateTime?
   totpSecret      String? // chiffré (AES-256-GCM)
+  totpBackupCodes String[]     @default([]) // empreintes SHA-256 des codes de secours non utilisés
   suspendedAt     DateTime?
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
@@ -209,13 +214,18 @@ model RefreshToken {
 }
 
 model Workspace {
-  id            String        @id @default(uuid())
-  name          String
-  slug          String        @unique
-  kind          WorkspaceKind @default(PERSONAL)
-  creditBalance Int           @default(0) // cache du grand livre
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  id              String        @id @default(uuid())
+  name            String
+  slug            String        @unique
+  kind            WorkspaceKind @default(PERSONAL)
+  creditBalance   Int           @default(0) // cache du grand livre
+  // Lecteurs autorisés à télécharger les fichiers et exports (§3, « si autorisé »)
+  viewerDownloads Boolean       @default(false)
+  // Espace supprimé par son propriétaire ou un admin : invisible, projets purgés après 30 jours ;
+  // le grand livre, les paiements et l'abonnement restent conservés.
+  deletedAt       DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
 
   members           Membership[]
   invitations       Invitation[]
@@ -226,6 +236,7 @@ model Workspace {
   associationProofs AssociationProof[]
   printShops        PrintShopProfile[]
   numberFonts       NumberFontSet[]
+  creditRequests    CreditAdjustmentRequest[]
 }
 
 model Membership {
@@ -272,6 +283,7 @@ model Project {
   signatures     Signature[]
   brandKits      BrandKit[]
   apparelDesigns ApparelDesign[]
+  studioDesigns  StudioDesign[]
   jobs           GenerationJob[]
   comments       Comment[]
 
@@ -413,10 +425,30 @@ model BrandKit {
   shareToken        String?   @unique
   sharePasswordHash String?
   shareExpiresAt    DateTime?
+  content           Json      @default("{}") // instantané : nom, sigle, origine, slogan, devise, mission
+  restoredFrom      Int? // version restaurée (KIT-06)
   createdAt         DateTime  @default(now())
   project           Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@unique([projectId, version])
+}
+
+// Création du Studio : publication, affiche, flyer, carte… (document de pages et d'éléments)
+model StudioDesign {
+  id          String   @id @default(uuid())
+  projectId   String
+  name        String
+  format      String // identifiant du format (post-square, flyer-a4…) ou custom
+  width       Int
+  height      Int
+  doc         Json // DesignDoc validé (render/design-doc.ts)
+  thumbnail   String? // aperçu PNG en data URL, produit par l'éditeur
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, updatedAt])
 }
 
 // ─── Génération et bibliothèque ───
@@ -430,8 +462,10 @@ model GenerationJob {
   promptVersion String?
   costCredits   Int
   costUsdMicros Int? // coût IA réel
-  output        Json? // résultat (ex. clé de l'archive d'export)
+  output        Json? // colonne de la première version des exports, remplacée par result
   error         String?
+  result        Json? // sortie d'une tâche sans entité dédiée (export : fichier et lien)
+  requestedById String? // auteur de la demande, prévenu quand un export est prêt (COL-03)
   startedAt     DateTime?
   finishedAt    DateTime?
   createdAt     DateTime         @default(now())
@@ -459,6 +493,7 @@ model Asset {
 
 model Template {
   id         String      @id @default(uuid())
+  key        String?     @unique // identifiant stable partagé avec le front (« classic », « round »…)
   kind       String // EMAIL_SIGNATURE | STAMP | BRAND_GUIDE
   name       String
   content    Json
@@ -543,6 +578,23 @@ model CreditLedgerEntry {
   @@index([workspaceId, createdAt])
 }
 
+// Ajustement de crédits proposé par le support, appliqué après validation d'un admin (§3).
+model CreditAdjustmentRequest {
+  id            String    @id @default(uuid())
+  workspaceId   String
+  delta         Int
+  reason        String
+  status        String    @default("PENDING") // PENDING | APPROVED | REJECTED
+  requestedById String
+  decidedById   String?
+  decisionNote  String?
+  decidedAt     DateTime?
+  createdAt     DateTime  @default(now())
+  workspace     Workspace @relation(fields: [workspaceId], references: [id])
+
+  @@index([status, createdAt])
+}
+
 model AssociationProof {
   id           String    @id @default(uuid())
   workspaceId  String
@@ -557,15 +609,26 @@ model AssociationProof {
 
 // ─── Suivi ───
 model Comment {
-  id         String   @id @default(uuid())
-  projectId  String
-  authorId   String
-  targetType String // NAME | LOGO | SIGNATURE | SLOGAN
-  targetId   String
-  body       String
-  createdAt  DateTime @default(now())
-  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  author     User     @relation(fields: [authorId], references: [id])
+  id           String    @id @default(uuid())
+  projectId    String
+  authorId     String
+  targetType   String // PROJECT | NAME | LOGO | SIGNATURE | SLOGAN | KIT | DESIGN
+  targetId     String
+  body         String
+  /// Épingle sur une création du Studio : { pageId, x, y } en proportion de la page (0 à 1).
+  anchor       Json?
+  /// Réponse dans le fil d'un commentaire (un seul niveau).
+  parentId     String?
+  resolvedAt   DateTime?
+  resolvedById String?
+  createdAt    DateTime  @default(now())
+  project      Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  author       User      @relation(fields: [authorId], references: [id])
+  parent       Comment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies      Comment[] @relation("CommentReplies")
+
+  @@index([projectId, createdAt])
+  @@index([parentId])
 }
 
 model Notification {

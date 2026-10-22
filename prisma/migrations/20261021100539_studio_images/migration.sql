@@ -1,0 +1,5 @@
+-- AlterEnum
+ALTER TYPE "AssetKind" ADD VALUE 'GENERATED';
+
+-- AlterEnum
+ALTER TYPE "JobKind" ADD VALUE 'STUDIO_IMAGES';

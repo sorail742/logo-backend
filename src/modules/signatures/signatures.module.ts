@@ -1,13 +1,12 @@
 import { Module } from '@nestjs/common';
-import {
-  AdminSignaturesController,
-  PublicSignaturesController,
-  SignaturesController,
-} from './signatures.controller';
+import { SignatureBatchService } from './signature-batch.service';
+import { SignatureBrandService } from './signature-brand.service';
+import { SignaturesController } from './signatures.controller';
 import { SignaturesService } from './signatures.service';
 
 @Module({
-  controllers: [SignaturesController, PublicSignaturesController, AdminSignaturesController],
-  providers: [SignaturesService],
+  controllers: [SignaturesController],
+  providers: [SignaturesService, SignatureBrandService, SignatureBatchService],
+  exports: [SignatureBatchService, SignatureBrandService],
 })
 export class SignaturesModule {}

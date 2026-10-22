@@ -2,59 +2,40 @@ import {
   Body,
   Controller,
   Get,
+  Headers,
   HttpCode,
   HttpStatus,
   Param,
   ParseUUIDPipe,
   Patch,
   Post,
-  Query,
   Res,
-  StreamableFile,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiHeader, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import type { Response } from 'express';
+import { randomUUID } from 'node:crypto';
 import type { AuthUser, WorkspaceContext } from '../../common/auth-user';
-import {
-  ClientIp,
-  CurrentUser,
-  CurrentWorkspace,
-  Public,
-  Roles,
-  WorkspaceAccess,
-} from '../../common/decorators';
+import { CurrentUser, CurrentWorkspace, Public, WorkspaceAccess } from '../../common/decorators';
+import { AuditService } from '../audit/audit.service';
+import { projectEvent } from '../projects/project-activity';
 import {
   BatchSignaturesDto,
   CreateSignatureDto,
-  HandwritingProposalsDto,
   PublicEmailSignatureDto,
-  ReviewSignatureDto,
-  SignatureFileQueryDto,
   UpdateSignatureDto,
 } from './signatures.dto';
 import { SignaturesService } from './signatures.service';
 
-/** Signatures e-mail, paraphes et cachets (§6.2 à §6.4, §13.6). */
+/** Module 3 — signatures e-mail, paraphes et cachets (§6.2 à 6.4, §13.6). */
 @ApiTags('signatures')
 @ApiBearerAuth()
 @Controller()
 export class SignaturesController {
-  constructor(private readonly signatures: SignaturesService) {}
-
-  @Post('projects/:pid/signatures')
-  @WorkspaceAccess('EDITOR')
-  create(
-    @Param('pid', ParseUUIDPipe) pid: string,
-    @Body() dto: CreateSignatureDto,
-    @CurrentUser() user: AuthUser,
-    @CurrentWorkspace() ws: WorkspaceContext,
-  ) {
-    return this.signatures.create(
-      { projectId: pid, workspaceId: ws.workspaceId, actorId: user.id },
-      dto,
-    );
-  }
+  constructor(
+    private readonly signatures: SignaturesService,
+    private readonly audit: AuditService,
+  ) {}
 
   @Get('projects/:pid/signatures')
   @WorkspaceAccess('VIEWER')
@@ -62,25 +43,41 @@ export class SignaturesController {
     return this.signatures.list(pid);
   }
 
-  @Post('projects/:pid/signatures/handwritten/proposals')
+  @Post('projects/:pid/signatures')
   @WorkspaceAccess('EDITOR')
-  @HttpCode(HttpStatus.OK)
-  proposals(@Param('pid', ParseUUIDPipe) _pid: string, @Body() dto: HandwritingProposalsDto) {
-    return this.signatures.handwritingProposals(dto.fullName, dto.ink);
+  async create(
+    @Param('pid', ParseUUIDPipe) pid: string,
+    @Body() dto: CreateSignatureDto,
+    @CurrentUser() user: AuthUser,
+    @CurrentWorkspace() ws: WorkspaceContext,
+  ) {
+    const signature = await this.signatures.create(
+      { projectId: pid, workspaceId: ws.workspaceId, actorId: user.id },
+      dto,
+    );
+    await this.audit.log(projectEvent(pid, user.id, 'signatures.create', { kind: dto.kind }));
+    return signature;
   }
 
   @Post('projects/:pid/signatures/batch')
   @WorkspaceAccess('EDITOR')
-  batch(
+  @HttpCode(HttpStatus.ACCEPTED)
+  @ApiHeader({ name: 'Idempotency-Key', required: false, description: 'Générée si absente' })
+  async batch(
     @Param('pid', ParseUUIDPipe) pid: string,
     @Body() dto: BatchSignaturesDto,
     @CurrentUser() user: AuthUser,
     @CurrentWorkspace() ws: WorkspaceContext,
+    @Headers('idempotency-key') idempotencyKey?: string,
   ) {
-    return this.signatures.batch(
+    // Gratuit en crédits : la clé d'idempotence est facultative.
+    const result = await this.signatures.batch(
       { projectId: pid, workspaceId: ws.workspaceId, actorId: user.id },
       dto,
+      idempotencyKey ?? randomUUID(),
     );
+    await this.audit.log(projectEvent(pid, user.id, 'signatures.batch', result));
+    return result;
   }
 
   @Get('signatures/:sid')
@@ -91,17 +88,21 @@ export class SignaturesController {
 
   @Patch('signatures/:sid')
   @WorkspaceAccess('EDITOR')
-  update(
+  async update(
     @Param('sid', ParseUUIDPipe) sid: string,
     @Body() dto: UpdateSignatureDto,
     @CurrentUser() user: AuthUser,
     @CurrentWorkspace() ws: WorkspaceContext,
   ) {
-    return this.signatures.update(
+    const signature = await this.signatures.update(
       { projectId: ws.projectId!, workspaceId: ws.workspaceId, actorId: user.id },
       sid,
       dto,
     );
+    await this.audit.log(
+      projectEvent(ws.projectId!, user.id, 'signatures.update', { kind: signature.kind }),
+    );
+    return signature;
   }
 
   @Get('signatures/:sid/html')
@@ -112,63 +113,27 @@ export class SignaturesController {
 
   @Get('signatures/:sid/file')
   @WorkspaceAccess('EDITOR')
-  file(@Param('sid', ParseUUIDPipe) sid: string, @Query() q: SignatureFileQueryDto) {
-    return this.signatures.file(sid, q.format);
+  file(@Param('sid', ParseUUIDPipe) sid: string) {
+    return this.signatures.fileUrl(sid);
   }
-}
 
-/** Accès public : essai sans compte et images des signatures e-mail. */
-@ApiTags('signatures')
-@Public()
-@Controller('public')
-export class PublicSignaturesController {
-  constructor(private readonly signatures: SignaturesService) {}
-
-  @Post('email-signature')
-  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @Public()
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  @Post('public/email-signature')
   @HttpCode(HttpStatus.OK)
-  tryEmail(@ClientIp() ip: string, @Body() dto: PublicEmailSignatureDto) {
-    return this.signatures.publicEmail(ip, dto);
+  publicEmail(@Body() dto: PublicEmailSignatureDto) {
+    return this.signatures.publicEmail(dto);
   }
 
-  /** Images référencées par les signatures e-mail ; nom immuable, cache long. */
-  @Get('signature-assets/:sid/:file')
-  @Throttle({ default: { limit: 600, ttl: 60_000 } })
-  async asset(
-    @Param('sid', ParseUUIDPipe) sid: string,
-    @Param('file') file: string,
-    @Res({ passthrough: true }) res: Response,
-  ) {
-    const png = await this.signatures.publicAsset(sid, file);
-    res.set({
-      'Content-Type': 'image/png',
-      'Cache-Control': 'public, max-age=31536000, immutable',
-      'Cross-Origin-Resource-Policy': 'cross-origin',
-    });
-    return new StreamableFile(png);
-  }
-}
-
-/** Cachets en validation manuelle (§6.4, ADM-12, §13.9). */
-@ApiTags('admin')
-@ApiBearerAuth()
-@Roles('SUPPORT')
-@Controller('admin')
-export class AdminSignaturesController {
-  constructor(private readonly signatures: SignaturesService) {}
-
-  @Get('moderation')
-  moderation() {
-    return this.signatures.pendingReview();
-  }
-
-  @Patch('signatures/:sid/review')
-  review(
-    @Param('sid', ParseUUIDPipe) sid: string,
-    @Body() dto: ReviewSignatureDto,
-    @CurrentUser() user: AuthUser,
-    @ClientIp() ip: string,
-  ) {
-    return this.signatures.review(user.id, sid, dto.decision, dto.note, ip);
+  /** Logo des signatures e-mail : les messageries chargent l'image sans authentification. */
+  @Public()
+  @Throttle({ default: { limit: 300, ttl: 60_000 } })
+  @Get('public/signatures/:sid/logo.png')
+  async logo(@Param('sid', ParseUUIDPipe) sid: string, @Res() res: Response) {
+    const png = await this.signatures.logoPng(sid);
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    // Affichée par les webmails et l'aperçu du front, servis depuis d'autres origines.
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    res.type('image/png').send(png);
   }
 }
