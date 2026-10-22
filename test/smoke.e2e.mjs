@@ -1,4 +1,4 @@
-// Test de fumée de bout en bout (phases 1 à 5, module 5, Studio, avis, images et photos) contre une API et un worker lancés localement.
+// Test de fumée de bout en bout (phases 1 à 5, module 5, site web, Studio, avis, images et photos) contre une API et un worker lancés localement.
 // Usage : npm run test:smoke   (API=http://hote/api/v1 pour une autre cible, hôte déclaré dans TRUSTED_HOSTS)
 import { PrismaClient } from '@prisma/client';
 import otplib from 'otplib';
@@ -600,6 +600,112 @@ check('suppression : auteur oui, autre éditeur non', deleteOthers.status === 40
 const invite = await call('POST', `/workspaces/${org.json.id}/invitations`, { token, body: { role: 'VIEWER', email: mfaEmail } });
 const inviteeNotifs = await call('GET', '/notifications', { token: adminToken });
 check('invitation notifiée à un utilisateur inscrit (COL-03)', invite.status === 201 && inviteeNotifs.json.items?.some((n) => n.type === 'INVITATION' && n.href?.startsWith('/invitation/')), invite.json.detail);
+
+// ─── Site web de la marque ───
+const noSite = await call('GET', `/projects/${pid}/website`, { token });
+check('site : aucun au départ', noSite.status === 200 && noSite.json.website === null, noSite.json);
+const site = await call('POST', `/projects/${pid}/website`, { token });
+const webid = site.json.id;
+const siteContent = site.json.content;
+check(
+  'site : créé depuis le projet (slogan, 7 sections, couleurs du logo)',
+  site.status === 201 && /^[a-z0-9][a-z0-9-]{1,46}[a-z0-9]$/.test(site.json.slug) && siteContent?.sections.length === 7 &&
+    siteContent.sections[0].type === 'hero' && siteContent.sections[0].subtitle === chosen2.json.text &&
+    /^#[0-9a-f]{6}$/i.test(siteContent.colors.primary) && site.json.published === false && site.json.free === false,
+  site.json.detail ?? site.json.slug,
+);
+check('site : un seul par projet', (await call('POST', `/projects/${pid}/website`, { token })).status === 409);
+const badSite = structuredClone(siteContent);
+badSite.fonts.heading.id = 'comic-sans';
+check('site : contenu invalide → 400', (await call('PATCH', `/websites/${webid}`, { token, body: { content: badSite } })).status === 400);
+const PNG_1PX = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+const siteMedia = await call('POST', `/websites/${webid}/media`, { token, body: { dataUrl: `data:image/png;base64,${PNG_1PX}`, alt: 'Notre équipe' } });
+const fakeMedia = await call('POST', `/websites/${webid}/media`, { token, body: { dataUrl: `data:image/png;base64,${Buffer.from('<svg onload=x>').toString('base64')}` } });
+const mediaFile = siteMedia.status === 201 ? await fetch(trusted(siteMedia.json.url)) : null;
+check(
+  'site : image téléversée (signature PNG vérifiée), servie sans authentification',
+  siteMedia.status === 201 && fakeMedia.status === 400 && mediaFile?.status === 200 && mediaFile.headers.get('content-type') === 'image/png' &&
+    mediaFile.headers.get('cross-origin-resource-policy') === 'cross-origin',
+  [siteMedia.status, fakeMedia.status, mediaFile?.status],
+);
+const siteEdited = structuredClone(siteContent);
+siteEdited.sections[0].image = { kind: 'media', id: siteMedia.json.id, alt: 'Notre équipe' };
+siteEdited.sections.find((s) => s.type === 'testimonials').visible = true;
+const unknownMedia = structuredClone(siteEdited);
+unknownMedia.sections[0].image.id = crypto.randomUUID();
+check('site : image d’un autre site refusée', (await call('PATCH', `/websites/${webid}`, { token, body: { content: unknownMedia } })).status === 400);
+const siteSlug = `fumee-${Date.now().toString(36)}`;
+const badSlugs = await Promise.all(['admin', 'Mon Site', 'a'].map((slug) => call('PATCH', `/websites/${webid}`, { token, body: { slug } })));
+check('site : adresse réservée ou invalide → 400', badSlugs.every((r) => r.status === 400), badSlugs.map((r) => r.status));
+const patched = await call('PATCH', `/websites/${webid}`, { token, body: { content: siteEdited, slug: siteSlug } });
+check('site : contenu et adresse enregistrés', patched.status === 200 && patched.json.slug === siteSlug && patched.json.content.sections[0].image?.id === siteMedia.json.id, patched.json.detail);
+const viewerSite = await call('GET', `/projects/${pid}/website`, { token });
+check('site : lu par le projet', viewerSite.status === 200 && viewerSite.json.website?.id === webid);
+check('site : invisible avant publication', (await fetch(apiUrl(`/public/sites/${siteSlug}`))).status === 404);
+const published = await call('POST', `/websites/${webid}/publish`, { token });
+check('site : publié', published.status === 200 && published.json.published === true && published.json.dirty === false && published.json.url.endsWith(`/site/${siteSlug}`), published.json.detail);
+const sitePage = await fetch(apiUrl(`/public/sites/${siteSlug}`));
+const siteHtml = await sitePage.text();
+const fileUrls = [...siteHtml.matchAll(/https?:\/\/[^"')\s]+\/public\/sites\/[^"')\s]+\/files\/[^"')\s]+/g)].map((m) => m[0].replaceAll('&amp;', '&'));
+const fontUrl = /url\('([^']+\/site-fonts\/[^']+)'\)/.exec(siteHtml)?.[1];
+check(
+  'site : page complète (nom, données structurées, partage, formulaire)',
+  sitePage.status === 200 && /text\/html/.test(sitePage.headers.get('content-type') ?? '') && siteHtml.includes(chosen2.json.text) &&
+    siteHtml.includes('application/ld+json') && siteHtml.includes('og:image') && siteHtml.includes(`/public/sites/${webid}/messages`) && siteHtml.includes(siteMedia.json.url),
+  sitePage.status,
+);
+const ogFile = fileUrls.find((u) => u.includes('/files/og.png'));
+const mockupFile = fileUrls.find((u) => /\/files\/mockup-[a-z]+\.jpg/.test(u));
+const [ogRes, mockupRes, fontRes] = await Promise.all([ogFile, mockupFile, fontUrl].map((u) => (u ? fetch(trusted(u)) : null)));
+check(
+  'site : image de partage, mise en situation et police servies',
+  ogRes?.status === 200 && ogRes.headers.get('content-type') === 'image/png' && mockupRes?.status === 200 && mockupRes.headers.get('content-type') === 'image/jpeg' &&
+    fontRes?.status === 200 && fontRes.headers.get('content-type') === 'font/woff' && fontRes.headers.get('access-control-allow-origin') === '*',
+  [ogRes?.status, mockupRes?.status, fontRes?.status],
+);
+check('site : fichier hors liste → 404', (await fetch(apiUrl(`/public/sites/${webid}/files/..%2F..%2Fsecret.png`))).status === 404);
+const afterEdit = await call('PATCH', `/websites/${webid}`, { token, body: { content: { ...siteEdited, seo: { ...siteEdited.seo, title: 'Nouveau titre' } } } });
+check('site : modification après publication signalée', afterEdit.status === 200 && afterEdit.json.dirty === true, afterEdit.json.dirty);
+const views = (await call('GET', `/projects/${pid}/website`, { token })).json.website;
+check('site : visites comptées sans marquer de modification', views.views >= 1 && views.dirty === true, views.views);
+
+const sendForm = (fields) => fetch(apiUrl(`/public/sites/${webid}/messages`), {
+  method: 'POST',
+  headers: { 'content-type': 'application/x-www-form-urlencoded', origin: 'https://ailleurs.example' },
+  body: new URLSearchParams(fields),
+});
+const sent = await sendForm({ name: 'Awa Diallo', phone: '+224 620 00 00 00', email: '', message: 'Bonjour, je voudrais un devis.', website: '' });
+const bot = await sendForm({ name: 'Robot', email: 'bot@example.org', message: 'Spam', website: 'https://spam.example' });
+check('site : formulaire de contact (encodé, ouvert à toute origine)', sent.status === 201 && sent.headers.get('access-control-allow-origin') === '*' && bot.status === 201, [sent.status, bot.status]);
+const inbox = await call('GET', `/websites/${webid}/messages`, { token });
+check('site : message reçu, robot ignoré', inbox.status === 200 && inbox.json.items.length === 1 && inbox.json.items[0].name === 'Awa Diallo' && inbox.json.items[0].readAt === null, inbox.json.items?.length);
+const siteNotifs = await call('GET', '/notifications', { token });
+check('site : message notifié au propriétaire', siteNotifs.json.items.some((n) => n.type === 'SITE_MESSAGE' && n.href === `/app/projets/${pid}/site`));
+const read = await call('PATCH', `/websites/${webid}/messages/${inbox.json.items[0].id}`, { token, body: { read: true } });
+const unread = (await call('GET', `/projects/${pid}/website`, { token })).json.website.unreadMessages;
+check('site : message lu', read.status === 200 && !!read.json.readAt && unread === 0, unread);
+
+const siteZip = await call('POST', `/websites/${webid}/export`, { token });
+const siteFiles = siteZip.status === 200 ? zipEntries(Buffer.from(await (await fetch(trusted(siteZip.json.url))).arrayBuffer())) : [];
+check(
+  'site : export ZIP autonome (page, polices, images, icônes)',
+  ['index.html', 'og.png', 'favicon.png', 'icon-180.png', 'LISEZ-MOI.txt', `assets/media/${siteMedia.json.id}.png`].every((f) => siteFiles.includes(f)) &&
+    siteFiles.some((f) => /^assets\/fonts\/.+\.woff$/.test(f)) && siteFiles.some((f) => /^assets\/images\/[a-z]+\.jpg$/.test(f)),
+  siteFiles,
+);
+await db.subscription.update({ where: { workspaceId: wid }, data: { status: 'EXPIRED' } });
+const freeExport = await call('POST', `/websites/${webid}/export`, { token });
+const freeSite = (await call('GET', `/projects/${pid}/website`, { token })).json.website;
+check('site : offre gratuite → export refusé, mention imposée', freeExport.status === 403 && freeExport.json.code === 'PLAN_REQUIRED' && freeSite.free === true, freeExport.status);
+await db.subscription.update({ where: { workspaceId: wid }, data: { status: 'ACTIVE' } });
+check('site : autre espace → 404', (await call('PATCH', `/websites/${webid}`, { token: other.json.accessToken, body: { slug: 'pirate' } })).status === 404);
+const noMedia = await call('DELETE', `/websites/${webid}/media/${siteMedia.json.id}`, { token });
+check('site : image supprimée et retirée du contenu', noMedia.status === 200 && noMedia.json.media.length === 0 && noMedia.json.content.sections[0].image === null, noMedia.json.detail);
+const offline = await call('POST', `/websites/${webid}/unpublish`, { token });
+check('site : dépublié → page 404', offline.status === 200 && offline.json.published === false && (await fetch(apiUrl(`/public/sites/${siteSlug}`))).status === 404);
+const siteActivity = await call('GET', `/projects/${pid}/activity`, { token });
+check('historique : site web', ['site.create', 'site.publish', 'site.export', 'site.unpublish'].every((code) => siteActivity.json.some((a) => a.code === code)));
+
 await db.$disconnect();
 const sigActivity = await call('GET', `/projects/${pid}/activity`, { token });
 check('historique : slogans et signatures', ['slogans.generate', 'slogans.choose', 'signatures.create', 'signatures.batch'].every((code) => sigActivity.json.some((a) => a.code === code)));

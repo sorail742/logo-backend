@@ -162,6 +162,13 @@ export class WorkspaceGuard implements CanActivate {
       });
       projectId = job?.projectId;
     }
+    if (!projectId && params.webid) {
+      const site = await this.prisma.website.findUnique({
+        where: { id: params.webid },
+        select: { projectId: true },
+      });
+      projectId = site?.projectId;
+    }
     if (!projectId) throw new NotFoundException('Ressource introuvable');
 
     const project = await this.prisma.project.findUnique({

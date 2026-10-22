@@ -151,6 +151,37 @@ check('tâche vue par un lecteur autorisé : lien signé', !!allowed.json.result
 await matrix('lecteur autorisé : toujours pas d’édition', 'PUT', `/studio-designs/${sdid}`, { viewer: 403 }, { name: 'Affiche' });
 await call('PATCH', `/workspaces/${wid}`, { token: owner.token, body: { viewerDownloads: false } });
 
+// ─── Site web : lecture pour tous les membres, édition par l'éditeur, suppression par le propriétaire ───
+await matrix('site : avant le logo', 'POST', `/projects/${pid}/website`, { editor: 400, viewer: 403, outsider: 404 });
+await db.logo.create({
+  data: {
+    projectId: pid,
+    type: 'ICON_TEXT',
+    engine: 'SVG_COMPOSER',
+    style: 'MODERN',
+    versions: {
+      create: {
+        number: 1,
+        svg: '<svg xmlns="http://www.w3.org/2000/svg"/>',
+        spec: {
+          type: 'ICON_TEXT', text: 'Témoin', tagline: '', fontId: 'montserrat', fontWeight: 700, letterSpacing: 0, uppercase: false,
+          iconId: 'leaf', iconScale: 1, iconFrame: 'circle', layout: 'horizontal',
+          colors: { primary: '#0f766e', secondary: '#f59e0b', text: '#0f172a', background: '#ffffff' },
+        },
+      },
+    },
+  },
+});
+await matrix('site : créer', 'POST', `/projects/${pid}/website`, { viewer: 403, outsider: 404, support: 404, editor: 201 });
+await matrix('site : voir', 'GET', `/projects/${pid}/website`, { owner: 200, editor: 200, viewer: 200, outsider: 404, support: 200 });
+const webid = (await call('GET', `/projects/${pid}/website`, { token: owner.token })).json.website.id;
+await matrix('site : modifier', 'PATCH', `/websites/${webid}`, { owner: 200, editor: 200, viewer: 403, outsider: 404, support: 404 }, { logoId: null });
+await matrix('site : publier', 'POST', `/websites/${webid}/publish`, { viewer: 403, outsider: 404, support: 404, editor: 200 });
+await matrix('site : messages reçus', 'GET', `/websites/${webid}/messages`, { owner: 200, editor: 200, viewer: 403, outsider: 404 });
+await matrix('site : exporter (téléchargements non autorisés)', 'POST', `/websites/${webid}/export`, { viewer: 403, outsider: 404, editor: 200 });
+await matrix('site : dépublier', 'POST', `/websites/${webid}/unpublish`, { viewer: 403, outsider: 404, editor: 200 });
+await matrix('site : supprimer', 'DELETE', `/websites/${webid}`, { editor: 403, viewer: 403, outsider: 404, support: 404, owner: 204 });
+
 // ─── Suppression et restauration d'un projet ───
 const doomed = (await call('POST', `/workspaces/${wid}/projects`, { token: owner.token, body: { title: 'À supprimer', entityType: 'ASSOCIATION', existingName: 'Éphémère' } })).json.id;
 await matrix('supprimer un projet', 'DELETE', `/projects/${doomed}`, { editor: 403, viewer: 403, outsider: 404, owner: 204 });
