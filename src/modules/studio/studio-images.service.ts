@@ -70,23 +70,24 @@ export class StudioImagesService {
     });
     const input = imageGenerationInputSchema.parse(job.input);
     const outcome = await this.ai.generateImages(input);
-    const images: StudioImagesResult['images'] = [];
-    for (const [index, image] of outcome.images.entries()) {
-      const name = `image-${index + 1}.png`;
-      const storageKey = `studio-images/${job.project.workspaceId}/${job.projectId}/${jobId}/${name}`;
-      await this.storage.put(storageKey, image.data, 'image/png');
-      const asset = await this.prisma.asset.create({
-        data: {
-          kind: AssetKind.GENERATED,
-          name,
-          storageKey,
-          mimeType: 'image/png',
-          sizeBytes: image.data.length,
-          tags: [`project:${job.projectId}`, `job:${jobId}`],
-        },
-      });
-      images.push({ assetId: asset.id, storageKey, width: image.width, height: image.height });
-    }
+    const images: StudioImagesResult['images'] = await Promise.all(
+      outcome.images.map(async (image, index) => {
+        const name = `image-${index + 1}.png`;
+        const storageKey = `studio-images/${job.project.workspaceId}/${job.projectId}/${jobId}/${name}`;
+        await this.storage.put(storageKey, image.data, 'image/png');
+        const asset = await this.prisma.asset.create({
+          data: {
+            kind: AssetKind.GENERATED,
+            name,
+            storageKey,
+            mimeType: 'image/png',
+            sizeBytes: image.data.length,
+            tags: [`project:${job.projectId}`, `job:${jobId}`],
+          },
+        });
+        return { assetId: asset.id, storageKey, width: image.width, height: image.height };
+      }),
+    );
     const result: StudioImagesResult = { images, provider: outcome.provider, demo: outcome.demo };
     await this.prisma.generationJob.update({
       where: { id: jobId },

@@ -104,24 +104,27 @@ export async function buildKitArchive(input: KitArchiveInput): Promise<ZipEntry[
 
   const { email, stampSvg, handwritten } = input.signatures;
   if (email) {
-    entries.push({
-      path: 'signatures/signature-email.html',
-      data: emailHtmlPage(email.html, input.content.name),
-    });
-    entries.push({ path: 'signatures/signature-email.txt', data: email.text });
+    entries.push(
+      {
+        path: 'signatures/signature-email.html',
+        data: emailHtmlPage(email.html, input.content.name),
+      },
+      { path: 'signatures/signature-email.txt', data: email.text },
+    );
   }
   const brand = brandText(input.content);
   if (brand) entries.push({ path: 'signatures/slogan.txt', data: brand });
   if (stampSvg) {
-    entries.push({ path: 'signatures/cachet.svg', data: stampSvg });
-    entries.push({ path: 'signatures/cachet.png', data: svgToPng(stampSvg, { size: 2048 }) });
+    entries.push(
+      { path: 'signatures/cachet.svg', data: stampSvg },
+      { path: 'signatures/cachet.png', data: svgToPng(stampSvg, { size: 2048 }) },
+    );
   }
   if (handwritten) {
-    entries.push({ path: 'signatures/paraphe.svg', data: handwritten.svg });
-    entries.push({
-      path: 'signatures/paraphe.png',
-      data: svgToPng(handwritten.svg, { size: 2048 }),
-    });
+    entries.push(
+      { path: 'signatures/paraphe.svg', data: handwritten.svg },
+      { path: 'signatures/paraphe.png', data: svgToPng(handwritten.svg, { size: 2048 }) },
+    );
   }
 
   const supports = input.supports;
@@ -140,16 +143,13 @@ export async function buildKitArchive(input: KitArchiveInput): Promise<ZipEntry[
   if (handwritten?.fontId) {
     extra.push(`Paraphe : ${getFont(handwritten.fontId).name} — SIL Open Font License 1.1`);
   }
-  entries.push({
+  const licences = {
     path: 'LICENCES.txt',
     data: `${licencesText(input.logo)}\n${extra.join('\n')}\n`,
-  });
-  entries.push({
+  };
+  entries.push(licences, {
     path: 'LISEZMOI.txt',
-    data: readme(
-      input,
-      entries.map((e) => e.path),
-    ),
+    data: readme(input, [...entries.map((e) => e.path), licences.path]),
   });
 
   const root = `${input.slug}-kit-v${input.version}`;

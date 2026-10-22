@@ -29,8 +29,9 @@ const n = (v: number) => Math.round(v * 10) / 10;
 /** Graine stable d'un texte (FNV-1a). */
 export function hashSeed(text: string) {
   let h = 0x811c9dc5;
-  for (let i = 0; i < text.length; i++) {
-    h ^= text.charCodeAt(i);
+  // Par point de code : identique à l'ancien calcul pour tout caractère hors emoji.
+  for (const char of text) {
+    h ^= char.codePointAt(0) ?? 0;
     h = Math.imul(h, 0x01000193);
   }
   return h >>> 0;
@@ -83,6 +84,33 @@ function softShapes(input: ArtworkInput, rand: Rand, blurRatio: number, grain: b
   return `<defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${c0}"/><stop offset="1" stop-color="${mix(c0, c1, 0.5)}"/></linearGradient><filter id="b" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="${n(m * blurRatio)}"/></filter></defs><rect width="${w}" height="${h}" fill="url(#bg)"/><g filter="url(#b)">${shapes}</g>${grainLayer}`;
 }
 
+/** Motif d'une case de la grille géométrique (ordre des tirages inchangé). */
+function geometricMotif(x: number, y: number, s: number, fg: string, rand: Rand, clip: string) {
+  switch (Math.floor(rand() * 6)) {
+    case 0:
+      return `<circle cx="${n(x + s / 2)}" cy="${n(y + s / 2)}" r="${n(s * 0.36)}" fill="${fg}"/>`;
+    case 1: {
+      const corner = Math.floor(rand() * 4);
+      const cx = corner % 2 ? x + s : x;
+      const cy = corner > 1 ? y + s : y;
+      return `<clipPath id="${clip}"><rect x="${n(x)}" y="${n(y)}" width="${n(s)}" height="${n(s)}"/></clipPath><circle cx="${n(cx)}" cy="${n(cy)}" r="${n(s)}" fill="${fg}" clip-path="url(#${clip})"/>`;
+    }
+    case 2:
+      return `<path d="M${n(x)} ${n(y + s)}A${n(s / 2)} ${n(s / 2)} 0 0 1 ${n(x + s)} ${n(y + s)}Z" fill="${fg}"/>`;
+    case 3:
+      return `<polygon points="${n(x)},${n(y + s)} ${n(x + s / 2)},${n(y)} ${n(x + s)},${n(y + s)}" fill="${fg}"/>`;
+    case 4:
+      return [0, 1, 2]
+        .map(
+          (k) =>
+            `<rect x="${n(x)}" y="${n(y + (k * 2 + 0.5) * (s / 6))}" width="${n(s)}" height="${n(s / 6)}" fill="${fg}"/>`,
+        )
+        .join('');
+    default:
+      return `<rect x="${n(x + s * 0.2)}" y="${n(y + s * 0.2)}" width="${n(s * 0.6)}" height="${n(s * 0.6)}" fill="${fg}" transform="rotate(45 ${n(x + s / 2)} ${n(y + s / 2)})"/>`;
+  }
+}
+
 function geometric(input: ArtworkInput, rand: Rand) {
   const { width: w, height: h, palette } = input;
   const cols = 4;
@@ -99,44 +127,7 @@ function geometric(input: ArtworkInput, rand: Rand) {
       out.push(
         `<rect x="${n(x)}" y="${n(y)}" width="${n(size + 1)}" height="${n(size + 1)}" fill="${bg}"/>`,
       );
-      const s = size;
-      switch (Math.floor(rand() * 6)) {
-        case 0:
-          out.push(
-            `<circle cx="${n(x + s / 2)}" cy="${n(y + s / 2)}" r="${n(s * 0.36)}" fill="${fg}"/>`,
-          );
-          break;
-        case 1: {
-          const corner = Math.floor(rand() * 4);
-          const cx = corner % 2 ? x + s : x;
-          const cy = corner > 1 ? y + s : y;
-          out.push(
-            `<clipPath id="q${r}-${c}"><rect x="${n(x)}" y="${n(y)}" width="${n(s)}" height="${n(s)}"/></clipPath><circle cx="${n(cx)}" cy="${n(cy)}" r="${n(s)}" fill="${fg}" clip-path="url(#q${r}-${c})"/>`,
-          );
-          break;
-        }
-        case 2:
-          out.push(
-            `<path d="M${n(x)} ${n(y + s)}A${n(s / 2)} ${n(s / 2)} 0 0 1 ${n(x + s)} ${n(y + s)}Z" fill="${fg}"/>`,
-          );
-          break;
-        case 3:
-          out.push(
-            `<polygon points="${n(x)},${n(y + s)} ${n(x + s / 2)},${n(y)} ${n(x + s)},${n(y + s)}" fill="${fg}"/>`,
-          );
-          break;
-        case 4:
-          for (let k = 0; k < 3; k++) {
-            out.push(
-              `<rect x="${n(x)}" y="${n(y + (k * 2 + 0.5) * (s / 6))}" width="${n(s)}" height="${n(s / 6)}" fill="${fg}"/>`,
-            );
-          }
-          break;
-        default:
-          out.push(
-            `<rect x="${n(x + s * 0.2)}" y="${n(y + s * 0.2)}" width="${n(s * 0.6)}" height="${n(s * 0.6)}" fill="${fg}" transform="rotate(45 ${n(x + s / 2)} ${n(y + s / 2)})"/>`,
-          );
-      }
+      out.push(geometricMotif(x, y, size, fg, rand, `q${r}-${c}`));
     }
   }
   return out.join('');
@@ -183,15 +174,15 @@ function wax(input: ArtworkInput, rand: Rand) {
       const c2 = colors[(row + Math.floor(x / s) + 1) % colors.length]!;
       if ((row + Math.round(x / s) + parity) % 2 === 0) {
         // Cercles concentriques
-        out.push(`<circle cx="${n(x)}" cy="${n(y)}" r="${n(s * 0.42)}" fill="${c1}"/>`);
-        out.push(`<circle cx="${n(x)}" cy="${n(y)}" r="${n(s * 0.28)}" fill="${palette[0]}"/>`);
-        out.push(`<circle cx="${n(x)}" cy="${n(y)}" r="${n(s * 0.15)}" fill="${c2}"/>`);
+        out.push(
+          `<circle cx="${n(x)}" cy="${n(y)}" r="${n(s * 0.42)}" fill="${c1}"/>`,
+          `<circle cx="${n(x)}" cy="${n(y)}" r="${n(s * 0.28)}" fill="${palette[0]}"/>`,
+          `<circle cx="${n(x)}" cy="${n(y)}" r="${n(s * 0.15)}" fill="${c2}"/>`,
+        );
       } else {
         // Feuille en goutte
         out.push(
           `<path d="M${n(x)} ${n(y - s * 0.42)}C${n(x + s * 0.34)} ${n(y - s * 0.1)} ${n(x + s * 0.3)} ${n(y + s * 0.3)} ${n(x)} ${n(y + s * 0.42)}C${n(x - s * 0.3)} ${n(y + s * 0.3)} ${n(x - s * 0.34)} ${n(y - s * 0.1)} ${n(x)} ${n(y - s * 0.42)}Z" fill="${c1}" transform="rotate(${n(tilt)} ${n(x)} ${n(y)})"/>`,
-        );
-        out.push(
           `<path d="M${n(x)} ${n(y - s * 0.3)}V${n(y + s * 0.3)}" stroke="${palette[0]}" stroke-width="${n(s * 0.04)}" transform="rotate(${n(tilt)} ${n(x)} ${n(y)})"/>`,
         );
       }
@@ -208,10 +199,7 @@ function bogolan(input: ArtworkInput, rand: Rand) {
   const { width: w, height: h, palette } = input;
   // Terre sombre et ivoire, teintées par la couleur principale.
   const ground = mix(palette[0]!, '#2b1a0e', 0.65);
-  const ink =
-    luminance(palette[palette.length - 1]!) > 0.7
-      ? mix(palette[palette.length - 1]!, '#f3e9d2', 0.6)
-      : '#f3e9d2';
+  const ink = luminance(palette.at(-1)!) > 0.7 ? mix(palette.at(-1)!, '#f3e9d2', 0.6) : '#f3e9d2';
   const cols = 3 + Math.floor(rand() * 3);
   const size = w / cols;
   const rows = Math.ceil(h / size);
@@ -339,10 +327,11 @@ export function renderArtwork(input: ArtworkInput): string {
 /** Style suggéré par des mots du texte (le fournisseur de démonstration ne l'interprète pas). */
 export function styleFromPrompt(prompt: string): ArtworkStyle | null {
   // Mots entiers (« campagne » ne doit pas évoquer un pagne) ; les radicaux finissant par « ~ » acceptent une suite.
-  const words = (list: string) =>
-    new RegExp(`(?<!\\p{L})(?:${list.replaceAll('~', '\\p{L}*')})(?!\\p{L})`, 'u').test(
-      prompt.toLowerCase(),
-    );
+  const letter = String.raw`\p{L}`;
+  const words = (list: string) => {
+    const pattern = list.replaceAll('~', `${letter}*`);
+    return new RegExp(`(?<!${letter})(?:${pattern})(?!${letter})`, 'u').test(prompt.toLowerCase());
+  };
   if (words('wax|pagnes?|tissus?|fabrics?')) return 'wax';
   if (words('bogolan|terre|mudcloth|artisan~')) return 'bogolan';
   if (words('vagues?|mers?|océan~|ocean~|eaux?|waves?')) return 'waves';

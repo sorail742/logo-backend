@@ -4,10 +4,9 @@
 //
 // Usage : node scripts/fetch-fonts.mjs
 // Pour ajouter une police : compléter FONTS (même identifiant que le front), relancer.
-import { execFileSync } from 'node:child_process';
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { gunzipSync } from 'node:zlib';
 import opentype from 'opentype.js';
 
 const FONTSOURCE_VERSION = '5.3.0';
@@ -65,43 +64,59 @@ const FONTS = [
   { id: 'kaushan-script', pkg: 'kaushan-script', name: 'Kaushan Script', category: 'script', weights: [400] },
 ];
 
+/** Fichiers d'une archive tar (format ustar des paquets npm), par chemin. */
+function untar(archive) {
+  const files = new Map();
+  const field = (header, start, length) => header.subarray(start, start + length).toString('utf8').split('\0')[0];
+  let offset = 0;
+  while (offset + 512 <= archive.length) {
+    const header = archive.subarray(offset, offset + 512);
+    if (header.every((byte) => byte === 0)) break;
+    const name = [field(header, 345, 155), field(header, 0, 100)].filter(Boolean).join('/');
+    const size = Number.parseInt(field(header, 124, 12).trim() || '0', 8);
+    const type = field(header, 156, 1);
+    offset += 512;
+    if (type === '0' || type === '') files.set(name, archive.subarray(offset, offset + size));
+    offset += Math.ceil(size / 512) * 512;
+  }
+  return files;
+}
+
+/** Paquet @fontsource téléchargé depuis le registre npm (sans commande système). */
+async function fetchPackage(pkg) {
+  const url = `https://registry.npmjs.org/@fontsource/${pkg}/-/${pkg}-${FONTSOURCE_VERSION}.tgz`;
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`${url} : ${response.status}`);
+  return untar(gunzipSync(Buffer.from(await response.arrayBuffer())));
+}
+
 const out = resolve(import.meta.dirname, '..', 'assets', 'fonts');
 mkdirSync(out, { recursive: true });
-const tmp = mkdtempSync(join(tmpdir(), 'fonts-'));
 
-const manifest = [];
-try {
-  for (const font of FONTS) {
-    const spec = `@fontsource/${font.pkg}@${FONTSOURCE_VERSION}`;
-    const tarball = execFileSync('npm', ['pack', spec, '--silent', '--pack-destination', tmp], { encoding: 'utf8' }).trim();
-    const dir = join(tmp, font.pkg);
-    mkdirSync(dir);
-    execFileSync('tar', ['xzf', join(tmp, tarball), '-C', dir]);
-
-    const files = {};
-    for (const weight of font.weights) {
-      files[weight] = [];
-      for (const subset of SUBSETS) {
-        const name = `${font.pkg}-${subset}-${weight}-normal.woff`;
-        const source = join(dir, 'package', 'files', name);
-        if (!existsSync(source)) continue;
-        copyFileSync(source, join(out, name));
-        files[weight].push(name);
-      }
-      if (files[weight].length === 0) throw new Error(`${spec} : graisse ${weight} introuvable`);
+const packages = await Promise.all(FONTS.map((font) => fetchPackage(font.pkg)));
+const manifest = FONTS.map((font, index) => {
+  const spec = `@fontsource/${font.pkg}@${FONTSOURCE_VERSION}`;
+  const files = {};
+  for (const weight of font.weights) {
+    files[weight] = [];
+    for (const subset of SUBSETS) {
+      const name = `${font.pkg}-${subset}-${weight}-normal.woff`;
+      const data = packages[index].get(`package/files/${name}`);
+      if (!data) continue;
+      writeFileSync(join(out, name), data);
+      files[weight].push(name);
     }
-    // Hauteurs au-dessus et au-dessous de la ligne de base, en em : placement des lignes de
-    // texte du Studio, identique dans le navigateur et dans le rendu serveur.
-    const regular = opentype.loadSync(join(out, files[font.weights[0]][0]));
-    const ascent = Math.round((regular.ascender / regular.unitsPerEm) * 1000) / 1000;
-    const descent = Math.round((-regular.descender / regular.unitsPerEm) * 1000) / 1000;
-    const { pkg: _pkg, ...meta } = font;
-    manifest.push({ ...meta, license: 'OFL', source: spec, ascent, descent, files });
-    console.log(`${font.name} : ${Object.values(files).flat().length} fichiers`);
+    if (files[weight].length === 0) throw new Error(`${spec} : graisse ${weight} introuvable`);
   }
-} finally {
-  rmSync(tmp, { recursive: true, force: true });
-}
+  // Hauteurs au-dessus et au-dessous de la ligne de base, en em : placement des lignes de
+  // texte du Studio, identique dans le navigateur et dans le rendu serveur.
+  const regular = opentype.loadSync(join(out, files[font.weights[0]][0]));
+  const ascent = Math.round((regular.ascender / regular.unitsPerEm) * 1000) / 1000;
+  const descent = Math.round((-regular.descender / regular.unitsPerEm) * 1000) / 1000;
+  const { pkg: _pkg, ...meta } = font;
+  console.log(`${font.name} : ${Object.values(files).flat().length} fichiers`);
+  return { ...meta, license: 'OFL', source: spec, ascent, descent, files };
+});
 
 writeFileSync(join(out, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
 console.log(`Manifeste écrit dans ${join(out, 'manifest.json')}`);

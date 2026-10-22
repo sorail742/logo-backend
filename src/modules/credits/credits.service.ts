@@ -109,21 +109,26 @@ export class CreditsService {
       by: ['workspaceId'],
       _sum: { delta: true },
     });
-    const drift: { workspaceId: string; cached: number; actual: number }[] = [];
-    for (const s of sums) {
+    const workspaces = await this.prisma.workspace.findMany({
+      where: { id: { in: sums.map((s) => s.workspaceId) } },
+      select: { id: true, creditBalance: true },
+    });
+    const cached = new Map(workspaces.map((ws) => [ws.id, ws.creditBalance]));
+    const drift = sums.flatMap((s) => {
       const actual = s._sum.delta ?? 0;
-      const ws = await this.prisma.workspace.findUnique({
-        where: { id: s.workspaceId },
-        select: { creditBalance: true },
-      });
-      if (ws && ws.creditBalance !== actual) {
-        drift.push({ workspaceId: s.workspaceId, cached: ws.creditBalance, actual });
-        await this.prisma.workspace.update({
-          where: { id: s.workspaceId },
+      const balance = cached.get(s.workspaceId);
+      return balance === undefined || balance === actual
+        ? []
+        : [{ workspaceId: s.workspaceId, cached: balance, actual }];
+    });
+    await Promise.all(
+      drift.map(({ workspaceId, actual }) =>
+        this.prisma.workspace.update({
+          where: { id: workspaceId },
           data: { creditBalance: actual },
-        });
-      }
-    }
+        }),
+      ),
+    );
     return drift;
   }
 }

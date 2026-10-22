@@ -94,26 +94,31 @@ export class LogoGeneratorService {
     if (outcome.proposals.length === 0) throw new Error('Aucune proposition de logo valide');
 
     await this.prisma.$transaction(async (tx) => {
-      for (const proposal of outcome.proposals) {
-        await tx.logo.create({
-          data: {
-            projectId: job.projectId,
-            jobId,
-            type: outcome.input.type,
-            engine: LogoEngine.SVG_COMPOSER,
-            style: outcome.input.style,
-            phash: proposal.phash,
-            versions: {
-              create: {
-                number: 1,
-                label: 'Proposition',
-                spec: proposal.spec as unknown as Prisma.InputJsonValue,
-                svg: proposal.svg,
+      // Créations dans l'ordre des propositions : l'affichage suit la date de création.
+      await outcome.proposals.reduce<Promise<unknown>>(
+        (previous, proposal) =>
+          previous.then(() =>
+            tx.logo.create({
+              data: {
+                projectId: job.projectId,
+                jobId,
+                type: outcome.input.type,
+                engine: LogoEngine.SVG_COMPOSER,
+                style: outcome.input.style,
+                phash: proposal.phash,
+                versions: {
+                  create: {
+                    number: 1,
+                    label: 'Proposition',
+                    spec: proposal.spec as unknown as Prisma.InputJsonValue,
+                    svg: proposal.svg,
+                  },
+                },
               },
-            },
-          },
-        });
-      }
+            }),
+          ),
+        Promise.resolve(),
+      );
       await tx.generationJob.update({
         where: { id: jobId },
         data: {

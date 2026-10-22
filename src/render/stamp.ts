@@ -65,7 +65,7 @@ function normalize(value: string) {
 
 export function findOfficialTerms(...texts: string[]) {
   const haystack = normalize(texts.join(' '));
-  return OFFICIAL_TERMS.filter((term) => new RegExp(`\\b${term}\\b`).test(haystack));
+  return OFFICIAL_TERMS.filter((term) => new RegExp(String.raw`\b${term}\b`).test(haystack));
 }
 
 function inkFilter(id: string) {
@@ -199,12 +199,10 @@ export function renderStampSvg(data: StampData, options: StampRenderOptions = {}
     height = 220;
     body.push(
       `<rect x="8" y="8" width="${width - 16}" height="${height - 16}" rx="10" fill="none" stroke="${color}" stroke-width="6"/>`,
-    );
-    body.push(
       `<rect x="22" y="22" width="${width - 44}" height="${height - 44}" rx="4" fill="none" stroke="${color}" stroke-width="2"/>`,
+      line(data.ringText.toUpperCase(), width / 2, 58, 22, 800, 2),
+      center(width / 2, height / 2 + 6, 80),
     );
-    body.push(line(data.ringText.toUpperCase(), width / 2, 58, 22, 800, 2));
-    body.push(center(width / 2, height / 2 + 6, 80));
     if (data.bottomText)
       body.push(line(data.bottomText.toUpperCase(), width / 2, height - 40, 16, 700, 2));
   } else {
@@ -251,7 +249,8 @@ export function renderStampSvg(data: StampData, options: StampRenderOptions = {}
   }
 
   const label = escapeXml(data.ringText);
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" role="img" aria-label="${label}"><title>${label}</title>${defs ? `<defs>${defs}</defs>` : ''}<g fill="${color}"${filter} opacity="0.92">${body.join('')}</g></svg>`;
+  const defsMarkup = defs ? `<defs>${defs}</defs>` : '';
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" role="img" aria-label="${label}"><title>${label}</title>${defsMarkup}<g fill="${color}"${filter} opacity="0.92">${body.join('')}</g></svg>`;
 }
 
 /** Paraphe : texte en police manuscrite avec un trait de soulignement, ou tracé dessiné. */

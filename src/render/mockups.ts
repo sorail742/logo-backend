@@ -301,12 +301,10 @@ function phone(a: BrandAssets) {
       place(t.asset, x + 30, 550, tile - 60, tile - 60, `mk-t${i}-`),
     );
   });
-  grid.push(place(visual('profile-inverse'), 598, 656, tile, tile, 'mk-pi-'));
   grid.push(
+    place(visual('profile-inverse'), 598, 656, tile, tile, 'mk-pi-'),
     `<rect x="${598 + tile + 4}" y="656" width="${tile}" height="${tile}" fill="${tint(P, 0.75)}"/>`,
     place(a.logo.color, 598 + tile + 16, 700, tile - 24, 44, 'mk-pl-'),
-  );
-  grid.push(
     `<rect x="${598 + 2 * (tile + 4)}" y="656" width="${tile}" height="${tile}" fill="${shade(P, 0.3)}"/>`,
   );
   for (let i = 0; i < 3; i++) {

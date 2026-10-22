@@ -298,7 +298,7 @@ export class SignaturesService {
       where: { id: signatureId },
       select: { kind: true, projectId: true, project: { select: { deletedAt: true } } },
     });
-    if (!signature || signature.kind !== SignatureKind.EMAIL || signature.project.deletedAt) {
+    if (signature?.kind !== SignatureKind.EMAIL || signature.project.deletedAt) {
       throw new NotFoundException('Logo introuvable');
     }
     const logo = await this.brands.logo(signature.projectId);

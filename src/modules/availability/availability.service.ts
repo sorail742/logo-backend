@@ -98,7 +98,7 @@ export class AvailabilityService {
 
   // ─── Domaines via RDAP (NOM-20) ───
 
-  private async checkDomains(handle: string): Promise<CheckResult[]> {
+  private checkDomains(handle: string): Promise<CheckResult[]> {
     return Promise.all(
       CHECKED_TLDS.map(async (tld): Promise<CheckResult> => {
         const domain = `${handle}.${tld}`;
@@ -123,7 +123,7 @@ export class AvailabilityService {
 
   // ─── Réseaux sociaux, indicatif (NOM-21) ───
 
-  private async checkSocial(handle: string): Promise<CheckResult[]> {
+  private checkSocial(handle: string): Promise<CheckResult[]> {
     return Promise.all(
       Object.entries(SOCIAL_NETWORKS).map(async ([network, url]): Promise<CheckResult> => {
         const details = { url: url(handle), indicative: true };

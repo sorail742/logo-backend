@@ -195,16 +195,19 @@ export async function buildExportEntries(
   const variants = LOGO_VARIANTS.filter((def) => source.kind === 'spec' || !def.layout);
   const title = source.kind === 'spec' ? source.spec.text : source.title;
 
-  for (const def of variants) {
+  const masters = variants.map((def) => optimizeSvg(renderVariant(source, def.variant, def.layout)));
+  // PDF vectoriels produits en parallèle ; l'ordre des fichiers de l'archive ne change pas.
+  const pdfs = options.formats.includes('pdf')
+    ? await Promise.all(
+        variants.map((def, i) => svgToPdf(masters[i], { title: `${title} — ${def.file}` })),
+      )
+    : [];
+
+  variants.forEach((def, i) => {
     const base = `${slug}-${def.file}`;
-    const master = optimizeSvg(renderVariant(source, def.variant, def.layout));
+    const master = masters[i];
     if (options.formats.includes('svg')) entries.push({ path: `svg/${base}.svg`, data: master });
-    if (options.formats.includes('pdf')) {
-      entries.push({
-        path: `pdf/${base}.pdf`,
-        data: await svgToPdf(master, { title: `${title} — ${def.file}` }),
-      });
-    }
+    if (pdfs[i]) entries.push({ path: `pdf/${base}.pdf`, data: pdfs[i] });
     if (options.formats.includes('png')) {
       const png = options.watermark
         ? renderVariant(source, def.variant, def.layout, options.watermark)
@@ -225,7 +228,7 @@ export async function buildExportEntries(
         });
       }
     }
-  }
+  });
 
   if (options.iconPack) {
     const mark = markSvg(source);

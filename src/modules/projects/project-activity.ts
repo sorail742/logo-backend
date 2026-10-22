@@ -11,6 +11,8 @@ const SIGNATURE_LABELS: Record<string, string> = {
   STAMP: 'un cachet',
 };
 
+const SLOGAN_BATCH: Record<string, string> = { DEVISE: 'devises', MISSION: 'phrases de mission' };
+
 /**
  * Actions d'un projet enregistrées dans le journal (entityType « Project ») et affichées dans
  * son historique (COL-04). Le libellé est calculé à la lecture.
@@ -26,12 +28,7 @@ export const PROJECT_ACTIONS = {
   'logos.import': () => 'a importé un logo existant',
   'logos.version': (after) => `a enregistré la version ${text(after.number)} d'un logo`,
   'logos.export': () => 'a exporté un logo',
-  'slogans.generate': (after) =>
-    after.kind === 'DEVISE'
-      ? 'a lancé un lot de devises'
-      : after.kind === 'MISSION'
-        ? 'a lancé un lot de phrases de mission'
-        : 'a lancé un lot de slogans',
+  'slogans.generate': (after) => `a lancé un lot de ${SLOGAN_BATCH[text(after.kind)] ?? 'slogans'}`,
   'slogans.choose': (after) => `a retenu « ${text(after.text)} »`,
   'signatures.create': (after) =>
     `a créé ${SIGNATURE_LABELS[text(after.kind)] ?? 'une signature'}`,

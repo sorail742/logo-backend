@@ -28,28 +28,33 @@ export class SloganGeneratorService {
     const result = await this.ai.generateSlogans(input);
     const parsed = generatedSlogansSchema.parse(result.raw);
 
+    // La phrase de mission n'est pas limitée en mots ; le slogan et la devise le sont.
+    const candidates = parsed.slogans
+      .map(({ text }) => text.replace(/\s+/g, ' ').trim())
+      .filter((clean) => input.kind === 'MISSION' || clean.split(' ').length <= input.maxWords);
+    // Modération de toutes les propositions d'un coup (liste de termes en cache).
+    const verdicts = await Promise.all(
+      candidates.map((clean) => this.moderation.findBlocked(clean, 'SLOGAN')),
+    );
+
     const seen = new Set(input.exclude.map((t) => t.toLowerCase()));
     const kept: string[] = [];
-    for (const { text } of parsed.slogans) {
-      const clean = text.replace(/\s+/g, ' ').trim();
-      if (seen.has(clean.toLowerCase())) continue;
-      // La phrase de mission n'est pas limitée en mots ; le slogan et la devise le sont.
-      if (input.kind !== 'MISSION' && clean.split(' ').length > input.maxWords) continue;
-      const blocked = await this.moderation.findBlocked(clean, 'SLOGAN');
+    candidates.forEach((clean, index) => {
+      if (seen.has(clean.toLowerCase())) return;
+      const blocked = verdicts[index];
       if (blocked.length) {
         this.logger.debug(
           `Slogan écarté par la modération (${blocked.length} terme(s) interdit(s))`,
         );
-        continue;
+        return;
       }
-      const known = closeKnownSlogan(clean);
-      if (known) {
+      if (closeKnownSlogan(clean)) {
         this.logger.debug('Slogan écarté : trop proche d’un slogan connu');
-        continue;
+        return;
       }
       seen.add(clean.toLowerCase());
       kept.push(clean);
-    }
+    });
 
     return {
       input,

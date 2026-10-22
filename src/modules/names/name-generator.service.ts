@@ -36,18 +36,24 @@ export class NameGeneratorService {
     const result = await this.ai.generateNames(input);
     const parsed = generatedNamesSchema.parse(result.raw);
 
+    const candidates = parsed.names.filter(
+      (name) => !input.brief.mustAvoid.some((w) => containsTerm(name.value, w)),
+    );
+    // Modération de toutes les propositions d'un coup (liste de termes en cache).
+    const verdicts = await Promise.all(
+      candidates.map((name) =>
+        this.moderation.findBlocked(`${name.value} ${name.expandedForm ?? ''}`, 'NAME'),
+      ),
+    );
+
     const exclude = new Set(input.exclude.map((n) => n.toLowerCase()));
     const kept: GenerationOutcome['names'] = [];
-    for (const name of parsed.names) {
-      if (exclude.has(name.value.toLowerCase())) continue;
-      if (input.brief.mustAvoid.some((w) => containsTerm(name.value, w))) continue;
-      const blocked = await this.moderation.findBlocked(
-        `${name.value} ${name.expandedForm ?? ''}`,
-        'NAME',
-      );
+    candidates.forEach((name, index) => {
+      if (exclude.has(name.value.toLowerCase())) return;
+      const blocked = verdicts[index];
       if (blocked.length) {
         this.logger.debug(`Nom écarté par la modération (${blocked.length} terme(s) interdit(s))`);
-        continue;
+        return;
       }
       exclude.add(name.value.toLowerCase());
       kept.push({
@@ -57,7 +63,7 @@ export class NameGeneratorService {
           briefWords: [...input.brief.values, input.brief.sector],
         }),
       });
-    }
+    });
 
     return {
       names: kept.slice(0, input.count),

@@ -172,7 +172,7 @@ class Matrix {
     const count = Math.floor(this.version / 7) + 2;
     const step = Math.floor((this.version * 8 + count * 3 + 5) / (count * 4 - 4)) * 2;
     const result = [6];
-    for (let pos = this.size - 7; result.length < count; pos -= step) result.splice(1, 0, pos);
+    for (let i = 0; i < count - 1; i++) result.splice(1, 0, this.size - 7 - i * step);
     return result;
   }
 
@@ -225,16 +225,23 @@ class Matrix {
     }
   }
 
+  /** Colonne de droite de chaque paire parcourue en zigzag ; la colonne 6 (synchronisation) est sautée. */
+  dataColumns() {
+    const columns: number[] = [];
+    for (let right = this.size - 1; right >= 1; right -= 2)
+      columns.push(right > 6 ? right : right - 1);
+    return columns;
+  }
+
   codewords(data: number[]) {
+    const total = data.length * 8;
     let i = 0;
-    for (let right = this.size - 1; right >= 1; right -= 2) {
-      if (right === 6) right = 5;
+    for (const right of this.dataColumns()) {
       const upward = ((right + 1) & 2) === 0;
       for (let vert = 0; vert < this.size; vert++) {
-        for (let j = 0; j < 2; j++) {
-          const x = right - j;
-          const y = upward ? this.size - 1 - vert : vert;
-          if (!this.reserved[y][x] && i < data.length * 8) {
+        const y = upward ? this.size - 1 - vert : vert;
+        for (const x of [right, right - 1]) {
+          if (i < total && !this.reserved[y][x]) {
             this.dark[y][x] = bit(data[i >>> 3], 7 - (i & 7));
             i++;
           }
@@ -341,7 +348,9 @@ export function qrMatrix(text: string, level: QrLevel = 'M'): boolean[][] {
   for (let i = 0; i < bits.length; i += 8) {
     data.push(bits.slice(i, i + 8).reduce((acc, b) => (acc << 1) | b, 0));
   }
-  for (let pad = 0xec; data.length < capacity / 8; pad ^= 0xec ^ 0x11) data.push(pad);
+  // Octets de bourrage alternés 0xEC, 0x11 jusqu'à la capacité.
+  const padding = capacity / 8 - data.length;
+  for (let k = 0; k < padding; k++) data.push(k % 2 === 0 ? 0xec : 0x11);
 
   const codewords = withErrorCorrection(data, version, li);
   let best: Matrix | null = null;
@@ -391,8 +400,9 @@ export function whatsappLink(phone: string, message = '') {
   return `https://wa.me/${digits}${message ? `?text=${encodeURIComponent(message)}` : ''}`;
 }
 
+// « \$& » : la barre oblique inversée suivie du caractère trouvé.
 const vcardEscape = (value: string) =>
-  value.replace(/[\\;,]/g, (c) => `\\${c}`).replace(/\n/g, '\\n');
+  value.replace(/[\\;,]/g, String.raw`\$&`).replace(/\n/g, String.raw`\n`);
 
 export interface VCardInput {
   fullName: string;
@@ -422,10 +432,11 @@ export function vcard(input: VCardInput) {
   return lines.join('\r\n');
 }
 
-const wifiEscape = (value: string) => value.replace(/[\\;,:"]/g, (c) => `\\${c}`);
+const wifiEscape = (value: string) => value.replace(/[\\;,:"]/g, String.raw`\$&`);
 
 /** Accès Wi-Fi (boutique, restaurant, salle de réunion) : un scan connecte le téléphone. */
 export function wifiPayload(ssid: string, password = '') {
   const security = password ? 'WPA' : 'nopass';
-  return `WIFI:T:${security};S:${wifiEscape(ssid)};${password ? `P:${wifiEscape(password)};` : ''};`;
+  const secret = password ? `P:${wifiEscape(password)};` : '';
+  return `WIFI:T:${security};S:${wifiEscape(ssid)};${secret};`;
 }

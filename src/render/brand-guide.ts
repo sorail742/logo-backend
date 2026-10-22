@@ -223,7 +223,7 @@ class GuideWriter {
   }
 }
 
-export async function renderBrandGuidePdf(input: BrandGuideInput): Promise<Buffer> {
+export function renderBrandGuidePdf(input: BrandGuideInput): Promise<Buffer> {
   const { content } = input;
   const pdf = createPdf({
     size: [PAGE.width, PAGE.height],

@@ -19,7 +19,11 @@ export function normalizeHex(hex: string) {
 
 export function hexToRgb(hex: string): [number, number, number] {
   const value = normalizeHex(hex).slice(1);
-  return [0, 2, 4].map((i) => parseInt(value.slice(i, i + 2), 16)) as [number, number, number];
+  return [0, 2, 4].map((i) => Number.parseInt(value.slice(i, i + 2), 16)) as [
+    number,
+    number,
+    number,
+  ];
 }
 
 export function rgbToHex(r: number, g: number, b: number) {

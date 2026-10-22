@@ -42,12 +42,12 @@ export function parseSignatureData(kind: SignatureKind, raw: unknown): Signature
   return { kind, data: parsed.data } as SignatureData;
 }
 
-export function emailTemplateKey(key: string | undefined | null): EmailTemplateKey {
-  const value = key ?? 'classic';
-  if (!(EMAIL_TEMPLATE_KEYS as readonly string[]).includes(value)) {
-    throw new BadRequestException(`Modèle de signature inconnu : ${value}`);
+export function emailTemplateKey(key?: string | null): EmailTemplateKey {
+  if (key === undefined || key === null) return 'classic';
+  if (!(EMAIL_TEMPLATE_KEYS as readonly string[]).includes(key)) {
+    throw new BadRequestException(`Modèle de signature inconnu : ${key}`);
   }
-  return value as EmailTemplateKey;
+  return key as EmailTemplateKey;
 }
 
 /** Marque fournie par le formulaire public (signature e-mail sans compte). */

@@ -307,7 +307,7 @@ export class WorkspacesService {
       include: { plan: true },
     });
     const plan =
-      sub && sub.status === 'ACTIVE'
+      sub?.status === 'ACTIVE'
         ? sub.plan
         : await this.prisma.plan.findUnique({ where: { code: 'FREE' } });
     const max = plan?.maxMembers ?? 1;

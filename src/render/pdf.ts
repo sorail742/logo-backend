@@ -109,9 +109,9 @@ export function textRuns(text: string, font: PdfFont = 'regular') {
   const runs: { text: string; ext: boolean }[] = [];
   for (const char of Array.from(text)) {
     // Espaces et retours à la ligne restent dans le segment en cours.
-    const ext = /\s/.test(char) ? (runs.at(-1)?.ext ?? false) : !fileHasGlyph(latin, char);
     const last = runs.at(-1);
-    if (last && last.ext === ext) last.text += char;
+    const ext = /\s/.test(char) ? (last?.ext ?? false) : !fileHasGlyph(latin, char);
+    if (last?.ext === ext) last.text += char;
     else runs.push({ text: char, ext });
   }
   return runs;

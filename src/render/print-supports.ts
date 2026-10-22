@@ -71,68 +71,64 @@ function contactQr(input: SupportsInput) {
   );
 }
 
-/** Carte de visite 85 × 55 mm, recto (logo et coordonnées) et verso (couleur de la marque). */
-export function businessCardPdf(input: SupportsInput): Promise<Buffer> {
+/** Format de la carte de visite : 85 × 55 mm au rognage, fond perdu compris. */
+const CARD = (() => {
   const trimW = 85 * MM;
   const trimH = 55 * MM;
-  const width = trimW + BLEED * 2;
-  const height = trimH + BLEED * 2;
-  const pdf = createPdf({
-    size: [width, height],
-    title: `${input.content.name} — Carte de visite`,
-  });
-  const { doc } = pdf;
-  registerTextFonts(doc);
-  const safe = BLEED + 5 * MM;
-  const { colors, contact } = input;
+  return {
+    trimW,
+    trimH,
+    width: trimW + BLEED * 2,
+    height: trimH + BLEED * 2,
+    safe: BLEED + 5 * MM,
+  };
+})();
 
-  // Recto
+/** Recto : logo, nom et fonction à gauche ; QR code de contact et coordonnées à droite. */
+function cardFront(doc: PDFKit.PDFDocument, input: SupportsInput) {
+  const { width, height, safe, trimW, trimH } = CARD;
+  const { colors, contact } = input;
   setPrintBoxes(doc, width, height);
   doc.rect(0, 0, width, height).fill('#ffffff');
   doc.rect(0, height - BLEED - 2.5 * MM, width, BLEED + 2.5 * MM).fill(colors.primary);
   const lines = contactLines(contact);
-  if (contact?.fullName || lines.length) {
-    drawSvg(doc, logoSvg(input.logo), safe, safe, 38 * MM, 16 * MM, 'meet', 'xMinYMid');
-    let y = safe + 21 * MM;
-    if (contact?.fullName) {
-      writeText(doc, contact.fullName, safe, y, {
-        font: 'bold',
-        size: 9,
-        color: INK,
-        width: 40 * MM,
-        lineBreak: false,
-      });
-      y += 12;
-    }
-    if (contact?.jobTitle) {
-      writeText(doc, contact.jobTitle, safe, y, {
-        size: 7,
-        color: MUTED,
-        width: 40 * MM,
-        lineBreak: false,
-      });
-    }
-    const right = width - safe;
-    const qr = contactQr(input);
-    if (qr) drawSvg(doc, qr, right - 20 * MM, safe, 20 * MM, 20 * MM);
-    lines.slice(0, 4).forEach((line, index) => {
-      writeText(doc, line, right - 36 * MM, safe + 22 * MM + index * 10, {
-        size: 6.5,
-        color: INK,
-        width: 36 * MM,
-        align: 'right',
-        lineBreak: false,
-      });
-    });
-  } else {
+  if (!contact?.fullName && !lines.length) {
     drawSvg(doc, logoSvg(input.logo), safe, safe, trimW - 10 * MM, trimH - 14 * MM);
+    return;
   }
+  drawSvg(doc, logoSvg(input.logo), safe, safe, 38 * MM, 16 * MM, 'meet', 'xMinYMid');
+  const identity = [
+    contact?.fullName && { text: contact.fullName, font: 'bold' as const, size: 9, color: INK },
+    contact?.jobTitle && { text: contact.jobTitle, size: 7, color: MUTED },
+  ].filter((item) => !!item);
+  identity.forEach(({ text, ...style }, index) => {
+    writeText(doc, text, safe, safe + 21 * MM + index * 12, {
+      ...style,
+      width: 40 * MM,
+      lineBreak: false,
+    });
+  });
+  const right = width - safe;
+  const qr = contactQr(input);
+  if (qr) drawSvg(doc, qr, right - 20 * MM, safe, 20 * MM, 20 * MM);
+  lines.slice(0, 4).forEach((line, index) => {
+    writeText(doc, line, right - 36 * MM, safe + 22 * MM + index * 10, {
+      size: 6.5,
+      color: INK,
+      width: 36 * MM,
+      align: 'right',
+      lineBreak: false,
+    });
+  });
+}
 
-  // Verso
+/** Verso : logo sur la couleur de la marque, slogan s'il n'est pas déjà sous le logo. */
+function cardBack(doc: PDFKit.PDFDocument, input: SupportsInput) {
+  const { width, height, safe, trimW, trimH } = CARD;
+  const { colors } = input;
   doc.addPage({ size: [width, height], margin: 0 });
   setPrintBoxes(doc, width, height);
   const onPrimary = logoOn(input.logo, colors.primary);
-  const fg = readableOn(colors.primary);
   doc.rect(0, 0, width, height).fill(onPrimary ? colors.primary : '#ffffff');
   if (!onPrimary)
     doc.rect(0, height - BLEED - 2.5 * MM, width, BLEED + 2.5 * MM).fill(colors.primary);
@@ -153,12 +149,23 @@ export function businessCardPdf(input: SupportsInput): Promise<Buffer> {
   if (slogan) {
     writeText(doc, slogan, safe, height - safe - 6 * MM, {
       size: 7,
-      color: onPrimary ? fg : INK,
+      color: onPrimary ? readableOn(colors.primary) : INK,
       width: trimW - 10 * MM,
       align: 'center',
       lineBreak: false,
     });
   }
+}
+
+/** Carte de visite 85 × 55 mm, recto (logo et coordonnées) et verso (couleur de la marque). */
+export function businessCardPdf(input: SupportsInput): Promise<Buffer> {
+  const pdf = createPdf({
+    size: [CARD.width, CARD.height],
+    title: `${input.content.name} — Carte de visite`,
+  });
+  registerTextFonts(pdf.doc);
+  cardFront(pdf.doc, input);
+  cardBack(pdf.doc, input);
   return pdf.done();
 }
 

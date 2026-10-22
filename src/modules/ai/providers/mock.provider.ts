@@ -100,6 +100,12 @@ const STYLE_FONTS: Record<LogoStyle, string[]> = {
   ],
 };
 
+/** Disposition simulée : logotype seul, sinon une proposition sur trois en vertical. */
+function mockLayout(type: LogoGenerationInput['type'], index: number) {
+  if (type === 'WORDMARK') return 'text' as const;
+  return index % 3 === 2 ? ('vertical' as const) : ('horizontal' as const);
+}
+
 /**
  * Fournisseur factice déterministe, utilisé en développement et en test tant que le
  * fournisseur IA réel n'est pas choisi (§15.4). Produit des noms plausibles à partir du brief.
@@ -109,7 +115,7 @@ export class MockAiProvider extends AiProvider {
   readonly name = 'mock';
   readonly demo = true;
 
-  async generateNames(input: NameGenerationInput): Promise<AiCallResult> {
+  generateNames(input: NameGenerationInput): Promise<AiCallResult> {
     const { brief } = input;
     const words = [...brief.mustInclude, ...brief.values, brief.sector, ...brief.mission.split(/\s+/)]
       .map(clean)
@@ -133,11 +139,11 @@ export class MockAiProvider extends AiProvider {
       names.push(candidate);
     }
 
-    return { raw: { names }, provider: this.name, promptVersion: 'mock-1', costUsdMicros: 0 };
+    return Promise.resolve({ raw: { names }, provider: this.name, promptVersion: 'mock-1', costUsdMicros: 0 });
   }
 
   /** Port du simulateur du front : icônes liées au brief, polices et palettes selon le style. */
-  async composeLogos(input: LogoGenerationInput): Promise<AiCallResult> {
+  composeLogos(input: LogoGenerationInput): Promise<AiCallResult> {
     const random = rng(hash(JSON.stringify(input)));
     const pick = <T>(arr: readonly T[]) => arr[Math.floor(random() * arr.length)];
     const feedback = (input.feedback ?? '').toLowerCase();
@@ -174,18 +180,18 @@ export class MockAiProvider extends AiProvider {
         letterSpacing: input.style === 'MINIMAL' || input.style === 'INSTITUTIONAL' ? 0.04 : pick([0, 0, 0.02, 0.08]),
         uppercase: input.style === 'INSTITUTIONAL' || input.style === 'AFRICAN' || random() > 0.7,
         iconFrame: input.type === 'MONOGRAM' ? pick(['circle', 'rounded', 'hexagon'] as const) : pick(frames),
-        layout: input.type === 'WORDMARK' ? 'text' : i % 3 === 2 ? 'vertical' : 'horizontal',
+        layout: mockLayout(input.type, i),
         colors,
         withTagline: !simpler && random() > 0.5,
         rationale: `Style ${input.style.toLowerCase()}, proposition ${i + 1}`,
       });
     }
 
-    return { raw: { compositions }, provider: this.name, promptVersion: 'mock-logos-1', costUsdMicros: 0 };
+    return Promise.resolve({ raw: { compositions }, provider: this.name, promptVersion: 'mock-logos-1', costUsdMicros: 0 });
   }
 
   /** Port du simulateur du front : gabarits par ton, devises en trois termes, phrases de mission. */
-  async generateSlogans(input: SloganGenerationInput): Promise<AiCallResult> {
+  generateSlogans(input: SloganGenerationInput): Promise<AiCallResult> {
     const random = rng(hash(JSON.stringify(input)));
     const pick = <T>(arr: readonly T[]) => arr[Math.floor(random() * arr.length)];
     const values = input.brief?.values.length ? input.brief.values : ['progrès', 'unité', 'travail'];
@@ -226,7 +232,7 @@ export class MockAiProvider extends AiProvider {
     }
 
     const slogans = [...texts].map((text) => ({ text }));
-    return { raw: { slogans }, provider: this.name, promptVersion: 'mock-slogans-1', costUsdMicros: 0 };
+    return Promise.resolve({ raw: { slogans }, provider: this.name, promptVersion: 'mock-slogans-1', costUsdMicros: 0 });
   }
 
   private build(
@@ -311,6 +317,6 @@ function rng(seed: number) {
 
 function hash(s: string) {
   let h = 0;
-  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  for (const char of s) h = (h * 31 + (char.codePointAt(0) ?? 0)) >>> 0;
   return h;
 }

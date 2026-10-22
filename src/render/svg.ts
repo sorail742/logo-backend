@@ -56,9 +56,10 @@ const ALLOWED_ELEMENTS = new Set([
   'feOffset',
 ]);
 
-const SAFE_IMAGE = /^data:image\/(png|jpeg|gif|webp);base64,[a-z0-9+/=\s]+$/i;
-const EXTERNAL_URL = /url\(\s*['"]?(?!#)[^)]*\)/gi;
-const HAS_EXTERNAL_URL = /url\(\s*['"]?(?!#)/i;
+const SAFE_IMAGE = /^data:image\/(?:png|jpeg|gif|webp);base64,[a-z0-9+/=]+$/i;
+// Toute référence url(…) qui ne vise pas un identifiant interne (#…) ; expressions linéaires.
+const EXTERNAL_URL = /url\((?!\s*['"]?#)[^)]*\)/gi;
+const HAS_EXTERNAL_URL = /url\((?!\s*['"]?#)/i;
 const LINK_ATTRIBUTES = new Set(['href', 'xlink:href', 'src']);
 
 function detach(node: XastElement, parent: XastParent) {
@@ -97,7 +98,8 @@ const sanitizePlugin: CustomPlugin = {
             delete node.attributes[name];
           } else if (LINK_ATTRIBUTES.has(attr)) {
             const internal = value.startsWith('#') && node.name !== 'image';
-            const image = node.name === 'image' && SAFE_IMAGE.test(value);
+            // Les retours à la ligne d'un base64 sont retirés avant le contrôle (expression linéaire).
+            const image = node.name === 'image' && SAFE_IMAGE.test(value.replace(/\s+/g, ''));
             if (!internal && !image) delete node.attributes[name];
           } else if (HAS_EXTERNAL_URL.test(value)) {
             node.attributes[name] = cleanCss(value);
@@ -190,11 +192,11 @@ export function recolorSvg(svg: string, color: string): string {
 
 /** Dimensions intrinsèques d'un SVG (viewBox, sinon width / height). */
 export function svgSize(svg: string): { width: number; height: number } {
-  const root = svg.match(/<svg\b[^>]*>/)?.[0] ?? '';
-  const viewBox = root.match(/viewBox="\s*[-\d.]+[\s,]+[-\d.]+[\s,]+([\d.]+)[\s,]+([\d.]+)\s*"/);
+  const root = /<svg\b[^>]*>/.exec(svg)?.[0] ?? '';
+  const viewBox = /viewBox="\s*[-\d.]+[\s,]+[-\d.]+[\s,]+([\d.]+)[\s,]+([\d.]+)\s*"/.exec(root);
   if (viewBox) return { width: Number(viewBox[1]), height: Number(viewBox[2]) };
-  const width = Number(root.match(/\bwidth="([\d.]+)(px)?"/)?.[1] ?? 512);
-  const height = Number(root.match(/\bheight="([\d.]+)(px)?"/)?.[1] ?? 512);
+  const width = Number(/\bwidth="([\d.]+)(px)?"/.exec(root)?.[1] ?? 512);
+  const height = Number(/\bheight="([\d.]+)(px)?"/.exec(root)?.[1] ?? 512);
   return { width, height };
 }
 

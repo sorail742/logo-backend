@@ -61,6 +61,11 @@ function toAdminUser({
 /** Période des indicateurs du tableau de bord (§9, ADM-01). */
 const STATS_DAYS = 14;
 
+/** Message de refus d'un cachet, avec le motif s'il est donné. */
+function refusalMessage(note?: string | null) {
+  return note ? `Votre cachet a été refusé. Motif : ${note}` : 'Votre cachet a été refusé.';
+}
+
 @Injectable()
 export class AdminService {
   constructor(
@@ -152,7 +157,7 @@ export class AdminService {
     return { ...page, items: page.items.map(toAdminUser) };
   }
 
-  async getUser(userId: string) {
+  getUser(userId: string) {
     return this.prisma.user.findUniqueOrThrow({
       where: { id: userId },
       select: {
@@ -205,7 +210,7 @@ export class AdminService {
   }
 
   /** ADM-06 : ajustement manuel avec motif obligatoire, tracé. */
-  async adjustCredits(actor: AuthUser, dto: AdjustCreditsDto, ip: string) {
+  adjustCredits(actor: AuthUser, dto: AdjustCreditsDto, ip: string) {
     return this.prisma.$transaction(async (tx) => {
       const before = await tx.workspace.findUniqueOrThrow({
         where: { id: dto.workspaceId },
@@ -417,7 +422,7 @@ export class AdminService {
             title: approved ? 'Cachet validé' : 'Cachet refusé',
             body: approved
               ? 'Votre cachet a été validé : vous pouvez le télécharger.'
-              : `Votre cachet a été refusé.${dto.note ? ` Motif : ${dto.note}` : ''}`,
+              : refusalMessage(dto.note),
             href: `/app/projets/${signature.project.id}/signatures?onglet=stamp`,
           },
         })),

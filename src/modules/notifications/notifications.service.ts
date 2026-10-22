@@ -101,10 +101,12 @@ export class NotificationsService {
       where: { id: { in: userIds }, email: { not: null }, deletedAt: null, suspendedAt: null },
       select: { email: true },
     });
-    for (const { email } of users) {
-      await this.mail.sendNotification(email!, content).catch((err: Error) => {
-        this.logger.warn(`E-mail de notification non programmé : ${err.message}`);
-      });
-    }
+    await Promise.all(
+      users.map(({ email }) =>
+        this.mail.sendNotification(email!, content).catch((err: Error) => {
+          this.logger.warn(`E-mail de notification non programmé : ${err.message}`);
+        }),
+      ),
+    );
   }
 }

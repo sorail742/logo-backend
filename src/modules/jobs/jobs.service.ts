@@ -29,7 +29,7 @@ export interface EnqueueParams {
 }
 
 const IDEMPOTENCY_TTL_S = 24 * 3600;
-const TERMINAL: JobStatus[] = [JobStatus.SUCCEEDED, JobStatus.FAILED, JobStatus.CANCELED];
+const TERMINAL = new Set<JobStatus>([JobStatus.SUCCEEDED, JobStatus.FAILED, JobStatus.CANCELED]);
 
 @Injectable()
 export class JobsService {
@@ -201,7 +201,7 @@ export class JobsService {
   }
 
   isTerminal(status: JobStatus) {
-    return TERMINAL.includes(status);
+    return TERMINAL.has(status);
   }
 }
 

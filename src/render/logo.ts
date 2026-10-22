@@ -98,7 +98,8 @@ function renderMark(
     parts.push(`<polygon points="${points}" fill="${colors.primary}"/>`);
   }
 
-  const ink = framed ? (variant === 'white' ? '#111111' : '#ffffff') : colors.primary;
+  const inkOnFrame = variant === 'white' ? '#111111' : '#ffffff';
+  const ink = framed ? inkOnFrame : colors.primary;
   const icon = spec.type !== 'MONOGRAM' && spec.iconId ? getIcon(spec.iconId) : undefined;
 
   if (!icon) {
@@ -207,15 +208,19 @@ export function renderLogoSvg(spec: LogoSpec, options: RenderOptions = {}): Rend
   } else if (layout === 'text') {
     width = blockWidth + PAD * 2;
     height = textBlockHeight + PAD * 2;
-    body.push(path(name.toPath(width / 2, PAD + TEXT_SIZE * 0.8, 'middle'), colors.text));
-    body.push(taglineEl(width / 2, PAD + TEXT_SIZE + TAGLINE_SIZE + 6, 'middle'));
+    body.push(
+      path(name.toPath(width / 2, PAD + TEXT_SIZE * 0.8, 'middle'), colors.text),
+      taglineEl(width / 2, PAD + TEXT_SIZE + TAGLINE_SIZE + 6, 'middle'),
+    );
   } else if (layout === 'vertical') {
     width = Math.max(blockWidth, MARK_SIZE) + PAD * 2;
     height = MARK_SIZE + 28 + textBlockHeight + PAD * 2;
     body.push(renderMark(spec, colors, (width - MARK_SIZE) / 2, PAD, MARK_SIZE, variant));
     const baseline = PAD + MARK_SIZE + 28 + TEXT_SIZE * 0.8;
-    body.push(path(name.toPath(width / 2, baseline, 'middle'), colors.text));
-    body.push(taglineEl(width / 2, baseline + TAGLINE_SIZE + 18, 'middle'));
+    body.push(
+      path(name.toPath(width / 2, baseline, 'middle'), colors.text),
+      taglineEl(width / 2, baseline + TAGLINE_SIZE + 18, 'middle'),
+    );
   } else {
     const gap = 28;
     width = MARK_SIZE + gap + blockWidth + PAD * 2;
@@ -223,8 +228,10 @@ export function renderLogoSvg(spec: LogoSpec, options: RenderOptions = {}): Rend
     body.push(renderMark(spec, colors, PAD, (height - MARK_SIZE) / 2, MARK_SIZE, variant));
     const textX = PAD + MARK_SIZE + gap;
     const baseline = (height - textBlockHeight) / 2 + TEXT_SIZE * 0.8;
-    body.push(path(name.toPath(textX, baseline, 'start'), colors.text));
-    body.push(taglineEl(textX, baseline + TAGLINE_SIZE + 18, 'start'));
+    body.push(
+      path(name.toPath(textX, baseline, 'start'), colors.text),
+      taglineEl(textX, baseline + TAGLINE_SIZE + 18, 'start'),
+    );
   }
 
   width = Math.ceil(width);

@@ -163,15 +163,17 @@ const TEMPLATES = [
 ];
 
 async function main() {
-  for (const plan of PLANS) {
-    await prisma.plan.upsert({ where: { code: plan.code }, create: plan, update: plan });
-  }
+  await Promise.all(
+    PLANS.map((plan) => prisma.plan.upsert({ where: { code: plan.code }, create: plan, update: plan })),
+  );
 
   await prisma.blockedTerm.createMany({ data: BLOCKED_TERMS, skipDuplicates: true });
 
-  for (const t of TEMPLATES) {
-    await prisma.template.upsert({ where: { key: t.key }, create: t, update: { name: t.name, isActive: true } });
-  }
+  await Promise.all(
+    TEMPLATES.map((t) =>
+      prisma.template.upsert({ where: { key: t.key }, create: t, update: { name: t.name, isActive: true } }),
+    ),
+  );
   // Anciens modèles sans clé (premier seed) : retirés de la bibliothèque.
   await prisma.template.updateMany({
     where: { key: null, kind: { in: ['EMAIL_SIGNATURE', 'STAMP'] } },
@@ -179,30 +181,36 @@ async function main() {
   });
 
   // Module textile : préréglages sportifs et supports (créés une seule fois, ensuite gérés par l'admin).
-  for (const p of DEFAULT_RULE_PRESETS) {
-    await prisma.rulePreset.upsert({
-      where: { code: p.code },
-      create: { code: p.code, name: p.name, rules: p.rules as object },
-      update: {},
-    });
-  }
-  for (const t of DEFAULT_TEMPLATES) {
-    if (await prisma.productTemplate.findFirst({ where: { category: t.category, name: t.name } }))
-      continue;
-    await prisma.productTemplate.create({
-      data: {
-        category: t.category,
-        name: t.name,
-        views: {},
-        sizes: {
-          create: DEFAULT_SIZES.filter(
-            (s) => t.category !== 'POLO' || !s.label.includes('ANS'),
-          ).map((s, i) => ({ ...s, sortOrder: i })),
+  await Promise.all(
+    DEFAULT_RULE_PRESETS.map((p) =>
+      prisma.rulePreset.upsert({
+        where: { code: p.code },
+        create: { code: p.code, name: p.name, rules: p.rules as object },
+        update: {},
+      }),
+    ),
+  );
+  const existing = await prisma.productTemplate.findMany({ select: { category: true, name: true } });
+  const missing = DEFAULT_TEMPLATES.filter(
+    (t) => !existing.some((e) => e.category === t.category && e.name === t.name),
+  );
+  await Promise.all(
+    missing.map((t) =>
+      prisma.productTemplate.create({
+        data: {
+          category: t.category,
+          name: t.name,
+          views: {},
+          sizes: {
+            create: DEFAULT_SIZES.filter(
+              (s) => t.category !== 'POLO' || !s.label.includes('ANS'),
+            ).map((s, i) => ({ ...s, sortOrder: i })),
+          },
+          zones: { create: t.zones },
         },
-        zones: { create: t.zones },
-      },
-    });
-  }
+      }),
+    ),
+  );
 
   console.log(
     `Seed : ${PLANS.length} offres, ${BLOCKED_TERMS.length} termes bloqués, ${TEMPLATES.length} modèles, ` +

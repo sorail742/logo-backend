@@ -141,7 +141,7 @@ export class AuthService {
   }
 
   /** Espace personnel créé à l'inscription (PRJ-01). */
-  async createPersonalWorkspace(tx: Tx, user: Pick<User, 'id' | 'fullName'>) {
+  createPersonalWorkspace(tx: Tx, user: Pick<User, 'id' | 'fullName'>) {
     return tx.workspace.create({
       data: {
         name: `Espace de ${user.fullName}`,

@@ -126,8 +126,8 @@ export function shapeText(text: string, style: TextStyle): ShapedText {
     width,
     capHeight,
     toPath(originX, baseline, anchor = 'start') {
-      const start =
-        anchor === 'middle' ? originX - width / 2 : anchor === 'end' ? originX - width : originX;
+      const offset = { start: 0, middle: width / 2, end: width }[anchor];
+      const start = originX - offset;
       return glyphs
         .map(({ glyph, x: gx }) => glyph.getPath(start + gx, baseline, style.size).toPathData(2))
         .filter(Boolean)

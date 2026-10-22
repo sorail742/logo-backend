@@ -9,6 +9,8 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createHash } from 'node:crypto';
+import { Readable } from 'node:stream';
+import type { ReadableStream as WebReadableStream } from 'node:stream/web';
 import type Redis from 'ioredis';
 import { z } from 'zod';
 import { REDIS } from '../../common/redis/redis.module';
@@ -25,7 +27,7 @@ const PHOTO_TTL_S = 86400;
 /** Côté maximal téléchargé : le Studio réduit de toute façon à 2 400 px. */
 const DOWNLOAD_SIDE = 2400;
 const MAX_DOWNLOAD_BYTES = 15 * 1024 * 1024;
-const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+const IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 
 export type PhotoOrientation = 'landscape' | 'portrait' | 'square';
 
@@ -74,13 +76,13 @@ const pexelsPage = z.object({
 });
 
 // Listes autorisées : seules les adresses HTTPS de Pexels sont relayées ou téléchargées.
-const SECURE_PROTOCOLS = ['https:'];
+const SECURE_PROTOCOLS = new Set(['https:']);
 const IMAGE_HOSTS = ['images.pexels.com'];
 const PAGE_HOSTS = ['www.pexels.com'];
 
 const onHost = (url: string, hosts: string[]) => {
   const parsed = new URL(url);
-  return SECURE_PROTOCOLS.includes(parsed.protocol) && hosts.includes(parsed.hostname);
+  return SECURE_PROTOCOLS.has(parsed.protocol) && hosts.includes(parsed.hostname);
 };
 
 function normalize(raw: unknown): LibraryPhoto | null {
@@ -196,7 +198,7 @@ export class PhotosService {
         code: 'PHOTOS_UNAVAILABLE',
       });
     const contentType = response.headers.get('content-type')?.split(';')[0]?.trim() ?? '';
-    if (!response.ok || !IMAGE_TYPES.includes(contentType)) {
+    if (!response.ok || !IMAGE_TYPES.has(contentType)) {
       this.logger.warn(`Téléchargement Pexels refusé (statut ${response.status})`);
       throw new BadGatewayException({ message: 'Photo indisponible', code: 'PHOTOS_UNAVAILABLE' });
     }
@@ -257,20 +259,17 @@ export class PhotosService {
 async function readLimited(response: Response, max: number) {
   if (Number(response.headers.get('content-length') ?? 0) > max)
     throw new BadGatewayException({ message: 'Photo trop lourde', code: 'PHOTOS_UNAVAILABLE' });
-  const reader = response.body?.getReader();
-  if (!reader)
+  if (!response.body)
     throw new BadGatewayException({ message: 'Photo indisponible', code: 'PHOTOS_UNAVAILABLE' });
   const chunks: Uint8Array[] = [];
   let size = 0;
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    size += value.byteLength;
-    if (size > max) {
-      await reader.cancel();
+  // Quitter la boucle (exception comprise) annule la lecture du flux.
+  for await (const chunk of Readable.fromWeb(response.body as WebReadableStream<Uint8Array>)) {
+    const bytes = chunk as Buffer;
+    size += bytes.byteLength;
+    if (size > max)
       throw new BadGatewayException({ message: 'Photo trop lourde', code: 'PHOTOS_UNAVAILABLE' });
-    }
-    chunks.push(value);
+    chunks.push(bytes);
   }
   return Buffer.concat(chunks);
 }

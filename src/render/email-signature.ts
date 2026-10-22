@@ -138,13 +138,24 @@ export function renderEmailSignature(
   const org = `<span style="color:#555555;">${esc(brand.name)}</span>`;
   const contacts = contactLines(data, primary);
   const social = socials(data, primary);
+  // Fragments facultatifs, calculés une fois pour les modèles.
+  const socialLine = social ? `<br>${social}` : '';
+  const sloganSpan = brand.slogan
+    ? `<span style="font-weight:normal;font-size:12px;color:#ffffff;"> — ${esc(brand.slogan)}</span>`
+    : '';
+  const centeredLogo = brand.logoUrl
+    ? `<div style="padding-bottom:8px;">${logoImg(brand, 120)}</div>`
+    : '';
+  const sideLogo = brand.logoUrl
+    ? `<td valign="middle" style="padding-right:16px;">${logoImg(brand, 96)}</td>`
+    : '';
 
   switch (templateId) {
     case 'sidebar':
       return wrap(
         `<table cellpadding="0" cellspacing="0" border="0" role="presentation" style="border-collapse:collapse;"><tr>
 <td valign="top" style="padding-right:14px;">${photoImg(data, 72) || logoImg(brand, 72)}</td>
-<td valign="top" style="border-left:3px solid ${primary};padding-left:14px;">${name}<br>${title}${title ? ' · ' : ''}${org}<br>${contacts.join('<br>')}${social ? `<br>${social}` : ''}</td>
+<td valign="top" style="border-left:3px solid ${primary};padding-left:14px;">${name}<br>${title}${title ? ' · ' : ''}${org}<br>${contacts.join('<br>')}${socialLine}</td>
 </tr></table>`,
         data,
         brand,
@@ -158,7 +169,7 @@ export function renderEmailSignature(
     case 'centered':
       return wrap(
         `<table cellpadding="0" cellspacing="0" border="0" role="presentation" style="border-collapse:collapse;"><tr><td align="center" style="text-align:center;">
-${brand.logoUrl ? `<div style="padding-bottom:8px;">${logoImg(brand, 120)}</div>` : ''}${name}<br>${title}<br>${org}<br><span style="font-size:12px;">${contacts.join(' · ')}</span>${social ? `<br>${social}` : ''}
+${centeredLogo}${name}<br>${title}<br>${org}<br><span style="font-size:12px;">${contacts.join(' · ')}</span>${socialLine}
 </td></tr></table>`,
         data,
         brand,
@@ -166,8 +177,8 @@ ${brand.logoUrl ? `<div style="padding-bottom:8px;">${logoImg(brand, 120)}</div>
     case 'banner':
       return wrap(
         `<table cellpadding="0" cellspacing="0" border="0" role="presentation" style="border-collapse:collapse;width:480px;"><tr>
-<td style="background-color:${primary};padding:10px 14px;color:#ffffff;font-weight:bold;font-size:14px;">${esc(brand.name)}${brand.slogan ? `<span style="font-weight:normal;font-size:12px;color:#ffffff;"> — ${esc(brand.slogan)}</span>` : ''}</td></tr>
-<tr><td style="padding:12px 14px;border:1px solid #e5e5e5;border-top:0;">${name}<br>${title}<br>${contacts.join('<br>')}${social ? `<br>${social}` : ''}</td></tr></table>`,
+<td style="background-color:${primary};padding:10px 14px;color:#ffffff;font-weight:bold;font-size:14px;">${esc(brand.name)}${sloganSpan}</td></tr>
+<tr><td style="padding:12px 14px;border:1px solid #e5e5e5;border-top:0;">${name}<br>${title}<br>${contacts.join('<br>')}${socialLine}</td></tr></table>`,
         data,
         brand,
       );
@@ -181,10 +192,10 @@ ${brand.logoUrl ? `<div style="padding-bottom:8px;">${logoImg(brand, 120)}</div>
     default:
       return wrap(
         `<table cellpadding="0" cellspacing="0" border="0" role="presentation" style="border-collapse:collapse;"><tr>
-${brand.logoUrl ? `<td valign="middle" style="padding-right:16px;">${logoImg(brand, 96)}</td>` : ''}
+${sideLogo}
 <td valign="middle">${name}<br>${title}<br>${org}
 <div style="height:2px;width:40px;background-color:${accent};margin:6px 0;line-height:2px;font-size:2px;">&nbsp;</div>
-${contacts.join('<br>')}${social ? `<br>${social}` : ''}</td>
+${contacts.join('<br>')}${socialLine}</td>
 </tr></table>`,
         data,
         brand,

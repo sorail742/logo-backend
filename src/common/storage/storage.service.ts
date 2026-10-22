@@ -144,7 +144,7 @@ export class StorageService {
   }
 
   /** URL de téléchargement signée, valable `expiresIn` secondes. */
-  async signedUrl(key: string, options: SignedUrlOptions = {}): Promise<string> {
+  signedUrl(key: string, options: SignedUrlOptions = {}): Promise<string> {
     const expiresIn = options.expiresIn ?? DEFAULT_URL_TTL_S;
     const fileName = options.fileName ?? key.split('/').pop()!;
     if (this.s3) {
@@ -162,7 +162,7 @@ export class StorageService {
     const d = options.inline ? 'inline' : 'attachment';
     const query = new URLSearchParams({ key: checkKey(key), exp, name: fileName, d });
     query.set('sig', this.sign(key, exp, fileName, d));
-    return `${this.filesUrl}?${query.toString()}`;
+    return Promise.resolve(`${this.filesUrl}?${query.toString()}`);
   }
 
   /** Vérifie une URL signée locale : chemin du fichier, ou null si elle est invalide ou expirée. */

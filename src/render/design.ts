@@ -127,13 +127,23 @@ export function archPath(width: number, height: number) {
   return `M0 ${n(height)}V${n(r)}A${n(width / 2)} ${n(r)} 0 0 1 ${n(width)} ${n(r)}V${n(height)}Z`;
 }
 
+/** Ancre SVG et abscisse du texte selon son alignement. */
+function textAnchor(el: { align?: string; width: number }) {
+  if (el.align === 'center') return { anchor: 'middle' as const, x: el.width / 2 };
+  if (el.align === 'right') return { anchor: 'end' as const, x: el.width };
+  return { anchor: 'start' as const, x: 0 };
+}
+
+const sign = (flipped?: boolean) => (flipped ? -1 : 1);
+
 function renderShape(el: ShapeElement, pid: string, defs: string[]) {
   const { width: w, height: h } = el;
   const paint = `fill="${paintValue(el.fill, `${pid}-f`, defs)}"${strokeAttrs(el.stroke)}`;
   switch (el.shape) {
     case 'rect': {
       const r = Math.min(el.radius ?? 0, w / 2, h / 2);
-      return `<rect width="${n(w)}" height="${n(h)}"${r > 0 ? ` rx="${n(r)}"` : ''} ${paint}/>`;
+      const radius = r > 0 ? ` rx="${n(r)}"` : '';
+      return `<rect width="${n(w)}" height="${n(h)}"${radius} ${paint}/>`;
     }
     case 'ellipse':
       return `<ellipse cx="${n(w / 2)}" cy="${n(h / 2)}" rx="${n(w / 2)}" ry="${n(h / 2)}" ${paint}/>`;
@@ -191,11 +201,27 @@ function textStyle(el: TextElement): TextStyle {
   };
 }
 
+/**
+ * Texte en courbe : chaque retour à la ligne, avec les blancs qui l'entourent, devient une espace
+ * (découpage linéaire, sans expression régulière à retour arrière).
+ */
+export function singleLine(text: string) {
+  const parts = text.split('\n');
+  const last = parts.length - 1;
+  return parts
+    .map((part, i) => {
+      const start = i > 0 ? part.trimStart() : part;
+      return i < last ? start.trimEnd() : start;
+    })
+    .filter((part, i) => part !== '' || i === 0 || i === last)
+    .join(' ');
+}
+
 /** Lignes du texte : celles de l'éditeur, sinon un retour à la ligne à la largeur de la boîte. */
 export function textLines(el: TextElement) {
   if (el.lines?.length) return el.lines;
   const text = displayText(el);
-  if (el.curve) return [text.replace(/\s*\n\s*/g, ' ')];
+  if (el.curve) return [singleLine(text)];
   const style = textStyle(el);
   const lines: string[] = [];
   for (const paragraph of text.split('\n')) {
@@ -257,8 +283,7 @@ function renderText(el: TextElement, pid: string, defs: string[]) {
     return parts.join('');
   }
 
-  const anchor = el.align === 'center' ? 'middle' : el.align === 'right' ? 'end' : 'start';
-  const x = el.align === 'center' ? el.width / 2 : el.align === 'right' ? el.width : 0;
+  const { anchor, x } = textAnchor(el);
   const paths = textLines(el)
     .map((line, i) => shapeText(line, style).toPath(x, i * box + baseline, anchor))
     .filter(Boolean)
@@ -317,12 +342,10 @@ function renderImage(el: ImageElement, pid: string, defs: string[]) {
 }
 
 export function svgParts(svg: string) {
-  const root = svg.match(/<svg\b[^>]*>/)?.[0] ?? '';
-  const viewBox = root.match(
-    /viewBox="\s*([-\d.]+)[\s,]+([-\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)\s*"/,
-  );
-  const width = Number(root.match(/\bwidth="([\d.]+)/)?.[1] ?? 100);
-  const height = Number(root.match(/\bheight="([\d.]+)/)?.[1] ?? 100);
+  const root = /<svg\b[^>]*>/.exec(svg)?.[0] ?? '';
+  const viewBox = /viewBox="\s*([-\d.]+)[\s,]+([-\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)\s*"/.exec(root);
+  const width = Number(/\bwidth="([\d.]+)/.exec(root)?.[1] ?? 100);
+  const height = Number(/\bheight="([\d.]+)/.exec(root)?.[1] ?? 100);
   const box = viewBox ? viewBox.slice(1, 5).map(Number) : [0, 0, width, height];
   const inner = svg
     .replace(/^[\s\S]*?<svg\b[^>]*>/, '')
@@ -365,7 +388,7 @@ export function elementTransform(el: DesignElement) {
   const cx = el.x + el.width / 2;
   const cy = el.y + el.height / 2;
   const rotate = el.rotation ? ` rotate(${n(el.rotation)})` : '';
-  const flip = el.flipX || el.flipY ? ` scale(${el.flipX ? -1 : 1} ${el.flipY ? -1 : 1})` : '';
+  const flip = el.flipX || el.flipY ? ` scale(${sign(el.flipX)} ${sign(el.flipY)})` : '';
   return `translate(${n(cx)} ${n(cy)})${rotate}${flip} translate(${n(-el.width / 2)} ${n(-el.height / 2)})`;
 }
 
@@ -403,7 +426,8 @@ export function renderElement(el: DesignElement) {
   if (el.opacity < 1) outer.push(`opacity="${n(el.opacity)}"`);
   if (el.blend && el.blend !== 'normal') outer.push(`style="mix-blend-mode:${el.blend}"`);
   const defsMarkup = defs.length ? `<defs>${defs.join('')}</defs>` : '';
-  return `<g${outer.length ? ` ${outer.join(' ')}` : ''}>${defsMarkup}<g transform="${elementTransform(el)}">${body}</g></g>`;
+  const attrs = outer.map((attr) => ` ${attr}`).join('');
+  return `<g${attrs}>${defsMarkup}<g transform="${elementTransform(el)}">${body}</g></g>`;
 }
 
 export function renderBackground(
