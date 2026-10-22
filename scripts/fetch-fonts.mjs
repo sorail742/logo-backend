@@ -113,9 +113,9 @@ const manifest = FONTS.map((font, index) => {
   const regular = opentype.loadSync(join(out, files[font.weights[0]][0]));
   const ascent = Math.round((regular.ascender / regular.unitsPerEm) * 1000) / 1000;
   const descent = Math.round((-regular.descender / regular.unitsPerEm) * 1000) / 1000;
-  const { pkg: _pkg, ...meta } = font;
-  console.log(`${font.name} : ${Object.values(files).flat().length} fichiers`);
-  return { ...meta, license: 'OFL', source: spec, ascent, descent, files };
+  const { id, name, category, weights } = font;
+  console.log(`${name} : ${Object.values(files).flat().length} fichiers`);
+  return { id, name, category, weights, license: 'OFL', source: spec, ascent, descent, files };
 });
 
 writeFileSync(join(out, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n');

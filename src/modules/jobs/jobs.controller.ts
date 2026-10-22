@@ -42,7 +42,7 @@ export class JobsController {
   @WorkspaceAccess('VIEWER')
   events$(@Param('jid', ParseUUIDPipe) jid: string): Observable<MessageEvent> {
     const read = () =>
-      from(this.jobs.get(jid)).pipe(
+      from(this.jobs.get(jid, { canDownload: false })).pipe(
         map((job) => ({ jobId: job.id, status: job.status, error: job.error ?? undefined })),
       );
     const live$ = this.events.stream(jid);

@@ -96,7 +96,7 @@ function cardFront(doc: PDFKit.PDFDocument, input: SupportsInput) {
     drawSvg(doc, logoSvg(input.logo), safe, safe, trimW - 10 * MM, trimH - 14 * MM);
     return;
   }
-  drawSvg(doc, logoSvg(input.logo), safe, safe, 38 * MM, 16 * MM, 'meet', 'xMinYMid');
+  drawSvg(doc, logoSvg(input.logo), safe, safe, 38 * MM, 16 * MM, 'meet-left');
   const identity = [
     contact?.fullName && { text: contact.fullName, font: 'bold' as const, size: 9, color: INK },
     contact?.jobTitle && { text: contact.jobTitle, size: 7, color: MUTED },
@@ -178,7 +178,7 @@ export function letterheadPdf(input: SupportsInput): Promise<Buffer> {
   registerTextFonts(doc);
   const margin = 20 * MM;
   doc.rect(0, 0, width, 3 * MM).fill(input.colors.primary);
-  drawSvg(doc, logoSvg(input.logo), margin, 12 * MM, 70 * MM, 22 * MM, 'meet', 'xMinYMid');
+  drawSvg(doc, logoSvg(input.logo), margin, 12 * MM, 70 * MM, 22 * MM, 'meet-left');
   const lines = contactLines(input.contact);
   lines.forEach((line, index) => {
     writeText(doc, line, width - margin - 70 * MM, 15 * MM + index * 11, {

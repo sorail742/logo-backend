@@ -537,7 +537,7 @@ function forbidden(w: GuideWriter, input: BrandGuideInput) {
           top + (tileH - stretchedH) / 2,
           stretchedW,
           stretchedH,
-          'none',
+          'stretch',
         );
       },
     },
@@ -685,8 +685,7 @@ function typography(w: GuideWriter, input: BrandGuideInput) {
       y + 54,
       CONTENT_WIDTH - 36,
       100,
-      'meet',
-      'xMinYMid',
+      'meet-left',
     );
     w.text(
       `Licence : ${font.license} — usage commercial autorisé, gratuite sur Google Fonts.`,

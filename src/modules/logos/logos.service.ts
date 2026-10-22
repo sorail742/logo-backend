@@ -111,7 +111,8 @@ export class LogosService {
 
   /** Import d'un logo existant (LOGO-07) : SVG nettoyé ou PNG encapsulé, palette extraite. */
   async importLogo(projectId: string, dto: ImportLogoDto) {
-    if (!dto.svg === !dto.pngDataUrl) {
+    // Exactement une des deux sources.
+    if (Boolean(dto.svg) === Boolean(dto.pngDataUrl)) {
       throw new BadRequestException('Fournissez soit un SVG, soit une image PNG');
     }
     let svg: string;

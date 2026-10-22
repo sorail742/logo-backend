@@ -100,6 +100,63 @@ const STYLE_FONTS: Record<LogoStyle, string[]> = {
   ],
 };
 
+type Picker = <T>(arr: readonly T[]) => T;
+
+/** Icônes dont les étiquettes rejoignent le brief, complétées au hasard. */
+function briefIcons(input: LogoGenerationInput, pick: Picker, avoided: string | null | undefined) {
+  const terms = [...(input.brief?.values ?? []), input.brief?.sector ?? '', ...(input.brief?.mustInclude ?? [])];
+  const icons = [...new Set(terms.flatMap((t) => searchIcons(t.slice(0, 6)).map((i) => i.id)))].filter(
+    (id) => id !== avoided,
+  );
+  while (icons.length < input.count) {
+    const id = pick(ICONS).id;
+    if (!icons.includes(id) && id !== avoided) icons.push(id);
+  }
+  return icons;
+}
+
+/** Devises en trois termes tirés des valeurs du brief. */
+function mockDevises(input: SloganGenerationInput, pick: Picker, values: string[], exclude: Set<string>) {
+  const texts = new Set<string>();
+  const pool = [...values, 'Unité', 'Travail', 'Progrès', 'Solidarité', 'Justice', 'Engagement', 'Excellence'];
+  for (let guard = 0; texts.size < Math.min(input.count, 6) && guard < 200; guard++) {
+    const terms = new Set<string>();
+    while (terms.size < 3) terms.add(cap(pick(pool)));
+    const devise = [...terms].join(' – ');
+    if (!exclude.has(devise.toLowerCase())) texts.add(devise);
+  }
+  return texts;
+}
+
+/** Phrases de mission composées depuis le brief. */
+function mockMissions(input: SloganGenerationInput, values: string[], exclude: Set<string>) {
+  const mission = input.brief?.mission || `accompagner ${input.brief?.audience || 'notre communauté'}`;
+  const audience = input.brief?.audience || 'celles et ceux';
+  const candidates = [
+    `${input.name} a pour mission de ${mission.charAt(0).toLowerCase()}${mission.slice(1).replace(/\.$/, '')}.`,
+    `Nous rassemblons ${audience} qui partagent nos valeurs : ${values.join(', ')}.`,
+    `${input.name} agit au quotidien pour ${values[0]} et ${values[1] ?? 'le progrès'}.`,
+  ];
+  return new Set(candidates.filter((t) => !exclude.has(t.toLowerCase())));
+}
+
+/** Slogans tirés des gabarits du ton demandé et d'un ton voisin. */
+function mockSlogans(input: SloganGenerationInput, pick: Picker, values: string[], exclude: Set<string>) {
+  const texts = new Set<string>();
+  const tones = Object.keys(SLOGAN_TEMPLATES[input.language]) as SloganGenerationInput['tone'][];
+  for (let guard = 0; texts.size < input.count && guard < 300; guard++) {
+    const templates = [...SLOGAN_TEMPLATES[input.language][input.tone], ...SLOGAN_TEMPLATES[input.language][pick(tones)]];
+    const value = pick(values);
+    const text = pick(templates)
+      .replace('{value}', value.toLowerCase())
+      .replace('{Value}', cap(value))
+      .replace('{Name}', input.name)
+      .replace('{sector}', (input.brief?.sector || 'service').toLowerCase());
+    if (text.split(/\s+/).length <= input.maxWords && !exclude.has(text.toLowerCase())) texts.add(text);
+  }
+  return texts;
+}
+
 /** Disposition simulée : logotype seul, sinon une proposition sur trois en vertical. */
 function mockLayout(type: LogoGenerationInput['type'], index: number) {
   if (type === 'WORDMARK') return 'text' as const;
@@ -152,29 +209,24 @@ export class MockAiProvider extends AiProvider {
     const otherIcon = /autre ic[ôo]ne|other icon/.test(feedback);
     const simpler = /simple/.test(feedback);
 
-    // Icônes dont les étiquettes rejoignent le brief, complétées au hasard.
-    const terms = [...(input.brief?.values ?? []), input.brief?.sector ?? '', ...(input.brief?.mustInclude ?? [])];
-    const avoided = otherIcon ? reference?.iconId : undefined;
-    const icons = [...new Set(terms.flatMap((t) => searchIcons(t.slice(0, 6)).map((i) => i.id)))].filter(
-      (id) => id !== avoided,
-    );
-    while (icons.length < input.count) {
-      const id = pick(ICONS).id;
-      if (!icons.includes(id) && id !== avoided) icons.push(id);
-    }
-
+    const icons = briefIcons(input, pick, otherIcon ? reference?.iconId : undefined);
     const fonts = STYLE_FONTS[input.style].filter((id) => FONTS.some((f) => f.id === id));
     const frames: IconFrame[] = simpler ? ['none'] : ['circle', 'rounded', 'none', 'hexagon'];
-    const compositions: LogoComposition[] = [];
-    for (let i = 0; i < input.count; i++) {
-      const colors = sameColors
-        ? reference!.colors
-        : input.palette
-          ? paletteFromList(input.palette)
-          : { ...pick(STYLE_PALETTES[input.style]) };
-      const keepIcon = reference?.iconId && !otherIcon;
-      compositions.push({
-        iconId: input.type === 'MONOGRAM' ? null : keepIcon ? reference.iconId : icons[i % icons.length],
+    const keepIcon = reference?.iconId && !otherIcon ? reference.iconId : null;
+    const colorsFor = (): LogoComposition['colors'] => {
+      if (sameColors) return reference!.colors;
+      if (input.palette) return paletteFromList(input.palette);
+      return { ...pick(STYLE_PALETTES[input.style]) };
+    };
+    const iconFor = (i: number) => {
+      if (input.type === 'MONOGRAM') return null;
+      return keepIcon ?? icons[i % icons.length];
+    };
+    // Tirages dans le même ordre qu'avant : couleurs, police, graisse, espacement, capitales, cadre.
+    const compositions: LogoComposition[] = Array.from({ length: input.count }, (_, i) => {
+      const colors = colorsFor();
+      return {
+        iconId: iconFor(i),
         fontId: pick(fonts.length ? fonts : ['montserrat']),
         fontWeight: pick([600, 700, 800]),
         letterSpacing: input.style === 'MINIMAL' || input.style === 'INSTITUTIONAL' ? 0.04 : pick([0, 0, 0.02, 0.08]),
@@ -184,8 +236,8 @@ export class MockAiProvider extends AiProvider {
         colors,
         withTagline: !simpler && random() > 0.5,
         rationale: `Style ${input.style.toLowerCase()}, proposition ${i + 1}`,
-      });
-    }
+      };
+    });
 
     return Promise.resolve({ raw: { compositions }, provider: this.name, promptVersion: 'mock-logos-1', costUsdMicros: 0 });
   }
@@ -196,40 +248,10 @@ export class MockAiProvider extends AiProvider {
     const pick = <T>(arr: readonly T[]) => arr[Math.floor(random() * arr.length)];
     const values = input.brief?.values.length ? input.brief.values : ['progrès', 'unité', 'travail'];
     const exclude = new Set(input.exclude.map((t) => t.toLowerCase()));
-    const texts = new Set<string>();
-
-    if (input.kind === 'DEVISE') {
-      const pool = [...values, 'Unité', 'Travail', 'Progrès', 'Solidarité', 'Justice', 'Engagement', 'Excellence'];
-      for (let guard = 0; texts.size < Math.min(input.count, 6) && guard < 200; guard++) {
-        const terms = new Set<string>();
-        while (terms.size < 3) terms.add(cap(pick(pool)));
-        const devise = [...terms].join(' – ');
-        if (!exclude.has(devise.toLowerCase())) texts.add(devise);
-      }
-    } else if (input.kind === 'MISSION') {
-      const mission = input.brief?.mission || `accompagner ${input.brief?.audience || 'notre communauté'}`;
-      const audience = input.brief?.audience || 'celles et ceux';
-      [
-        `${input.name} a pour mission de ${mission.charAt(0).toLowerCase()}${mission.slice(1).replace(/\.$/, '')}.`,
-        `Nous rassemblons ${audience} qui partagent nos valeurs : ${values.join(', ')}.`,
-        `${input.name} agit au quotidien pour ${values[0]} et ${values[1] ?? 'le progrès'}.`,
-      ]
-        .filter((t) => !exclude.has(t.toLowerCase()))
-        .forEach((t) => texts.add(t));
-    } else {
-      const tones = Object.keys(SLOGAN_TEMPLATES[input.language]) as SloganGenerationInput['tone'][];
-      for (let guard = 0; texts.size < input.count && guard < 300; guard++) {
-        const templates = [...SLOGAN_TEMPLATES[input.language][input.tone], ...SLOGAN_TEMPLATES[input.language][pick(tones)]];
-        const value = pick(values);
-        const text = pick(templates)
-          .replace('{value}', value.toLowerCase())
-          .replace('{Value}', cap(value))
-          .replace('{Name}', input.name)
-          .replace('{sector}', (input.brief?.sector || 'service').toLowerCase());
-        if (text.split(/\s+/).length > input.maxWords || exclude.has(text.toLowerCase())) continue;
-        texts.add(text);
-      }
-    }
+    let texts: Set<string>;
+    if (input.kind === 'DEVISE') texts = mockDevises(input, pick, values, exclude);
+    else if (input.kind === 'MISSION') texts = mockMissions(input, values, exclude);
+    else texts = mockSlogans(input, pick, values, exclude);
 
     const slogans = [...texts].map((text) => ({ text }));
     return Promise.resolve({ raw: { slogans }, provider: this.name, promptVersion: 'mock-slogans-1', costUsdMicros: 0 });

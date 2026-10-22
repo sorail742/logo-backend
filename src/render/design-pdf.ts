@@ -79,7 +79,7 @@ export function designToPdf(design: DesignDoc, options: DesignPdfOptions): Promi
       const px = Math.min(12_000, Math.round((width / 72) * PRINT_DPI));
       pdf.doc.image(svgToPng(svg, { size: px }), x, y, { width, height });
     } else {
-      drawSvg(pdf.doc, svg, x, y, width, height, 'none');
+      drawSvg(pdf.doc, svg, x, y, width, height, 'stretch');
     }
     if (print) {
       // Coordonnées PDF : origine en bas à gauche.

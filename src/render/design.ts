@@ -54,12 +54,11 @@ export function paintValue(paint: Paint, id: string, defs: string[]) {
 function strokeAttrs(stroke: Stroke | null | undefined, extraWidth = 1) {
   if (!stroke || stroke.width <= 0) return '';
   const width = stroke.width * extraWidth;
-  const dash =
-    stroke.dash === 'dashed'
-      ? ` stroke-dasharray="${n(width * 3)} ${n(width * 2)}"`
-      : stroke.dash === 'dotted'
-        ? ` stroke-dasharray="0 ${n(width * 2)}" stroke-linecap="round"`
-        : '';
+  const dashes: Record<string, string> = {
+    dashed: ` stroke-dasharray="${n(width * 3)} ${n(width * 2)}"`,
+    dotted: ` stroke-dasharray="0 ${n(width * 2)}" stroke-linecap="round"`,
+  };
+  const dash = (stroke.dash && dashes[stroke.dash]) ?? '';
   return ` stroke="${stroke.color}" stroke-width="${n(width)}" stroke-linejoin="round"${dash}`;
 }
 
@@ -138,7 +137,8 @@ const sign = (flipped?: boolean) => (flipped ? -1 : 1);
 
 function renderShape(el: ShapeElement, pid: string, defs: string[]) {
   const { width: w, height: h } = el;
-  const paint = `fill="${paintValue(el.fill, `${pid}-f`, defs)}"${strokeAttrs(el.stroke)}`;
+  const fillId = `${pid}-f`;
+  const paint = `fill="${paintValue(el.fill, fillId, defs)}"${strokeAttrs(el.stroke)}`;
   switch (el.shape) {
     case 'rect': {
       const r = Math.min(el.radius ?? 0, w / 2, h / 2);
@@ -330,7 +330,8 @@ function imageFilter(id: string, el: ImageElement) {
   const intercept = 0.5 - 0.5 * f.contrast;
   const channel = (c: string) =>
     `<feFunc${c} type="linear" slope="${n(slope)}" intercept="${n(intercept)}"/>`;
-  return `<filter id="${id}" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB"><feColorMatrix type="saturate" values="${n(f.saturation)}"/><feComponentTransfer>${channel('R')}${channel('G')}${channel('B')}</feComponentTransfer>${f.blur ? `<feGaussianBlur stdDeviation="${n(f.blur)}"/>` : ''}</filter>`;
+  const blur = f.blur ? `<feGaussianBlur stdDeviation="${n(f.blur)}"/>` : '';
+  return `<filter id="${id}" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB"><feColorMatrix type="saturate" values="${n(f.saturation)}"/><feComponentTransfer>${channel('R')}${channel('G')}${channel('B')}</feComponentTransfer>${blur}</filter>`;
 }
 
 function renderImage(el: ImageElement, pid: string, defs: string[]) {
@@ -338,7 +339,8 @@ function renderImage(el: ImageElement, pid: string, defs: string[]) {
   defs.push(`<clipPath id="${pid}-clip">${imageMaskShape(el)}</clipPath>`);
   const filter = imageFilter(`${pid}-img`, el);
   if (filter) defs.push(filter);
-  return `<g clip-path="url(#${pid}-clip)"><image href="${el.src}" xlink:href="${el.src}" x="${n(place.x)}" y="${n(place.y)}" width="${n(place.width)}" height="${n(place.height)}" preserveAspectRatio="none"${filter ? ` filter="url(#${pid}-img)"` : ''}/></g>`;
+  const filterAttr = filter ? ` filter="url(#${pid}-img)"` : '';
+  return `<g clip-path="url(#${pid}-clip)"><image href="${el.src}" xlink:href="${el.src}" x="${n(place.x)}" y="${n(place.y)}" width="${n(place.width)}" height="${n(place.height)}" preserveAspectRatio="none"${filterAttr}/></g>`;
 }
 
 export function svgParts(svg: string) {
@@ -438,7 +440,8 @@ export function renderBackground(
   const defs: string[] = [];
   const fill = paintValue(page.background, `bg-${svgId(page.id)}`, defs);
   if (fill === 'none') return '';
-  return `${defs.length ? `<defs>${defs.join('')}</defs>` : ''}<rect x="${n(-bleed)}" y="${n(-bleed)}" width="${n(doc.width + bleed * 2)}" height="${n(doc.height + bleed * 2)}" fill="${fill}"/>`;
+  const defsMarkup = defs.length ? `<defs>${defs.join('')}</defs>` : '';
+  return `${defsMarkup}<rect x="${n(-bleed)}" y="${n(-bleed)}" width="${n(doc.width + bleed * 2)}" height="${n(doc.height + bleed * 2)}" fill="${fill}"/>`;
 }
 
 /** Effets qu'un PDF vectoriel ne sait pas reproduire : la page est alors tramée à 300 dpi. */

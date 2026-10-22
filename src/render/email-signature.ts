@@ -103,9 +103,8 @@ function footer(data: EmailSignatureData, brand: SignatureBrand) {
   const parts: string[] = [];
   if (data.bannerUrl) {
     const img = `<img src="${esc(safeUrl(data.bannerUrl))}" alt="" width="480" style="display:block;border:0;width:480px;max-width:100%;height:auto;">`;
-    parts.push(
-      `<tr><td style="padding-top:12px;">${data.bannerLink ? `<a href="${esc(safeUrl(data.bannerLink))}">${img}</a>` : img}</td></tr>`,
-    );
+    const banner = data.bannerLink ? `<a href="${esc(safeUrl(data.bannerLink))}">${img}</a>` : img;
+    parts.push(`<tr><td style="padding-top:12px;">${banner}</td></tr>`);
   }
   if (data.legal) {
     parts.push(

@@ -147,7 +147,7 @@ export class JobsService {
   }
 
   /** Tâche ; ses fichiers ne sont signés que pour qui peut télécharger (§3). */
-  async get(jobId: string, opts: { canDownload: boolean } = { canDownload: true }) {
+  async get(jobId: string, { canDownload = true }: { canDownload?: boolean } = {}) {
     const job = await this.prisma.generationJob.findUniqueOrThrow({
       where: { id: jobId },
       select: {
@@ -165,7 +165,7 @@ export class JobsService {
     });
     return {
       ...job,
-      result: opts.canDownload ? await this.publicResult(job.result) : withoutFiles(job.result),
+      result: canDownload ? await this.publicResult(job.result) : withoutFiles(job.result),
     };
   }
 

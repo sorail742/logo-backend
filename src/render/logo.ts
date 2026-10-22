@@ -1,5 +1,5 @@
 import { ensureContrast, type LogoColors } from './color';
-import { closestWeight, FALLBACK_FONT, shapeText, type TextStyle } from './fonts';
+import { closestWeight, FALLBACK_FONT, shapeText, type ShapedText, type TextStyle } from './fonts';
 import { getIcon, type IconNode } from './icons';
 import type { LogoLayout, LogoSpec } from './logo-spec';
 import { escapeXml } from './svg';
@@ -134,6 +134,40 @@ function watermarkLayer(width: number, height: number, label: string) {
   );
 }
 
+/** Badge : symbole et nom réunis dans un cercle à double filet. */
+function renderEmblem(
+  spec: LogoSpec,
+  colors: LogoColors,
+  variant: LogoVariant,
+  t: { text: string; tagline: string; textStyle: TextStyle; name: ShapedText; blockWidth: number },
+) {
+  const diameter = Math.max(320, t.blockWidth * 0.62 + 120);
+  const size = diameter + PAD * 2;
+  const cx = size / 2;
+  const cy = size / 2;
+  const r = diameter / 2;
+  const ink = variant === 'white' ? '#111111' : '#ffffff';
+  const inner = { ...spec, iconFrame: 'none' as const };
+  const fitted = Math.min(TEXT_SIZE, (TEXT_SIZE * (diameter - 80)) / Math.max(t.name.width, 1));
+  const scaled = shapeText(t.text, { ...t.textStyle, size: fitted, letterSpacing: 0 });
+  const body = [
+    `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${colors.primary}"/>`,
+    `<circle cx="${cx}" cy="${cy}" r="${r - 12}" fill="none" stroke="${colors.secondary}" stroke-width="3"/>`,
+    renderMark(inner, { ...colors, primary: ink }, cx - 48, cy - r * 0.62, 96, variant),
+    path(scaled.toPath(cx, cy + 30, 'middle'), ink),
+  ];
+  if (t.tagline) {
+    const small = shapeText(t.tagline, {
+      fontId: FALLBACK_FONT,
+      weight: 600,
+      size: 16,
+      letterSpacing: 3,
+    });
+    body.push(path(small.toPath(cx, cy + 70, 'middle'), ink, ' fill-opacity="0.85"'));
+  }
+  return { size, body };
+}
+
 export function renderLogoSvg(spec: LogoSpec, options: RenderOptions = {}): RenderedLogo {
   const variant = options.variant ?? 'color';
   const colors = variantColors(spec.colors, variant);
@@ -171,36 +205,16 @@ export function renderLogoSvg(spec: LogoSpec, options: RenderOptions = {}): Rend
   let height: number;
 
   if (spec.type === 'EMBLEM' && layout !== 'icon' && layout !== 'text') {
-    // Badge : symbole et nom réunis dans un cercle à double filet
-    const diameter = Math.max(320, blockWidth * 0.62 + 120);
-    width = diameter + PAD * 2;
-    height = diameter + PAD * 2;
-    const cx = width / 2;
-    const cy = height / 2;
-    const r = diameter / 2;
-    const ink = variant === 'white' ? '#111111' : '#ffffff';
-    body.push(`<circle cx="${cx}" cy="${cy}" r="${r}" fill="${colors.primary}"/>`);
-    body.push(
-      `<circle cx="${cx}" cy="${cy}" r="${r - 12}" fill="none" stroke="${colors.secondary}" stroke-width="3"/>`,
-    );
-    const inner = { ...spec, iconFrame: 'none' as const };
-    body.push(renderMark(inner, { ...colors, primary: ink }, cx - 48, cy - r * 0.62, 96, variant));
-    const fitted = Math.min(TEXT_SIZE, (TEXT_SIZE * (diameter - 80)) / Math.max(name.width, 1));
-    const scaled = shapeText(text, {
-      ...textStyle,
-      size: fitted,
-      letterSpacing: 0,
+    const emblem = renderEmblem(spec, colors, variant, {
+      text,
+      tagline,
+      textStyle,
+      name,
+      blockWidth,
     });
-    body.push(path(scaled.toPath(cx, cy + 30, 'middle'), ink));
-    if (tagline) {
-      const small = shapeText(tagline, {
-        fontId: FALLBACK_FONT,
-        weight: 600,
-        size: 16,
-        letterSpacing: 3,
-      });
-      body.push(path(small.toPath(cx, cy + 70, 'middle'), ink, ' fill-opacity="0.85"'));
-    }
+    width = emblem.size;
+    height = emblem.size;
+    body.push(...emblem.body);
   } else if (layout === 'icon') {
     width = MARK_SIZE + PAD * 2;
     height = MARK_SIZE + PAD * 2;

@@ -38,10 +38,10 @@ const tint = (color: string, amount: number) => mix(color, '#ffffff', amount);
 function linear(id: string, stops: [number, string, number?][], vertical = false) {
   const end = vertical ? 'x2="0" y2="1"' : 'x2="1" y2="0"';
   const body = stops
-    .map(
-      ([offset, color, opacity]) =>
-        `<stop offset="${offset}" stop-color="${color}"${opacity === undefined ? '' : ` stop-opacity="${opacity}"`}/>`,
-    )
+    .map(([offset, color, opacity]) => {
+      const alpha = opacity === undefined ? '' : ` stop-opacity="${opacity}"`;
+      return `<stop offset="${offset}" stop-color="${color}"${alpha}/>`;
+    })
     .join('');
   return `<linearGradient id="${id}" x1="0" y1="0" ${end}>${body}</linearGradient>`;
 }
@@ -200,14 +200,15 @@ function mug(
   const hx = cx + side * (rx - 4);
   const reach = side * rx * 0.7;
   const handlePath = `M${n(hx)} ${n(top + height * 0.18)}C${n(hx + reach)} ${n(top + height * 0.18)} ${n(hx + reach)} ${n(top + height * 0.72)} ${n(hx)} ${n(top + height * 0.72)}`;
+  const bodyGradient = linear(`${id}-body`, [
+    [0, shade(color, 0.2)],
+    [0.2, color],
+    [0.42, tint(color, 0.45)],
+    [0.68, color],
+    [1, shade(color, 0.24)],
+  ]);
   return (
-    `<defs>${linear(`${id}-body`, [
-      [0, shade(color, 0.2)],
-      [0.2, color],
-      [0.42, tint(color, 0.45)],
-      [0.68, color],
-      [1, shade(color, 0.24)],
-    ])}</defs>` +
+    `<defs>${bodyGradient}</defs>` +
     shadow(cx + side * rx * 0.15, bottom + 4, rx * 1.35, ry * 1.1, 0.35) +
     `<path d="${handlePath}" fill="none" stroke="${shade(color, 0.22)}" stroke-width="${n(rx * 0.25)}" stroke-linecap="round"/>` +
     `<path d="${handlePath}" fill="none" stroke="${color}" stroke-width="${n(rx * 0.17)}" stroke-linecap="round"/>` +
@@ -395,11 +396,12 @@ function bag(
   const depth = w * 0.24;
   const rise = depth * 0.45;
   const [hl, hr] = [x + w * 0.27, x + w * 0.73];
+  const frontGradient = linear(`${id}-f`, [
+    [0, tint(color, 0.08)],
+    [1, shade(color, 0.1)],
+  ]);
   return (
-    `<defs>${linear(`${id}-f`, [
-      [0, tint(color, 0.08)],
-      [1, shade(color, 0.1)],
-    ])}</defs>` +
+    `<defs>${frontGradient}</defs>` +
     `<path d="M${n(hl + depth * 0.6)} ${n(y - rise)}C${n(hl + depth * 0.6)} ${n(y - h * 0.32)} ${n(hr + depth * 0.6)} ${n(y - h * 0.32)} ${n(hr + depth * 0.6)} ${n(y - rise)}" fill="none" stroke="${shade(color, 0.45)}" stroke-width="${n(w * 0.026)}" stroke-linecap="round"/>` +
     `<polygon points="${x},${y} ${n(x + depth)},${n(y - rise)} ${n(x + w + depth)},${n(y - rise)} ${x + w},${y}" fill="${shade(color, 0.42)}"/>` +
     `<polygon points="${x + w},${y} ${n(x + w + depth)},${n(y - rise)} ${n(x + w + depth)},${n(y + h - rise)} ${x + w},${y + h}" fill="${shade(color, 0.2)}"/>` +

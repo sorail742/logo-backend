@@ -214,11 +214,8 @@ export function renderStampSvg(data: StampData, options: StampRenderOptions = {}
     const ry = height / 2 - 10;
     body.push(
       `<ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" fill="none" stroke="${color}" stroke-width="6"/>`,
-    );
-    body.push(
       `<ellipse cx="${cx}" cy="${cy}" rx="${rx - 62}" ry="${ry - 62}" fill="none" stroke="${color}" stroke-width="2.5"/>`,
-    );
-    body.push(
+
       textOnArc(data.ringText.toUpperCase(), {
         cx,
         cy,
@@ -244,8 +241,11 @@ export function renderStampSvg(data: StampData, options: StampRenderOptions = {}
         }),
       );
     }
-    body.push(star(cx - rx + 22, cy, 7), star(cx + rx - 22, cy, 7));
-    body.push(center(cx, cy, Math.min(rx, ry) - 80));
+    body.push(
+      star(cx - rx + 22, cy, 7),
+      star(cx + rx - 22, cy, 7),
+      center(cx, cy, Math.min(rx, ry) - 80),
+    );
   }
 
   const label = escapeXml(data.ringText);

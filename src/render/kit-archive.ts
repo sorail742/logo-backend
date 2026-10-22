@@ -80,29 +80,10 @@ function readme(input: KitArchiveInput, paths: string[]) {
   return `${lines.join('\n')}\n`;
 }
 
-/** Fichiers de l'archive, rangés sous un dossier racine `<nom>-kit-v<n>`. */
-export async function buildKitArchive(input: KitArchiveInput): Promise<ZipEntry[]> {
-  const restricted = input.watermark !== null;
-  const logoEntries = await buildExportEntries(input.logo, input.slug, {
-    formats: restricted ? ['png'] : ['svg', 'pdf', 'png', 'jpg'],
-    sizes: restricted ? [512] : [512, 1024, 2048],
-    iconPack: !restricted,
-    social: !restricted,
-    mockups: !restricted,
-    watermark: input.watermark,
-  });
-  const entries: ZipEntry[] = [];
-  for (const entry of logoEntries) {
-    const path = entry.path.slice(input.slug.length + 1);
-    if (path === 'LICENCES.txt') continue;
-    const folder = Object.keys(LOGO_FOLDERS).find((prefix) => path.startsWith(prefix));
-    entries.push({
-      path: folder ? LOGO_FOLDERS[folder] + path.slice(folder.length) : path,
-      data: entry.data,
-    });
-  }
-
+/** Signatures du kit : e-mail (HTML et texte), slogan, cachet et paraphe validés. */
+function signatureEntries(input: KitArchiveInput): ZipEntry[] {
   const { email, stampSvg, handwritten } = input.signatures;
+  const entries: ZipEntry[] = [];
   if (email) {
     entries.push(
       {
@@ -126,18 +107,47 @@ export async function buildKitArchive(input: KitArchiveInput): Promise<ZipEntry[
       { path: 'signatures/paraphe.png', data: svgToPng(handwritten.svg, { size: 2048 }) },
     );
   }
+  return entries;
+}
 
+/** Supports prêts à imprimer, dans l'ordre de l'archive. */
+function supportEntries(input: KitArchiveInput): ZipEntry[] {
   const supports = input.supports;
-  if (supports?.businessCard)
-    entries.push({ path: 'supports/carte-de-visite.pdf', data: supports.businessCard });
-  if (supports?.letterheadPdf)
-    entries.push({ path: 'supports/papier-a-en-tete.pdf', data: supports.letterheadPdf });
-  if (supports?.letterheadDocx)
-    entries.push({ path: 'supports/papier-a-en-tete.docx', data: supports.letterheadDocx });
-  if (supports?.memberCard)
-    entries.push({ path: 'supports/carte-de-membre.pdf', data: supports.memberCard });
+  const files: [string, Buffer | null | undefined][] = [
+    ['supports/carte-de-visite.pdf', supports?.businessCard],
+    ['supports/papier-a-en-tete.pdf', supports?.letterheadPdf],
+    ['supports/papier-a-en-tete.docx', supports?.letterheadDocx],
+    ['supports/carte-de-membre.pdf', supports?.memberCard],
+  ];
+  return files.flatMap(([path, data]) => (data ? [{ path, data }] : []));
+}
+
+/** Fichiers de l'archive, rangés sous un dossier racine `<nom>-kit-v<n>`. */
+export async function buildKitArchive(input: KitArchiveInput): Promise<ZipEntry[]> {
+  const restricted = input.watermark !== null;
+  const logoEntries = await buildExportEntries(input.logo, input.slug, {
+    formats: restricted ? ['png'] : ['svg', 'pdf', 'png', 'jpg'],
+    sizes: restricted ? [512] : [512, 1024, 2048],
+    iconPack: !restricted,
+    social: !restricted,
+    mockups: !restricted,
+    watermark: input.watermark,
+  });
+  const entries: ZipEntry[] = [];
+  for (const entry of logoEntries) {
+    const path = entry.path.slice(input.slug.length + 1);
+    if (path === 'LICENCES.txt') continue;
+    const folder = Object.keys(LOGO_FOLDERS).find((prefix) => path.startsWith(prefix));
+    entries.push({
+      path: folder ? LOGO_FOLDERS[folder] + path.slice(folder.length) : path,
+      data: entry.data,
+    });
+  }
+
+  entries.push(...signatureEntries(input), ...supportEntries(input));
   if (input.charterPdf) entries.push({ path: 'charte.pdf', data: input.charterPdf });
 
+  const { handwritten } = input.signatures;
   // Licences : logo, puis polices de la charte, des supports et du paraphe (§14.2).
   const extra = ['', 'Charte et supports : Montserrat — SIL Open Font License 1.1'];
   if (handwritten?.fontId) {

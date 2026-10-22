@@ -260,48 +260,52 @@ class Matrix {
 
   /** Pénalité de lisibilité (§7.8.3) : le masque retenu est le moins pénalisé. */
   penalty() {
-    const size = this.size;
     let score = 0;
-    let darkCount = 0;
-    const line = (get: (i: number) => boolean) => {
-      let run = 1;
-      for (let i = 1; i <= size; i++) {
-        if (i < size && get(i) === get(i - 1)) {
-          run++;
-        } else {
-          if (run >= 5) score += 3 + run - 5;
-          run = 1;
-        }
-      }
-      const cells = Array.from({ length: size }, (_, i) => (get(i) ? '1' : '0')).join('');
-      for (const pattern of ['10111010000', '00001011101']) {
-        for (let at = cells.indexOf(pattern); at !== -1; at = cells.indexOf(pattern, at + 1)) {
-          score += 40;
-        }
-      }
-    };
-    for (let k = 0; k < size; k++) {
-      line((i) => this.dark[k][i]);
-      line((i) => this.dark[i][k]);
+    for (let k = 0; k < this.size; k++) {
+      score += linePenalty(this.dark[k]) + linePenalty(this.dark.map((row) => row[k]));
     }
-    for (let y = 0; y < size; y++) {
-      for (let x = 0; x < size; x++) {
-        if (this.dark[y][x]) darkCount++;
-        if (x < size - 1 && y < size - 1) {
-          const c = this.dark[y][x];
-          if (
-            c === this.dark[y][x + 1] &&
-            c === this.dark[y + 1][x] &&
-            c === this.dark[y + 1][x + 1]
-          )
-            score += 3;
-        }
+    return score + this.blockPenalty() + this.balancePenalty();
+  }
+
+  /** Carrés 2 × 2 d'une même couleur. */
+  blockPenalty() {
+    let score = 0;
+    for (let y = 0; y < this.size - 1; y++) {
+      for (let x = 0; x < this.size - 1; x++) {
+        const c = this.dark[y][x];
+        const square =
+          c === this.dark[y][x + 1] && c === this.dark[y + 1][x] && c === this.dark[y + 1][x + 1];
+        if (square) score += 3;
       }
     }
-    const total = size * size;
-    score += (Math.ceil(Math.abs(darkCount * 20 - total * 10) / total) - 1) * 10;
     return score;
   }
+
+  /** Écart à l'équilibre 50 % de modules sombres. */
+  balancePenalty() {
+    const total = this.size * this.size;
+    const darkCount = this.dark.flat().filter(Boolean).length;
+    return (Math.ceil(Math.abs(darkCount * 20 - total * 10) / total) - 1) * 10;
+  }
+}
+
+/** Suites de 5 modules ou plus d'une même couleur, et motifs proches d'un repère. */
+function linePenalty(cells: boolean[]) {
+  let score = 0;
+  let run = 1;
+  for (let i = 1; i <= cells.length; i++) {
+    if (i < cells.length && cells[i] === cells[i - 1]) {
+      run++;
+      continue;
+    }
+    if (run >= 5) score += 3 + run - 5;
+    run = 1;
+  }
+  const text = cells.map((dark) => (dark ? '1' : '0')).join('');
+  for (const pattern of ['10111010000', '00001011101']) {
+    for (let at = text.indexOf(pattern); at !== -1; at = text.indexOf(pattern, at + 1)) score += 40;
+  }
+  return score;
 }
 
 function maskBit(mask: number, x: number, y: number) {
@@ -397,12 +401,13 @@ export function qrSvg(
 /** Lien WhatsApp (wa.me) : numéro au format international, message prérempli facultatif. */
 export function whatsappLink(phone: string, message = '') {
   const digits = phone.replace(/\D/g, '').replace(/^00/, '');
-  return `https://wa.me/${digits}${message ? `?text=${encodeURIComponent(message)}` : ''}`;
+  const text = message ? `?text=${encodeURIComponent(message)}` : '';
+  return `https://wa.me/${digits}${text}`;
 }
 
 // « \$& » : la barre oblique inversée suivie du caractère trouvé.
 const vcardEscape = (value: string) =>
-  value.replace(/[\\;,]/g, String.raw`\$&`).replace(/\n/g, String.raw`\n`);
+  value.replace(/[\\;,]/g, String.raw`\$&`).replaceAll('\n', String.raw`\n`);
 
 export interface VCardInput {
   fullName: string;

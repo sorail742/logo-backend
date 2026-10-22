@@ -126,8 +126,8 @@ function geometric(input: ArtworkInput, rand: Rand) {
       if (fg === bg) fg = palette[(palette.indexOf(bg) + 1) % palette.length]!;
       out.push(
         `<rect x="${n(x)}" y="${n(y)}" width="${n(size + 1)}" height="${n(size + 1)}" fill="${bg}"/>`,
+        geometricMotif(x, y, size, fg, rand, `q${r}-${c}`),
       );
-      out.push(geometricMotif(x, y, size, fg, rand, `q${r}-${c}`));
     }
   }
   return out.join('');
@@ -195,6 +195,67 @@ function wax(input: ArtworkInput, rand: Rand) {
   return out.join('');
 }
 
+interface BogolanCell {
+  x: number;
+  y: number;
+  size: number;
+  /** Épaisseur du trait. */
+  sw: number;
+  ink: string;
+}
+
+/** Points en grille 4 × 4. */
+function bogolanDots({ x, y, size, ink }: BogolanCell, p: number) {
+  const step = (size - 2 * p) / 4;
+  const out: string[] = [];
+  for (let i = 0; i < 4; i++)
+    for (let j = 0; j < 4; j++)
+      out.push(
+        `<circle cx="${n(x + p + (i + 0.5) * step)}" cy="${n(y + p + (j + 0.5) * step)}" r="${n(size * 0.035)}" fill="${ink}"/>`,
+      );
+  return out.join('');
+}
+
+/** Trois lignes brisées. */
+function bogolanZigzags({ x, y, size, sw, ink }: BogolanCell, p: number) {
+  let d = '';
+  for (let k = 0; k < 3; k++) {
+    const yy = y + p + k * ((size - 2 * p) / 2);
+    d += `M${n(x + p)} ${n(yy)}`;
+    for (let i = 1; i <= 6; i++)
+      d += `L${n(x + p + i * ((size - 2 * p) / 6))} ${n(yy + (i % 2 ? size * 0.08 : 0))}`;
+  }
+  return `<path d="${d}" fill="none" stroke="${ink}" stroke-width="${n(sw * 1.4)}" stroke-linejoin="round"/>`;
+}
+
+/** Motif d'une case du bogolan (le tirage du motif est fait par l'appelant). */
+function bogolanMotif(cell: BogolanCell, motif: number) {
+  const { x, y, size, sw, ink } = cell;
+  const p = size * 0.18;
+  switch (motif) {
+    case 0:
+      return bogolanDots(cell, p);
+    case 1:
+      return bogolanZigzags(cell, p);
+    case 2:
+      return `<path d="M${n(x + size / 2)} ${n(y + p)}V${n(y + size - p)}M${n(x + p)} ${n(y + size / 2)}H${n(x + size - p)}" stroke="${ink}" stroke-width="${n(sw * 2.2)}" stroke-linecap="round"/>`;
+    case 3:
+      return [0, 1, 2]
+        .map((k) => {
+          const inset = p + k * size * 0.1;
+          return `<rect x="${n(x + inset)}" y="${n(y + inset)}" width="${n(size - inset * 2)}" height="${n(size - inset * 2)}" fill="none" stroke="${ink}" stroke-width="${n(sw * 1.2)}"/>`;
+        })
+        .join('');
+    default:
+      return [0, 1, 2, 3]
+        .map(
+          (k) =>
+            `<rect x="${n(x + p)}" y="${n(y + p + k * ((size - 2 * p) / 4))}" width="${n(size - 2 * p)}" height="${n(size * 0.05)}" fill="${ink}"/>`,
+        )
+        .join('');
+  }
+}
+
 function bogolan(input: ArtworkInput, rand: Rand) {
   const { width: w, height: h, palette } = input;
   // Terre sombre et ivoire, teintées par la couleur principale.
@@ -209,50 +270,10 @@ function bogolan(input: ArtworkInput, rand: Rand) {
     for (let c = 0; c < cols; c++) {
       const x = c * size;
       const y = r * size;
-      const p = size * 0.18;
       out.push(
         `<rect x="${n(x + sw)}" y="${n(y + sw)}" width="${n(size - sw * 2)}" height="${n(size - sw * 2)}" fill="none" stroke="${ink}" stroke-width="${n(sw)}"/>`,
+        bogolanMotif({ x, y, size, sw, ink }, Math.floor(rand() * 5)),
       );
-      switch (Math.floor(rand() * 5)) {
-        case 0:
-          for (let i = 0; i < 4; i++)
-            for (let j = 0; j < 4; j++)
-              out.push(
-                `<circle cx="${n(x + p + (i + 0.5) * ((size - 2 * p) / 4))}" cy="${n(y + p + (j + 0.5) * ((size - 2 * p) / 4))}" r="${n(size * 0.035)}" fill="${ink}"/>`,
-              );
-          break;
-        case 1: {
-          let d = '';
-          for (let k = 0; k < 3; k++) {
-            const yy = y + p + k * ((size - 2 * p) / 2);
-            d += `M${n(x + p)} ${n(yy)}`;
-            for (let i = 1; i <= 6; i++)
-              d += `L${n(x + p + i * ((size - 2 * p) / 6))} ${n(yy + (i % 2 ? size * 0.08 : 0))}`;
-          }
-          out.push(
-            `<path d="${d}" fill="none" stroke="${ink}" stroke-width="${n(sw * 1.4)}" stroke-linejoin="round"/>`,
-          );
-          break;
-        }
-        case 2:
-          out.push(
-            `<path d="M${n(x + size / 2)} ${n(y + p)}V${n(y + size - p)}M${n(x + p)} ${n(y + size / 2)}H${n(x + size - p)}" stroke="${ink}" stroke-width="${n(sw * 2.2)}" stroke-linecap="round"/>`,
-          );
-          break;
-        case 3:
-          for (let k = 0; k < 3; k++) {
-            const inset = p + k * size * 0.1;
-            out.push(
-              `<rect x="${n(x + inset)}" y="${n(y + inset)}" width="${n(size - inset * 2)}" height="${n(size - inset * 2)}" fill="none" stroke="${ink}" stroke-width="${n(sw * 1.2)}"/>`,
-            );
-          }
-          break;
-        default:
-          for (let k = 0; k < 4; k++)
-            out.push(
-              `<rect x="${n(x + p)}" y="${n(y + p + k * ((size - 2 * p) / 4))}" width="${n(size - 2 * p)}" height="${n(size * 0.05)}" fill="${ink}"/>`,
-            );
-      }
     }
   }
   return out.join('');

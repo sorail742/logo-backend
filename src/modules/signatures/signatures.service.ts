@@ -310,12 +310,9 @@ export class SignaturesService {
 
   /** Modèle en base : gabarit e-mail choisi, forme du cachet ; aucun pour un paraphe. */
   private async templateId(parsed: SignatureData, key: string | undefined) {
-    const templateKey =
-      parsed.kind === 'EMAIL'
-        ? emailTemplateKey(key)
-        : parsed.kind === 'STAMP'
-          ? parsed.data.shape
-          : null;
+    let templateKey: string | null = null;
+    if (parsed.kind === 'EMAIL') templateKey = emailTemplateKey(key);
+    else if (parsed.kind === 'STAMP') templateKey = parsed.data.shape;
     if (!templateKey) return null;
     const template = await this.prisma.template.findUnique({
       where: { key: templateKey },

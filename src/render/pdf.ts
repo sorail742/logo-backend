@@ -69,15 +69,11 @@ export function drawSvg(
   y: number,
   width: number,
   height: number,
-  fit: 'meet' | 'none' = 'meet',
-  align: 'xMidYMid' | 'xMinYMid' = 'xMidYMid',
+  /** meet : centré, proportions gardées ; meet-left : calé à gauche ; stretch : étiré au cadre. */
+  placement: 'meet' | 'meet-left' | 'stretch' = 'meet',
 ) {
-  SVGtoPDF(doc, svg, x, y, {
-    width,
-    height,
-    assumePt: true,
-    preserveAspectRatio: fit === 'none' ? 'none' : `${align} meet`,
-  });
+  const ratio = { meet: 'xMidYMid meet', 'meet-left': 'xMinYMid meet', stretch: 'none' }[placement];
+  SVGtoPDF(doc, svg, x, y, { width, height, assumePt: true, preserveAspectRatio: ratio });
 }
 
 /** Taille d'un SVG dessiné dans un cadre, proportions conservées. */
