@@ -348,6 +348,7 @@ const proof = await call('POST', `/apparel-designs/${did}/proof`, { token, body:
 check('lien BAT créé', proof.status === 200 && !!proof.json.token, proof.json.url);
 const pubProof = await call('GET', `/public/proofs/${proof.json.token}`);
 check('BAT consultable sans compte', pubProof.status === 200 && pubProof.json.roster.entries.length === 3);
+check('BAT public : zones du support pour placer les éléments', pubProof.json.template.zones.some((z) => z.key === 'back_number' && z.maxWidthMm > 0), pubProof.json.template.zones?.length);
 const approve = await call('POST', `/public/proofs/${proof.json.token}/approve`, { body: { approverName: 'Président du club' } });
 check('BAT approuvé par le client → APPROVED', approve.status === 200 && approve.json.status === 'APPROVED', approve.json);
 const edited = await call('PATCH', `/apparel-designs/${did}`, { token, body: { garmentColor: '#C8102E' } });
