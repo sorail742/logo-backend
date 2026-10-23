@@ -7,7 +7,7 @@ import { bidiRuns, isNkoMark, nkoForms, type NkoForm } from './nko';
 // assets/fonts (scripts/fetch-fonts.mjs). Le texte des logos est converti en tracés à partir
 // de ces fichiers : l'export s'affiche sans la police installée.
 
-export type FontCategory = 'sans' | 'serif' | 'display' | 'script';
+export type FontCategory = 'sans' | 'serif' | 'display' | 'script' | 'sport';
 
 export interface LibraryFont {
   id: string;

@@ -186,7 +186,7 @@ check('back-office interdit à un USER', admin.status === 403, admin.json.detail
 const icons = await call('GET', '/library/icons?q=ecole', { token });
 check('bibliothèque : recherche d’icônes sans accents', icons.status === 200 && icons.json.some((i) => i.id === 'graduation-cap'), icons.json.map?.((i) => i.id));
 const fonts = await call('GET', '/library/fonts', { token });
-check('bibliothèque : 47 polices OFL', fonts.status === 200 && fonts.json.length === 47 && fonts.json.every((f) => f.license === 'OFL'), fonts.json.length);
+check('bibliothèque : 85 polices OFL (dont 38 de sport)', fonts.status === 200 && fonts.json.length === 85 && fonts.json.filter((f) => f.category === 'sport').length === 38 && fonts.json.every((f) => f.license === 'OFL'), fonts.json.length);
 
 const engineB = await call('POST', `/projects/${pid}/logos/generate`, { token, body: { type: 'ICON_TEXT', style: 'MODERN', engine: 'IMAGE_VECTORIZE' }, headers: { 'idempotency-key': 'b-' + Date.now() } });
 check('moteur B pas encore disponible → 501', engineB.status === 501, engineB.json.detail);

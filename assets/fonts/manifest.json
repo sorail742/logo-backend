@@ -1363,6 +1363,927 @@
     ]
   },
   {
+    "id": "graduate",
+    "name": "Graduate",
+    "category": "sport",
+    "weights": [
+      400
+    ],
+    "license": "OFL",
+    "source": "@fontsource/graduate@5.3.0",
+    "ascent": 0.953,
+    "descent": 0.186,
+    "files": {
+      "400": [
+        "graduate-latin-400-normal.woff"
+      ]
+    },
+    "scripts": [
+      "latin"
+    ]
+  },
+  {
+    "id": "big-shoulders",
+    "name": "Big Shoulders",
+    "category": "sport",
+    "weights": [
+      400,
+      700,
+      900
+    ],
+    "license": "OFL",
+    "source": "@fontsource/big-shoulders-display@5.3.0",
+    "ascent": 0.984,
+    "descent": 0.213,
+    "files": {
+      "400": [
+        "big-shoulders-display-latin-400-normal.woff",
+        "big-shoulders-display-latin-ext-400-normal.woff"
+      ],
+      "700": [
+        "big-shoulders-display-latin-700-normal.woff",
+        "big-shoulders-display-latin-ext-700-normal.woff"
+      ],
+      "900": [
+        "big-shoulders-display-latin-900-normal.woff",
+        "big-shoulders-display-latin-ext-900-normal.woff"
+      ]
+    },
+    "scripts": [
+      "latin"
+    ]
+  },
+  {
+    "id": "big-shoulders-inline",
+    "name": "Big Shoulders Inline",
+    "category": "sport",
+    "weights": [
+      700,
+      900
+    ],
+    "license": "OFL",
+    "source": "@fontsource/big-shoulders-inline-display@5.3.0",
+    "ascent": 0.984,
+    "descent": 0.213,
+    "files": {
+      "700": [
+        "big-shoulders-inline-display-latin-700-normal.woff",
+        "big-shoulders-inline-display-latin-ext-700-normal.woff"
+      ],
+      "900": [
+        "big-shoulders-inline-display-latin-900-normal.woff",
+        "big-shoulders-inline-display-latin-ext-900-normal.woff"
+      ]
+    },
+    "scripts": [
+      "latin"
+    ]
+  },
+  {
+    "id": "big-shoulders-stencil",
+    "name": "Big Shoulders Stencil",
+    "category": "sport",
+    "weights": [
+      700,
+      900
+    ],
+    "license": "OFL",
+    "source": "@fontsource/big-shoulders-stencil-display@5.3.0",
+    "ascent": 0.984,
+    "descent": 0.213,
+    "files": {
+      "700": [
+        "big-shoulders-stencil-display-latin-700-normal.woff",
+        "big-shoulders-stencil-display-latin-ext-700-normal.woff"
+      ],
+      "900": [
+        "big-shoulders-stencil-display-latin-900-normal.woff",
+        "big-shoulders-stencil-display-latin-ext-900-normal.woff"
+      ]
+    },
+    "scripts": [
+      "latin"
+    ]
+  },
+  {
+    "id": "bungee",
+    "name": "Bungee",
+    "category": "sport",
+    "weights": [
+      400
+    ],
+    "license": "OFL",
+    "source": "@fontsource/bungee@5.3.0",
+    "ascent": 1.02,
+    "descent": 0.3,
+    "files": {
+      "400": [
+        "bungee-latin-400-normal.woff",
+        "bungee-latin-ext-400-normal.woff"
+      ]
+    },
+    "scripts": [
+      "latin"
+    ]
+  },
+  {
+    "id": "bungee-inline",
+    "name": "Bungee Inline",
+    "category": "sport",
+    "weights": [
+      400
+    ],
+    "license": "OFL",
+    "source": "@fontsource/bungee-inline@5.3.0",
+    "ascent": 1.02,
+    "descent": 0.3,
+    "files": {
+      "400": [
+        "bungee-inline-latin-400-normal.woff",
+        "bungee-inline-latin-ext-400-normal.woff"
+      ]
+    },
+    "scripts": [
+      "latin"
+    ]
+  },
+  {
+    "id": "bungee-shade",
+    "name": "Bungee Shade",
+    "category": "sport",
+    "weights": [
+      400
+    ],
+    "license": "OFL",
+    "source": "@fontsource/bungee-shade@5.3.0",
+    "ascent": 1.02,
+    "descent": 0.3,
+    "files": {
+      "400": [
+        "bungee-shade-latin-400-normal.woff",
+        "bungee-shade-latin-ext-400-normal.woff"
+      ]
+    },
+    "scripts": [
+      "latin"
+    ]
+  },
+  {
+    "id": "russo-one",
+    "name": "Russo One",
+    "category": "sport",
+    "weights": [
+      400
+    ],
+    "license": "OFL",
+    "source": "@fontsource/russo-one@5.3.0",
+    "ascent": 0.926,
+    "descent": 0.279,
+    "files": {
+      "400": [
+        "russo-one-latin-400-normal.woff",
+        "russo-one-latin-ext-400-normal.woff"
+      ]
+    },
+    "scripts": [
+      "latin"
+    ]
+  },
+  {
+    "id": "squada-one",
+    "name": "Squada One",
+    "category": "sport",
+    "weights": [
+      400
+    ],
+    "license": "OFL",
+    "source": "@fontsource/squada-one@5.3.0",
+    "ascent": 0.861,
+    "descent": 0.196,
+    "files": {
+      "400": [
+        "squada-one-latin-400-normal.woff"
+      ]
+    },
+    "scripts": [
+      "latin"
+    ]
+  },
+  {
+    "id": "staatliches",
+    "name": "Staatliches",
+    "category": "sport",
+    "weights": [
+      400
+    ],
+    "license": "OFL",
+    "source": "@fontsource/staatliches@5.3.0",
+    "ascent": 0.95,
+    "descent": 0.3,
+    "files": {
+      "400": [
+        "staatliches-latin-400-normal.woff",
+        "staatliches-latin-ext-400-normal.woff"
+      ]
+    },
+    "scripts": [
+      "latin"
+    ]
+  },
+  {
+    "id": "saira-condensed",
+    "name": "Saira Condensed",
+    "category": "sport",
+    "weights": [
+      500,
+      700,
+      900
+    ],
+    "license": "OFL",
+    "source": "@fontsource/saira-condensed@5.3.0",
+    "ascent": 1.135,
+    "descent": 0.439,
+    "files": {
+      "500": [
+        "saira-condensed-latin-500-normal.woff",
+        "saira-condensed-latin-ext-500-normal.woff"
+      ],
+      "700": [
+        "saira-condensed-latin-700-normal.woff",
+        "saira-condensed-latin-ext-700-normal.woff"
+      ],
+      "900": [
+        "saira-condensed-latin-900-normal.woff",
+        "saira-condensed-latin-ext-900-normal.woff"
+      ]
+    },
+    "scripts": [
+      "latin"
+    ]
+  },
+  {
+    "id": "saira-extra-condensed",
+    "name": "Saira Extra Condensed",
+    "category": "sport",
+    "weights": [
+      500,
+      700,
+      900
+    ],
+    "license": "OFL",
+    "source": "@fontsource/saira-extra-condensed@5.3.0",
+    "ascent": 1.135,
+    "descent": 0.439,
+    "files": {
+      "500": [
+        "saira-extra-condensed-latin-500-normal.woff",
+        "saira-extra-condensed-latin-ext-500-normal.woff"
+      ],
+      "700": [
+        "saira-extra-condensed-latin-700-normal.woff",
+        "saira-extra-condensed-latin-ext-700-normal.woff"
+      ],
+      "900": [
+        "saira-extra-condensed-latin-900-normal.woff",
+        "saira-extra-condensed-latin-ext-900-normal.woff"
+      ]
+    },
+    "scripts": [
+      "latin"
+    ]
+  },
+  {
+    "id": "saira-stencil",
+    "name": "Saira Stencil One",
+    "category": "sport",
+    "weights": [
+      400
+    ],
+    "license": "OFL",
+    "source": "@fontsource/saira-stencil-one@5.3.0",
+    "ascent": 1.135,
+    "descent": 0.439,
+    "files": {
+      "400": [
+        "saira-stencil-one-latin-400-normal.woff",
+        "saira-stencil-one-latin-ext-400-normal.woff"
+      ]
+    },
+    "scripts": [
+      "latin"
+    ]
+  },
+  {
+    "id": "chakra-petch",
+    "name": "Chakra Petch",
+    "category": "sport",
+    "weights": [
+      500,
+      700
+    ],
+    "license": "OFL",
+    "source": "@fontsource/chakra-petch@5.3.0",
+    "ascent": 0.992,
+    "descent": 0.308,
+    "files": {
+      "500": [
+        "chakra-petch-latin-500-normal.woff",
+        "chakra-petch-latin-ext-500-normal.woff"
+      ],
+      "700": [
+        "chakra-petch-latin-700-normal.woff",
+        "chakra-petch-latin-ext-700-normal.woff"
+      ]
+    },
+    "scripts": [
+      "latin"
+    ]
+  },
+  {
+    "id": "black-ops-one",
+    "name": "Black Ops One",
+    "category": "sport",
+    "weights": [
+      400
+    ],
+    "license": "OFL",
+    "source": "@fontsource/black-ops-one@5.3.0",
+    "ascent": 0.914,
+    "descent": 0.336,
+    "files": {
+      "400": [
+        "black-ops-one-latin-400-normal.woff",
+        "black-ops-one-latin-ext-400-normal.woff"
+      ]
+    },
+    "scripts": [
+      "latin"
+    ]
+  },
+  {
+    "id": "racing-sans-one",
+    "name": "Racing Sans One",
+    "category": "sport",
+    "weights": [
+      400
+    ],
+    "license": "OFL",
+    "source": "@fontsource/racing-sans-one@5.3.0",
+    "ascent": 0.976,
+    "descent": 0.284,
+    "files": {
+      "400": [
+        "racing-sans-one-latin-400-normal.woff",
+        "racing-sans-one-latin-ext-400-normal.woff"
+      ]
+    },
+    "scripts": [
+      "latin"
+    ]
+  },
+  {
+    "id": "orbitron",
+    "name": "Orbitron",
+    "category": "sport",
+    "weights": [
+      500,
+      700,
+      900
+    ],
+    "license": "OFL",
+    "source": "@fontsource/orbitron@5.3.0",
+    "ascent": 1.011,
+    "descent": 0.243,
+    "files": {
+      "500": [
+        "orbitron-latin-500-normal.woff"
+      ],
+      "700": [
+        "orbitron-latin-700-normal.woff"
+      ],
+      "900": [
+        "orbitron-latin-900-normal.woff"
+      ]
+    },
+    "scripts": [
+      "latin"
+    ]
+  },
+  {
+    "id": "audiowide",
+    "name": "Audiowide",
+    "category": "sport",
+    "weights": [
+      400
+    ],
+    "license": "OFL",
+    "source": "@fontsource/audiowide@5.3.0",
+    "ascent": 0.99,
+    "descent": 0.285,
+    "files": {
+      "400": [
+        "audiowide-latin-400-normal.woff",
+        "audiowide-latin-ext-400-normal.woff"
+      ]
+    },
+    "scripts": [
+      "latin"
+    ]
+  },
+  {
+    "id": "kanit",
+    "name": "Kanit",
+    "category": "sport",
+    "weights": [
+      500,
+      700,
+      900
+    ],
+    "license": "OFL",
+    "source": "@fontsource/kanit@5.3.0",
+    "ascent": 1.1,
+    "descent": 0.395,
+    "files": {
+      "500": [
+        "kanit-latin-500-normal.woff",
+        "kanit-latin-ext-500-normal.woff"
+      ],
+      "700": [
+        "kanit-latin-700-normal.woff",
+        "kanit-latin-ext-700-normal.woff"
+      ],
+      "900": [
+        "kanit-latin-900-normal.woff",
+        "kanit-latin-ext-900-normal.woff"
+      ]
+    },
+    "scripts": [
+      "latin"
+    ]
+  },
+  {
+    "id": "rajdhani",
+    "name": "Rajdhani",
+    "category": "sport",
+    "weights": [
+      500,
+      700
+    ],
+    "license": "OFL",
+    "source": "@fontsource/rajdhani@5.3.0",
+    "ascent": 0.93,
+    "descent": 0.346,
+    "files": {
+      "500": [
+        "rajdhani-latin-500-normal.woff",
+        "rajdhani-latin-ext-500-normal.woff"
+      ],
+      "700": [
+        "rajdhani-latin-700-normal.woff",
+        "rajdhani-latin-ext-700-normal.woff"
+      ]
+    },
+    "scripts": [
+      "latin"
+    ]
+  },
+  {
+    "id": "exo-2",
+    "name": "Exo 2",
+    "category": "sport",
+    "weights": [
+      500,
+      700,
+      900
+    ],
+    "license": "OFL",
+    "source": "@fontsource/exo-2@5.3.0",
+    "ascent": 0.999,
+    "descent": 0.201,
+    "files": {
+      "500": [
+        "exo-2-latin-500-normal.woff",
+        "exo-2-latin-ext-500-normal.woff"
+      ],
+      "700": [
+        "exo-2-latin-700-normal.woff",
+        "exo-2-latin-ext-700-normal.woff"
+      ],
+      "900": [
+        "exo-2-latin-900-normal.woff",
+        "exo-2-latin-ext-900-normal.woff"
+      ]
+    },
+    "scripts": [
+      "latin"
+    ]
+  },
+  {
+    "id": "changa-one",
+    "name": "Changa One",
+    "category": "sport",
+    "weights": [
+      400
+    ],
+    "license": "OFL",
+    "source": "@fontsource/changa-one@5.3.0",
+    "ascent": 0.882,
+    "descent": 0.18,
+    "files": {
+      "400": [
+        "changa-one-latin-400-normal.woff"
+      ]
+    },
+    "scripts": [
+      "latin"
+    ]
+  },
+  {
+    "id": "bowlby-one-sc",
+    "name": "Bowlby One SC",
+    "category": "sport",
+    "weights": [
+      400
+    ],
+    "license": "OFL",
+    "source": "@fontsource/bowlby-one-sc@5.3.0",
+    "ascent": 1.098,
+    "descent": 0.428,
+    "files": {
+      "400": [
+        "bowlby-one-sc-latin-400-normal.woff",
+        "bowlby-one-sc-latin-ext-400-normal.woff"
+      ]
+    },
+    "scripts": [
+      "latin"
+    ]
+  },
+  {
+    "id": "holtwood-one-sc",
+    "name": "Holtwood One SC",
+    "category": "sport",
+    "weights": [
+      400
+    ],
+    "license": "OFL",
+    "source": "@fontsource/holtwood-one-sc@5.3.0",
+    "ascent": 1.2,
+    "descent": 0.428,
+    "files": {
+      "400": [
+        "holtwood-one-sc-latin-400-normal.woff",
+        "holtwood-one-sc-latin-ext-400-normal.woff"
+      ]
+    },
+    "scripts": [
+      "latin"
+    ]
+  },
+  {
+    "id": "monoton",
+    "name": "Monoton",
+    "category": "sport",
+    "weights": [
+      400
+    ],
+    "license": "OFL",
+    "source": "@fontsource/monoton@5.3.0",
+    "ascent": 1.155,
+    "descent": 0.401,
+    "files": {
+      "400": [
+        "monoton-latin-400-normal.woff",
+        "monoton-latin-ext-400-normal.woff"
+      ]
+    },
+    "scripts": [
+      "latin"
+    ]
+  },
+  {
+    "id": "tourney",
+    "name": "Tourney",
+    "category": "sport",
+    "weights": [
+      600,
+      800
+    ],
+    "license": "OFL",
+    "source": "@fontsource/tourney@5.3.0",
+    "ascent": 0.9,
+    "descent": 0.2,
+    "files": {
+      "600": [
+        "tourney-latin-600-normal.woff",
+        "tourney-latin-ext-600-normal.woff"
+      ],
+      "800": [
+        "tourney-latin-800-normal.woff",
+        "tourney-latin-ext-800-normal.woff"
+      ]
+    },
+    "scripts": [
+      "latin"
+    ]
+  },
+  {
+    "id": "goldman",
+    "name": "Goldman",
+    "category": "sport",
+    "weights": [
+      400,
+      700
+    ],
+    "license": "OFL",
+    "source": "@fontsource/goldman@5.3.0",
+    "ascent": 0.9,
+    "descent": 0.3,
+    "files": {
+      "400": [
+        "goldman-latin-400-normal.woff",
+        "goldman-latin-ext-400-normal.woff"
+      ],
+      "700": [
+        "goldman-latin-700-normal.woff",
+        "goldman-latin-ext-700-normal.woff"
+      ]
+    },
+    "scripts": [
+      "latin"
+    ]
+  },
+  {
+    "id": "zen-dots",
+    "name": "Zen Dots",
+    "category": "sport",
+    "weights": [
+      400
+    ],
+    "license": "OFL",
+    "source": "@fontsource/zen-dots@5.3.0",
+    "ascent": 0.93,
+    "descent": 0.27,
+    "files": {
+      "400": [
+        "zen-dots-latin-400-normal.woff",
+        "zen-dots-latin-ext-400-normal.woff"
+      ]
+    },
+    "scripts": [
+      "latin"
+    ]
+  },
+  {
+    "id": "michroma",
+    "name": "Michroma",
+    "category": "sport",
+    "weights": [
+      400
+    ],
+    "license": "OFL",
+    "source": "@fontsource/michroma@5.3.0",
+    "ascent": 1.156,
+    "descent": 0.266,
+    "files": {
+      "400": [
+        "michroma-latin-400-normal.woff",
+        "michroma-latin-ext-400-normal.woff"
+      ]
+    },
+    "scripts": [
+      "latin"
+    ]
+  },
+  {
+    "id": "anta",
+    "name": "Anta",
+    "category": "sport",
+    "weights": [
+      400
+    ],
+    "license": "OFL",
+    "source": "@fontsource/anta@5.3.0",
+    "ascent": 0.96,
+    "descent": 0.261,
+    "files": {
+      "400": [
+        "anta-latin-400-normal.woff",
+        "anta-latin-ext-400-normal.woff"
+      ]
+    },
+    "scripts": [
+      "latin"
+    ]
+  },
+  {
+    "id": "oxanium",
+    "name": "Oxanium",
+    "category": "sport",
+    "weights": [
+      500,
+      700,
+      800
+    ],
+    "license": "OFL",
+    "source": "@fontsource/oxanium@5.3.0",
+    "ascent": 0.79,
+    "descent": 0.21,
+    "files": {
+      "500": [
+        "oxanium-latin-500-normal.woff",
+        "oxanium-latin-ext-500-normal.woff"
+      ],
+      "700": [
+        "oxanium-latin-700-normal.woff",
+        "oxanium-latin-ext-700-normal.woff"
+      ],
+      "800": [
+        "oxanium-latin-800-normal.woff",
+        "oxanium-latin-ext-800-normal.woff"
+      ]
+    },
+    "scripts": [
+      "latin"
+    ]
+  },
+  {
+    "id": "tektur",
+    "name": "Tektur",
+    "category": "sport",
+    "weights": [
+      500,
+      700,
+      900
+    ],
+    "license": "OFL",
+    "source": "@fontsource/tektur@5.3.0",
+    "ascent": 1,
+    "descent": 0.3,
+    "files": {
+      "500": [
+        "tektur-latin-500-normal.woff",
+        "tektur-latin-ext-500-normal.woff"
+      ],
+      "700": [
+        "tektur-latin-700-normal.woff",
+        "tektur-latin-ext-700-normal.woff"
+      ],
+      "900": [
+        "tektur-latin-900-normal.woff",
+        "tektur-latin-ext-900-normal.woff"
+      ]
+    },
+    "scripts": [
+      "latin",
+      "pular"
+    ]
+  },
+  {
+    "id": "bevan",
+    "name": "Bevan",
+    "category": "sport",
+    "weights": [
+      400
+    ],
+    "license": "OFL",
+    "source": "@fontsource/bevan@5.3.0",
+    "ascent": 1.155,
+    "descent": 0.452,
+    "files": {
+      "400": [
+        "bevan-latin-400-normal.woff",
+        "bevan-latin-ext-400-normal.woff"
+      ]
+    },
+    "scripts": [
+      "latin"
+    ]
+  },
+  {
+    "id": "sarpanch",
+    "name": "Sarpanch",
+    "category": "sport",
+    "weights": [
+      500,
+      700,
+      900
+    ],
+    "license": "OFL",
+    "source": "@fontsource/sarpanch@5.3.0",
+    "ascent": 1.05,
+    "descent": 0.35,
+    "files": {
+      "500": [
+        "sarpanch-latin-500-normal.woff",
+        "sarpanch-latin-ext-500-normal.woff"
+      ],
+      "700": [
+        "sarpanch-latin-700-normal.woff",
+        "sarpanch-latin-ext-700-normal.woff"
+      ],
+      "900": [
+        "sarpanch-latin-900-normal.woff",
+        "sarpanch-latin-ext-900-normal.woff"
+      ]
+    },
+    "scripts": [
+      "latin"
+    ]
+  },
+  {
+    "id": "jockey-one",
+    "name": "Jockey One",
+    "category": "sport",
+    "weights": [
+      400
+    ],
+    "license": "OFL",
+    "source": "@fontsource/jockey-one@5.3.0",
+    "ascent": 1.079,
+    "descent": 0.319,
+    "files": {
+      "400": [
+        "jockey-one-latin-400-normal.woff",
+        "jockey-one-latin-ext-400-normal.woff"
+      ]
+    },
+    "scripts": [
+      "latin"
+    ]
+  },
+  {
+    "id": "passion-one",
+    "name": "Passion One",
+    "category": "sport",
+    "weights": [
+      400,
+      700,
+      900
+    ],
+    "license": "OFL",
+    "source": "@fontsource/passion-one@5.3.0",
+    "ascent": 0.835,
+    "descent": 0.266,
+    "files": {
+      "400": [
+        "passion-one-latin-400-normal.woff",
+        "passion-one-latin-ext-400-normal.woff"
+      ],
+      "700": [
+        "passion-one-latin-700-normal.woff",
+        "passion-one-latin-ext-700-normal.woff"
+      ],
+      "900": [
+        "passion-one-latin-900-normal.woff",
+        "passion-one-latin-ext-900-normal.woff"
+      ]
+    },
+    "scripts": [
+      "latin"
+    ]
+  },
+  {
+    "id": "fugaz-one",
+    "name": "Fugaz One",
+    "category": "sport",
+    "weights": [
+      400
+    ],
+    "license": "OFL",
+    "source": "@fontsource/fugaz-one@5.3.0",
+    "ascent": 1.046,
+    "descent": 0.422,
+    "files": {
+      "400": [
+        "fugaz-one-latin-400-normal.woff"
+      ]
+    },
+    "scripts": [
+      "latin"
+    ]
+  },
+  {
+    "id": "days-one",
+    "name": "Days One",
+    "category": "sport",
+    "weights": [
+      400
+    ],
+    "license": "OFL",
+    "source": "@fontsource/days-one@5.3.0",
+    "ascent": 0.996,
+    "descent": 0.277,
+    "files": {
+      "400": [
+        "days-one-latin-400-normal.woff"
+      ]
+    },
+    "scripts": [
+      "latin"
+    ]
+  },
+  {
     "id": "noto-sans-nko",
     "name": "Noto Sans NKo",
     "category": "sans",

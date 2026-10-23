@@ -9,7 +9,8 @@ dans les exports.
 Montserrat, Poppins, Space Grotesk, Nunito, Raleway, Oswald, Bebas Neue, Playfair Display, Lora,
 Merriweather, Great Vibes, Dancing Script, Allura, Satisfy, Sacramento.
 
-Bibliothèque élargie du Studio : voir la liste complète dans `manifest.json`.
+Bibliothèque élargie du Studio, et polices de maillots et de sport (catégorie `sport` : Graduate,
+Big Shoulders, Bungee, Saira, Kanit, Orbitron…) : voir la liste complète dans `manifest.json`.
 
 Police de secours, hors bibliothèque : **Noto Sans NKo** (sous-ensemble N'Ko), utilisée pour les
 caractères N'Ko qu'aucune police de la bibliothèque ne contient.
