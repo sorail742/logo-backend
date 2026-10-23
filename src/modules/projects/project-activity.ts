@@ -46,6 +46,11 @@ export const PROJECT_ACTIONS = {
   'studio.create': (after) => `a créé « ${text(after.name)} » dans le Studio`,
   'studio.export': (after) => `a exporté une création du Studio (${text(after.format).toUpperCase()})`,
   'studio.images': () => 'a généré des images dans le Studio',
+  'site.create': () => 'a créé le site web',
+  'site.publish': (after) => `a publié le site web (/site/${text(after.slug)})`,
+  'site.unpublish': () => 'a dépublié le site web',
+  'site.delete': () => 'a supprimé le site web',
+  'site.export': () => 'a exporté le site web (ZIP)',
 } satisfies Record<string, (after: Record<string, unknown>) => string>;
 
 export type ProjectAction = keyof typeof PROJECT_ACTIONS;

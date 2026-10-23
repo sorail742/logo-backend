@@ -284,6 +284,7 @@ model Project {
   brandKits      BrandKit[]
   apparelDesigns ApparelDesign[]
   studioDesigns  StudioDesign[]
+  website        Website?
   jobs           GenerationJob[]
   comments       Comment[]
 
@@ -857,4 +858,53 @@ model ProductionExport {
   techPackKey String?
   createdAt   DateTime       @default(now())
   design      ApparelDesign  @relation(fields: [designId], references: [id], onDelete: Cascade)
+}
+
+/// Site web de la marque (une page complète), publié sous /site/<slug>.
+model Website {
+  id          String           @id @default(uuid())
+  projectId   String           @unique
+  slug        String           @unique
+  /// Logo affiché (sa version courante) ; à défaut, le favori ou le plus récent du projet.
+  logoId      String?
+  content     Json
+  published   Boolean          @default(false)
+  publishedAt DateTime?
+  /// Page publiée, rendue à la publication et à chaque modification d'un site en ligne.
+  html        String?
+  views       Int              @default(0)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  project     Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  media       WebsiteMedia[]
+  messages    WebsiteMessage[]
+}
+
+/// Image téléversée pour le site (visuel d'accueil, galerie).
+model WebsiteMedia {
+  id         String   @id @default(uuid())
+  websiteId  String
+  storageKey String
+  mimeType   String
+  sizeBytes  Int
+  alt        String   @default("")
+  createdAt  DateTime @default(now())
+  website    Website  @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+
+  @@index([websiteId])
+}
+
+/// Message reçu par le formulaire de contact du site publié.
+model WebsiteMessage {
+  id        String    @id @default(uuid())
+  websiteId String
+  name      String
+  email     String?
+  phone     String?
+  message   String
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+  website   Website   @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+
+  @@index([websiteId, createdAt])
 }

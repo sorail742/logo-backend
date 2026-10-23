@@ -24,6 +24,7 @@ import { SignaturesModule } from './modules/signatures/signatures.module';
 import { SlogansModule } from './modules/slogans/slogans.module';
 import { StudioModule } from './modules/studio/studio.module';
 import { UsersModule } from './modules/users/users.module';
+import { WebsitesModule } from './modules/websites/websites.module';
 import { WorkspacesModule } from './modules/workspaces/workspaces.module';
 
 @Module({
@@ -56,6 +57,7 @@ import { WorkspacesModule } from './modules/workspaces/workspaces.module';
     NotificationsModule,
     AdminModule,
     ApparelModule,
+    WebsitesModule,
   ],
   providers: [
     // Ordre d'exécution : limitation de débit, authentification, rôle plateforme, rôle d'espace.

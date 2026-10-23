@@ -101,9 +101,8 @@ function background(source: LogoSource) {
   return source.kind === 'spec' ? source.spec.colors.background : source.background;
 }
 
-/** Logo, symbole et couleurs pour le kit réseaux sociaux (LOGO-23). */
-/** Logo et symbole dans toutes leurs couleurs, pour les visuels composés (réseaux sociaux, mises en situation). */
-function brandAssets(source: LogoSource): BrandAssets {
+/** Logo et symbole dans toutes leurs couleurs, pour les visuels composés (réseaux sociaux, mises en situation, site). */
+export function brandAssets(source: LogoSource): BrandAssets {
   if (source.kind === 'svg') {
     const size = svgSize(source.svg);
     const color = { svg: source.svg, ...size };

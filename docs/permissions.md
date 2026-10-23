@@ -41,16 +41,18 @@ paiements et l'abonnement sont conservés.
 
 | Action | Lecteur | Éditeur | Propriétaire | Support | Admin |
 | --- | --- | --- | --- | --- | --- |
-| Voir projets, noms, logos, slogans, signatures, kits, créations, historique | Oui | Oui | Oui | Lecture | Lecture |
+| Voir projets, noms, logos, slogans, signatures, kits, créations, site web, historique | Oui | Oui | Oui | Lecture | Lecture |
 | Commenter, répondre, voter pour un nom | Oui | Oui | Oui | — | — |
 | Résoudre le fil d'un autre | — | Oui | Oui | — | — |
 | Créer un projet, lancer une génération (noms, logos, slogans, images) | — | Oui | Oui | — | — |
-| Éditer brief, logos, slogans, signatures, kit, créations du Studio | — | Oui | Oui | — | — |
-| Partager le kit (lien public) | — | Oui | Oui | — | — |
-| Exporter un logo ou une création, préparer l'archive du kit, télécharger | Si autorisé | Oui | Oui | — | — |
+| Éditer brief, logos, slogans, signatures, kit, créations du Studio, site web | — | Oui | Oui | — | — |
+| Partager le kit (lien public), publier ou dépublier le site web | — | Oui | Oui | — | — |
+| Lire les messages reçus par le formulaire du site | — | Oui | Oui | — | — |
+| Exporter un logo, une création ou le site web (ZIP), préparer l'archive du kit, télécharger | Si autorisé | Oui | Oui | — | — |
 | Télécharger le fichier d'un cachet ou d'un paraphe | — | Oui | Oui | — | — |
 | Demander la charte PDF (crédits) | — | Oui | Oui | — | — |
 | Voir la corbeille | — | — | Oui | — | Oui |
+| Supprimer le site web | — | — | Oui | — | — |
 | Supprimer ou restaurer un projet | — | — | Oui | — | Oui |
 
 « Si autorisé » : le propriétaire active « Les lecteurs peuvent télécharger » dans les réglages de
@@ -76,4 +78,7 @@ signés pour un lecteur (`result.restricted`). Le cachet et le paraphe restent r
 
 Sans compte, avec limitation de débit : essai de noms et de signature e-mail, page d'un kit
 partagé (mot de passe et expiration facultatifs), validation d'un BAT par lien, logo d'une
-signature e-mail, fichiers servis par URL signée, offres, sondes de santé.
+signature e-mail, fichiers servis par URL signée, offres, sondes de santé. Site web publié :
+page, image de partage et icônes, images téléversées (identifiant aléatoire), polices de la
+bibliothèque et formulaire de contact (5 messages par minute et par adresse IP, champ piège
+contre les robots, ouvert à toute origine pour un site exporté et hébergé ailleurs).
