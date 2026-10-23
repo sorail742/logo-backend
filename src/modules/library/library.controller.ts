@@ -100,12 +100,14 @@ export class LibraryController {
 
   @Get('fonts')
   fonts() {
-    return FONTS.map(({ id, name, category, license, weights }) => ({
+    return FONTS.map(({ id, name, category, license, weights, scripts }) => ({
       id,
       name,
       category,
       license,
       weights,
+      // Écritures complètes (latin, pular) : les autres lettres passent par la police de secours.
+      scripts,
       isActive: true,
     }));
   }

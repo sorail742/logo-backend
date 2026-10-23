@@ -2,9 +2,10 @@
 // @fontsource du registre npm et les copie dans assets/fonts, avec un manifeste lu par le
 // moteur de rendu. Les fichiers sont versionnés : le rendu ne dépend d'aucun réseau.
 //
-// Usage : node scripts/fetch-fonts.mjs
-// Pour ajouter une police : compléter FONTS (même identifiant que le front), relancer.
-import { mkdirSync, writeFileSync } from 'node:fs';
+// Usage : node scripts/fetch-fonts.mjs [identifiant…]
+// Pour ajouter une police : compléter FONTS (même identifiant que le front), relancer avec son
+// identifiant (les autres polices du manifeste sont conservées telles quelles).
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { gunzipSync } from 'node:zlib';
 import opentype from 'opentype.js';
@@ -62,7 +63,16 @@ const FONTS = [
   { id: 'caveat', pkg: 'caveat', name: 'Caveat', category: 'script', weights: [400, 700] },
   { id: 'permanent-marker', pkg: 'permanent-marker', name: 'Permanent Marker', category: 'script', weights: [400] },
   { id: 'kaushan-script', pkg: 'kaushan-script', name: 'Kaushan Script', category: 'script', weights: [400] },
+  // Polices de secours, hors bibliothèque : écritures absentes des polices ci-dessus.
+  { id: 'noto-sans-nko', pkg: 'noto-sans-nko', name: 'Noto Sans NKo', category: 'sans', weights: [400], subsets: ['nko'], fallback: true },
 ];
+
+/** Écritures repérées par leurs lettres : toutes doivent être présentes dans la graisse normale. */
+const SCRIPTS = {
+  latin: 'AZaz09éèçà',
+  pular: 'ɓɗŋƴƁƊŊƳ',
+  nko: 'ߊߒߞߏ',
+};
 
 /** Fichiers d'une archive tar (format ustar des paquets npm), par chemin. */
 function untar(archive) {
@@ -93,13 +103,19 @@ async function fetchPackage(pkg) {
 const out = resolve(import.meta.dirname, '..', 'assets', 'fonts');
 mkdirSync(out, { recursive: true });
 
-const packages = await Promise.all(FONTS.map((font) => fetchPackage(font.pkg)));
-const manifest = FONTS.map((font, index) => {
+const manifestPath = join(out, 'manifest.json');
+const previous = existsSync(manifestPath) ? JSON.parse(readFileSync(manifestPath, 'utf8')) : [];
+const only = new Set(process.argv.slice(2));
+const wanted = (font) => !only.size || only.has(font.id) || !previous.some((p) => p.id === font.id);
+
+const packages = await Promise.all(FONTS.map((font) => (wanted(font) ? fetchPackage(font.pkg) : null)));
+const fetched = FONTS.map((font, index) => {
+  if (!packages[index]) return previous.find((p) => p.id === font.id);
   const spec = `@fontsource/${font.pkg}@${FONTSOURCE_VERSION}`;
   const files = {};
   for (const weight of font.weights) {
     files[weight] = [];
-    for (const subset of SUBSETS) {
+    for (const subset of font.subsets ?? SUBSETS) {
       const name = `${font.pkg}-${subset}-${weight}-normal.woff`;
       const data = packages[index].get(`package/files/${name}`);
       if (!data) continue;
@@ -113,10 +129,18 @@ const manifest = FONTS.map((font, index) => {
   const regular = opentype.loadSync(join(out, files[font.weights[0]][0]));
   const ascent = Math.round((regular.ascender / regular.unitsPerEm) * 1000) / 1000;
   const descent = Math.round((-regular.descender / regular.unitsPerEm) * 1000) / 1000;
-  const { id, name, category, weights } = font;
+  const { id, name, category, weights, fallback } = font;
   console.log(`${name} : ${Object.values(files).flat().length} fichiers`);
-  return { id, name, category, weights, license: 'OFL', source: spec, ascent, descent, files };
+  return { id, name, category, weights, license: 'OFL', source: spec, ascent, descent, files, ...(fallback && { fallback }) };
 });
 
-writeFileSync(join(out, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
-console.log(`Manifeste écrit dans ${join(out, 'manifest.json')}`);
+// Écritures couvertes par chaque police (graisse normale, tous sous-ensembles confondus) : le
+// front prévient quand une lettre sera dessinée avec la police de secours.
+const manifest = fetched.map((font) => {
+  const regular = font.files[String(font.weights[0])].map((file) => opentype.loadSync(join(out, file)));
+  const covers = (letters) => Array.from(letters).every((c) => regular.some((f) => f.charToGlyphIndex(c) > 0));
+  return { ...font, scripts: Object.keys(SCRIPTS).filter((script) => covers(SCRIPTS[script])) };
+});
+
+writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n');
+console.log(`Manifeste écrit dans ${manifestPath}`);

@@ -53,11 +53,18 @@ describe('palette et polices du kit (KIT-01)', () => {
 describe('texte des PDF', () => {
   it('bascule sur le sous-ensemble latin étendu pour les seuls caractères absents', () => {
     expect(textRuns('Café « Ɓuuɗe »')).toEqual([
-      { text: 'Café « ', ext: false },
-      { text: 'Ɓ', ext: true },
-      { text: 'uu', ext: false },
-      { text: 'ɗ', ext: true },
-      { text: 'e »', ext: false },
+      { text: 'Café « ', face: 'latin' },
+      { text: 'Ɓ', face: 'ext' },
+      { text: 'uu', face: 'latin' },
+      { text: 'ɗ', face: 'ext' },
+      { text: 'e »', face: 'latin' },
+    ]);
+  });
+
+  it('écrit le N’Ko avec sa police de secours', () => {
+    expect(textRuns('Kafo ߒߞߏ')).toEqual([
+      { text: 'Kafo ', face: 'latin' },
+      { text: 'ߒߞߏ', face: 'nko' },
     ]);
   });
 });

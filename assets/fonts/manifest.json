@@ -30,7 +30,11 @@
         "montserrat-latin-800-normal.woff",
         "montserrat-latin-ext-800-normal.woff"
       ]
-    }
+    },
+    "scripts": [
+      "latin",
+      "pular"
+    ]
   },
   {
     "id": "poppins",
@@ -63,7 +67,10 @@
         "poppins-latin-800-normal.woff",
         "poppins-latin-ext-800-normal.woff"
       ]
-    }
+    },
+    "scripts": [
+      "latin"
+    ]
   },
   {
     "id": "space-grotesk",
@@ -91,7 +98,10 @@
         "space-grotesk-latin-700-normal.woff",
         "space-grotesk-latin-ext-700-normal.woff"
       ]
-    }
+    },
+    "scripts": [
+      "latin"
+    ]
   },
   {
     "id": "nunito",
@@ -119,7 +129,11 @@
         "nunito-latin-800-normal.woff",
         "nunito-latin-ext-800-normal.woff"
       ]
-    }
+    },
+    "scripts": [
+      "latin",
+      "pular"
+    ]
   },
   {
     "id": "raleway",
@@ -152,7 +166,10 @@
         "raleway-latin-800-normal.woff",
         "raleway-latin-ext-800-normal.woff"
       ]
-    }
+    },
+    "scripts": [
+      "latin"
+    ]
   },
   {
     "id": "oswald",
@@ -180,7 +197,10 @@
         "oswald-latin-700-normal.woff",
         "oswald-latin-ext-700-normal.woff"
       ]
-    }
+    },
+    "scripts": [
+      "latin"
+    ]
   },
   {
     "id": "bebas-neue",
@@ -198,7 +218,10 @@
         "bebas-neue-latin-400-normal.woff",
         "bebas-neue-latin-ext-400-normal.woff"
       ]
-    }
+    },
+    "scripts": [
+      "latin"
+    ]
   },
   {
     "id": "playfair",
@@ -231,7 +254,10 @@
         "playfair-display-latin-800-normal.woff",
         "playfair-display-latin-ext-800-normal.woff"
       ]
-    }
+    },
+    "scripts": [
+      "latin"
+    ]
   },
   {
     "id": "lora",
@@ -259,7 +285,10 @@
         "lora-latin-700-normal.woff",
         "lora-latin-ext-700-normal.woff"
       ]
-    }
+    },
+    "scripts": [
+      "latin"
+    ]
   },
   {
     "id": "merriweather",
@@ -287,7 +316,11 @@
         "merriweather-latin-900-normal.woff",
         "merriweather-latin-ext-900-normal.woff"
       ]
-    }
+    },
+    "scripts": [
+      "latin",
+      "pular"
+    ]
   },
   {
     "id": "great-vibes",
@@ -305,7 +338,11 @@
         "great-vibes-latin-400-normal.woff",
         "great-vibes-latin-ext-400-normal.woff"
       ]
-    }
+    },
+    "scripts": [
+      "latin",
+      "pular"
+    ]
   },
   {
     "id": "dancing-script",
@@ -328,7 +365,10 @@
         "dancing-script-latin-700-normal.woff",
         "dancing-script-latin-ext-700-normal.woff"
       ]
-    }
+    },
+    "scripts": [
+      "latin"
+    ]
   },
   {
     "id": "allura",
@@ -346,7 +386,10 @@
         "allura-latin-400-normal.woff",
         "allura-latin-ext-400-normal.woff"
       ]
-    }
+    },
+    "scripts": [
+      "latin"
+    ]
   },
   {
     "id": "satisfy",
@@ -363,7 +406,10 @@
       "400": [
         "satisfy-latin-400-normal.woff"
       ]
-    }
+    },
+    "scripts": [
+      "latin"
+    ]
   },
   {
     "id": "sacramento",
@@ -381,7 +427,10 @@
         "sacramento-latin-400-normal.woff",
         "sacramento-latin-ext-400-normal.woff"
       ]
-    }
+    },
+    "scripts": [
+      "latin"
+    ]
   },
   {
     "id": "inter",
@@ -414,7 +463,11 @@
         "inter-latin-800-normal.woff",
         "inter-latin-ext-800-normal.woff"
       ]
-    }
+    },
+    "scripts": [
+      "latin",
+      "pular"
+    ]
   },
   {
     "id": "dm-sans",
@@ -437,7 +490,10 @@
         "dm-sans-latin-700-normal.woff",
         "dm-sans-latin-ext-700-normal.woff"
       ]
-    }
+    },
+    "scripts": [
+      "latin"
+    ]
   },
   {
     "id": "work-sans",
@@ -470,7 +526,10 @@
         "work-sans-latin-800-normal.woff",
         "work-sans-latin-ext-800-normal.woff"
       ]
-    }
+    },
+    "scripts": [
+      "latin"
+    ]
   },
   {
     "id": "rubik",
@@ -503,7 +562,10 @@
         "rubik-latin-800-normal.woff",
         "rubik-latin-ext-800-normal.woff"
       ]
-    }
+    },
+    "scripts": [
+      "latin"
+    ]
   },
   {
     "id": "manrope",
@@ -536,7 +598,10 @@
         "manrope-latin-800-normal.woff",
         "manrope-latin-ext-800-normal.woff"
       ]
-    }
+    },
+    "scripts": [
+      "latin"
+    ]
   },
   {
     "id": "outfit",
@@ -569,7 +634,10 @@
         "outfit-latin-800-normal.woff",
         "outfit-latin-ext-800-normal.woff"
       ]
-    }
+    },
+    "scripts": [
+      "latin"
+    ]
   },
   {
     "id": "plus-jakarta-sans",
@@ -602,7 +670,10 @@
         "plus-jakarta-sans-latin-800-normal.woff",
         "plus-jakarta-sans-latin-ext-800-normal.woff"
       ]
-    }
+    },
+    "scripts": [
+      "latin"
+    ]
   },
   {
     "id": "archivo",
@@ -635,7 +706,10 @@
         "archivo-latin-800-normal.woff",
         "archivo-latin-ext-800-normal.woff"
       ]
-    }
+    },
+    "scripts": [
+      "latin"
+    ]
   },
   {
     "id": "josefin-sans",
@@ -663,7 +737,10 @@
         "josefin-sans-latin-700-normal.woff",
         "josefin-sans-latin-ext-700-normal.woff"
       ]
-    }
+    },
+    "scripts": [
+      "latin"
+    ]
   },
   {
     "id": "quicksand",
@@ -691,7 +768,10 @@
         "quicksand-latin-700-normal.woff",
         "quicksand-latin-ext-700-normal.woff"
       ]
-    }
+    },
+    "scripts": [
+      "latin"
+    ]
   },
   {
     "id": "comfortaa",
@@ -714,7 +794,10 @@
         "comfortaa-latin-700-normal.woff",
         "comfortaa-latin-ext-700-normal.woff"
       ]
-    }
+    },
+    "scripts": [
+      "latin"
+    ]
   },
   {
     "id": "ubuntu",
@@ -737,7 +820,10 @@
         "ubuntu-latin-700-normal.woff",
         "ubuntu-latin-ext-700-normal.woff"
       ]
-    }
+    },
+    "scripts": [
+      "latin"
+    ]
   },
   {
     "id": "barlow-condensed",
@@ -765,7 +851,10 @@
         "barlow-condensed-latin-700-normal.woff",
         "barlow-condensed-latin-ext-700-normal.woff"
       ]
-    }
+    },
+    "scripts": [
+      "latin"
+    ]
   },
   {
     "id": "anton",
@@ -783,7 +872,11 @@
         "anton-latin-400-normal.woff",
         "anton-latin-ext-400-normal.woff"
       ]
-    }
+    },
+    "scripts": [
+      "latin",
+      "pular"
+    ]
   },
   {
     "id": "archivo-black",
@@ -801,7 +894,10 @@
         "archivo-black-latin-400-normal.woff",
         "archivo-black-latin-ext-400-normal.woff"
       ]
-    }
+    },
+    "scripts": [
+      "latin"
+    ]
   },
   {
     "id": "righteous",
@@ -819,7 +915,10 @@
         "righteous-latin-400-normal.woff",
         "righteous-latin-ext-400-normal.woff"
       ]
-    }
+    },
+    "scripts": [
+      "latin"
+    ]
   },
   {
     "id": "abril-fatface",
@@ -837,7 +936,10 @@
         "abril-fatface-latin-400-normal.woff",
         "abril-fatface-latin-ext-400-normal.woff"
       ]
-    }
+    },
+    "scripts": [
+      "latin"
+    ]
   },
   {
     "id": "syne",
@@ -870,7 +972,10 @@
         "syne-latin-800-normal.woff",
         "syne-latin-ext-800-normal.woff"
       ]
-    }
+    },
+    "scripts": [
+      "latin"
+    ]
   },
   {
     "id": "unbounded",
@@ -903,7 +1008,11 @@
         "unbounded-latin-800-normal.woff",
         "unbounded-latin-ext-800-normal.woff"
       ]
-    }
+    },
+    "scripts": [
+      "latin",
+      "pular"
+    ]
   },
   {
     "id": "bricolage-grotesque",
@@ -936,7 +1045,10 @@
         "bricolage-grotesque-latin-800-normal.woff",
         "bricolage-grotesque-latin-ext-800-normal.woff"
       ]
-    }
+    },
+    "scripts": [
+      "latin"
+    ]
   },
   {
     "id": "teko",
@@ -964,7 +1076,10 @@
         "teko-latin-700-normal.woff",
         "teko-latin-ext-700-normal.woff"
       ]
-    }
+    },
+    "scripts": [
+      "latin"
+    ]
   },
   {
     "id": "alfa-slab-one",
@@ -982,7 +1097,10 @@
         "alfa-slab-one-latin-400-normal.woff",
         "alfa-slab-one-latin-ext-400-normal.woff"
       ]
-    }
+    },
+    "scripts": [
+      "latin"
+    ]
   },
   {
     "id": "lobster",
@@ -1000,7 +1118,10 @@
         "lobster-latin-400-normal.woff",
         "lobster-latin-ext-400-normal.woff"
       ]
-    }
+    },
+    "scripts": [
+      "latin"
+    ]
   },
   {
     "id": "dm-serif-display",
@@ -1018,7 +1139,10 @@
         "dm-serif-display-latin-400-normal.woff",
         "dm-serif-display-latin-ext-400-normal.woff"
       ]
-    }
+    },
+    "scripts": [
+      "latin"
+    ]
   },
   {
     "id": "fraunces",
@@ -1051,7 +1175,10 @@
         "fraunces-latin-800-normal.woff",
         "fraunces-latin-ext-800-normal.woff"
       ]
-    }
+    },
+    "scripts": [
+      "latin"
+    ]
   },
   {
     "id": "cormorant-garamond",
@@ -1079,7 +1206,10 @@
         "cormorant-garamond-latin-700-normal.woff",
         "cormorant-garamond-latin-ext-700-normal.woff"
       ]
-    }
+    },
+    "scripts": [
+      "latin"
+    ]
   },
   {
     "id": "libre-baskerville",
@@ -1102,7 +1232,11 @@
         "libre-baskerville-latin-700-normal.woff",
         "libre-baskerville-latin-ext-700-normal.woff"
       ]
-    }
+    },
+    "scripts": [
+      "latin",
+      "pular"
+    ]
   },
   {
     "id": "roboto-slab",
@@ -1135,7 +1269,10 @@
         "roboto-slab-latin-800-normal.woff",
         "roboto-slab-latin-ext-800-normal.woff"
       ]
-    }
+    },
+    "scripts": [
+      "latin"
+    ]
   },
   {
     "id": "pacifico",
@@ -1153,7 +1290,10 @@
         "pacifico-latin-400-normal.woff",
         "pacifico-latin-ext-400-normal.woff"
       ]
-    }
+    },
+    "scripts": [
+      "latin"
+    ]
   },
   {
     "id": "caveat",
@@ -1176,7 +1316,10 @@
         "caveat-latin-700-normal.woff",
         "caveat-latin-ext-700-normal.woff"
       ]
-    }
+    },
+    "scripts": [
+      "latin"
+    ]
   },
   {
     "id": "permanent-marker",
@@ -1193,7 +1336,10 @@
       "400": [
         "permanent-marker-latin-400-normal.woff"
       ]
-    }
+    },
+    "scripts": [
+      "latin"
+    ]
   },
   {
     "id": "kaushan-script",
@@ -1211,6 +1357,30 @@
         "kaushan-script-latin-400-normal.woff",
         "kaushan-script-latin-ext-400-normal.woff"
       ]
-    }
+    },
+    "scripts": [
+      "latin"
+    ]
+  },
+  {
+    "id": "noto-sans-nko",
+    "name": "Noto Sans NKo",
+    "category": "sans",
+    "weights": [
+      400
+    ],
+    "license": "OFL",
+    "source": "@fontsource/noto-sans-nko@5.3.0",
+    "ascent": 1.069,
+    "descent": 0.293,
+    "files": {
+      "400": [
+        "noto-sans-nko-nko-400-normal.woff"
+      ]
+    },
+    "fallback": true,
+    "scripts": [
+      "nko"
+    ]
   }
 ]

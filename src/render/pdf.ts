@@ -1,7 +1,7 @@
 import { join } from 'node:path';
 import PDFDocument from 'pdfkit';
 import SVGtoPDF from 'svg-to-pdfkit';
-import { FALLBACK_FONT, FONTS_DIR, fileHasGlyph, getFont } from './fonts';
+import { FALLBACK_FONT, FONTS_DIR, fileHasGlyph, getFont, scriptFallbackFile } from './fonts';
 import { svgSize } from './svg';
 
 /** Points par millimètre (1 pt = 1/72 de pouce). */
@@ -85,30 +85,59 @@ export function fitSize(svg: string, width: number, height: number) {
 
 // ─── Texte ───
 // Les polices de la bibliothèque sont découpées en sous-ensembles latin et latin étendu : un
-// texte est écrit par segments, chacun avec le fichier qui contient ses caractères.
+// texte est écrit par segments, chacun avec le fichier qui contient ses caractères. Le N'Ko est
+// écrit avec sa police de secours ; PDFKit (fontkit) le façonne et l'écrit de droite à gauche.
 
 export type PdfFont = 'regular' | 'medium' | 'bold';
 const WEIGHTS: Record<PdfFont, number> = { regular: 400, medium: 600, bold: 700 };
 
-/** Enregistre la police de l'interface (Montserrat, OFL) dans ses deux sous-ensembles. */
+/** Fichier de police d'un segment : latin, latin étendu ou police de secours N'Ko. */
+export type TextFace = 'latin' | 'ext' | 'nko';
+
+/** Enregistre la police de l'interface (Montserrat, OFL) dans ses sous-ensembles, et le N'Ko. */
 export function registerTextFonts(doc: PDFKit.PDFDocument) {
+  const nko = scriptFallbackFile('ߒ');
   for (const [name, weight] of Object.entries(WEIGHTS)) {
     const [latin, extended] = getFont(FALLBACK_FONT).files[String(weight)];
     doc.registerFont(name, join(FONTS_DIR, latin));
     doc.registerFont(`${name}-ext`, join(FONTS_DIR, extended ?? latin));
+    if (nko) doc.registerFont(`${name}-nko`, join(FONTS_DIR, nko));
   }
 }
 
-/** Segments d'un texte : `ext` si le caractère manque au sous-ensemble latin. */
+function faceOf(char: string, latin: string, extended: string | undefined): TextFace {
+  if (fileHasGlyph(latin, char)) return 'latin';
+  if (extended && fileHasGlyph(extended, char)) return 'ext';
+  return scriptFallbackFile(char) ? 'nko' : 'ext';
+}
+
+/**
+ * Morceaux d'un segment N'Ko dans l'ordre d'affichage : PDFKit pose les mots de gauche à droite
+ * et retourne les glyphes de chacun, espace final compris ; chaque mot est donc écrit seul, les
+ * espaces avec la police latine. Un segment N'Ko qui passe à la ligne garde l'ordre logique de
+ * ses lignes (limite acceptée : textes courts).
+ */
+export function nkoPieces(text: string): { text: string; face: TextFace }[] {
+  const body = text.trim();
+  if (!body) return [{ text, face: 'latin' }];
+  const lead = text.slice(0, text.length - text.trimStart().length);
+  const trail = text.slice(text.trimEnd().length);
+  const words = body.split(/(\s+)/).reverse();
+  return [lead, ...words, trail]
+    .filter(Boolean)
+    .map((piece) => ({ text: piece, face: /^\s+$/.test(piece) ? 'latin' : 'nko' }));
+}
+
+/** Segments d'un texte, chacun avec le fichier qui contient ses caractères. */
 export function textRuns(text: string, font: PdfFont = 'regular') {
-  const latin = getFont(FALLBACK_FONT).files[String(WEIGHTS[font])][0];
-  const runs: { text: string; ext: boolean }[] = [];
+  const [latin, extended] = getFont(FALLBACK_FONT).files[String(WEIGHTS[font])];
+  const runs: { text: string; face: TextFace }[] = [];
   for (const char of Array.from(text)) {
     // Espaces et retours à la ligne restent dans le segment en cours.
     const last = runs.at(-1);
-    const ext = /\s/.test(char) ? (last?.ext ?? false) : !fileHasGlyph(latin, char);
-    if (last?.ext === ext) last.text += char;
-    else runs.push({ text: char, ext });
+    const face = /\s/.test(char) ? (last?.face ?? 'latin') : faceOf(char, latin, extended);
+    if (last?.face === face) last.text += char;
+    else runs.push({ text: char, face });
   }
   return runs;
 }
@@ -143,11 +172,12 @@ export function writeText(
     characterSpacing: style.characterSpacing,
     lineBreak: style.lineBreak,
   };
-  runs.forEach((run, index) => {
-    doc.font(run.ext ? `${font}-ext` : font);
-    const continued = index < runs.length - 1;
-    if (index === 0) doc.text(run.text, x, y, { ...options, continued });
-    else doc.text(run.text, { ...options, continued });
+  const pieces = runs.flatMap((run) => (run.face === 'nko' ? nkoPieces(run.text) : [run]));
+  pieces.forEach((piece, index) => {
+    doc.font(piece.face === 'latin' ? font : `${font}-${piece.face}`);
+    const continued = index < pieces.length - 1;
+    if (index === 0) doc.text(piece.text, x, y, { ...options, continued });
+    else doc.text(piece.text, { ...options, continued });
   });
   if (!runs.length) doc.text('', x, y, options);
 }
