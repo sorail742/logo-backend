@@ -6,6 +6,7 @@ import { ModerationService } from '../moderation/moderation.service';
 import { activityLabel } from './project-activity';
 import { PROJECT_INCLUDE, toProjectDto } from './project.presenter';
 import { BriefDto, CreateProjectDto, ListProjectsDto, UpdateProjectDto } from './projects.dto';
+import { omit } from '../../common/utils/object.util';
 
 /** Un projet supprimé reste récupérable 30 jours (PRJ-04). */
 export const TRASH_RETENTION_DAYS = 30;
@@ -109,14 +110,15 @@ export class ProjectsService {
       where: { id: projectId },
       include: { brief: true },
     });
-    const { id: _id, projectId: _pid, updatedAt: _u, ...brief } = source.brief ?? ({} as never);
     const copy = await this.prisma.project.create({
       data: {
         workspaceId: source.workspaceId,
         entityType: source.entityType,
         title: `${source.title} (copie)`,
         status: ProjectStatus.DRAFT,
-        ...(source.brief && { brief: { create: brief } }),
+        ...(source.brief && {
+          brief: { create: omit(source.brief, ['id', 'projectId', 'updatedAt']) },
+        }),
       },
       include: PROJECT_INCLUDE,
     });

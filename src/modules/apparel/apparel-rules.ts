@@ -197,12 +197,36 @@ const FULL_ZONE_CONFLICTS: Record<string, string[]> = {
 const AD_KINDS: DesignElementKind[] = ['LOGO', 'SPONSOR', 'IMAGE'];
 
 export function checkDesign(input: CheckInput): Issue[] {
-  const issues: Issue[] = [];
   const zones = new Map(input.zones.map((z) => [z.key, z]));
   const preset = input.preset ?? null;
   const presetSeverity: Severity = preset?.blocking === false ? 'warning' : 'error';
-  const used = new Set(input.elements.map((e) => e.zoneKey));
+  const issues = zoneOverlapIssues(new Set(input.elements.map((e) => e.zoneKey)));
 
+  for (const el of input.elements) {
+    const zone = zones.get(el.zoneKey);
+    if (!zone) {
+      issues.push({
+        elementId: el.id,
+        zoneKey: el.zoneKey,
+        code: 'UNKNOWN_ZONE',
+        severity: 'error',
+        message: `Zone ${el.zoneKey} absente de ce support`,
+      });
+      continue;
+    }
+    issues.push(...elementIssues(el, zone, input));
+    // Règlement sportif (§16.3)
+    if (preset) issues.push(...checkPresetElement(el, el.content ?? {}, preset, presetSeverity));
+  }
+
+  if (preset) issues.push(...checkPresetLayout(input.elements, zones, preset, presetSeverity));
+  issues.push(...garmentIssues(input));
+  return issues;
+}
+
+/** Une zone pleine remplace les zones qu'elle recouvre. */
+function zoneOverlapIssues(used: Set<string>): Issue[] {
+  const issues: Issue[] = [];
   for (const [full, conflicts] of Object.entries(FULL_ZONE_CONFLICTS)) {
     const clash = conflicts.filter((c) => used.has(c));
     if (used.has(full) && clash.length) {
@@ -214,126 +238,121 @@ export function checkDesign(input: CheckInput): Issue[] {
       });
     }
   }
+  return issues;
+}
 
-  for (const el of input.elements) {
-    const ref = { elementId: el.id, zoneKey: el.zoneKey };
-    const zone = zones.get(el.zoneKey);
-    if (!zone) {
-      issues.push({
-        ...ref,
-        code: 'UNKNOWN_ZONE',
-        severity: 'error',
-        message: `Zone ${el.zoneKey} absente de ce support`,
-      });
-      continue;
-    }
+/** Contrôles d'un élément dans sa zone : placement, droits, contraste, technique. */
+function elementIssues(el: Element, zone: Zone, input: CheckInput): Issue[] {
+  const ref = { elementId: el.id, zoneKey: el.zoneKey };
+  const c = el.content ?? {};
+  const issues: Issue[] = [];
 
-    // Élément dans sa zone (TEX-34)
-    if (
-      el.offsetXMm < 0 ||
-      el.offsetYMm < 0 ||
-      el.offsetXMm + el.widthMm > zone.maxWidthMm + 0.5 ||
-      el.offsetYMm + el.heightMm > zone.maxHeightMm + 0.5
-    ) {
-      issues.push({
-        ...ref,
-        code: 'OUT_OF_ZONE',
-        severity: 'error',
-        message: `L'élément sort de la zone ${zone.key} (${zone.maxWidthMm} × ${zone.maxHeightMm} mm)`,
-      });
-    }
-
-    const c = el.content ?? {};
-
-    // Droits (§16.9)
-    if (AD_KINDS.includes(el.kind) && c.source === 'upload' && !c.rightsAttested) {
-      issues.push({
-        ...ref,
-        code: 'RIGHTS_REQUIRED',
-        severity: 'error',
-        message: 'Logo importé : attestez détenir les droits ou l’autorisation de son titulaire',
-      });
-    }
-
-    // Contraste avec le tissu (TEX-35)
-    for (const color of c.colors ?? []) {
-      const ratio = contrastRatio(color, input.garmentColor);
-      if (ratio < MIN_GARMENT_CONTRAST) {
-        issues.push({
-          ...ref,
-          code: 'LOW_CONTRAST',
-          severity: 'warning',
-          message: `Contraste faible entre ${color} et le tissu ${input.garmentColor} (${ratio.toFixed(1)}:1)`,
-        });
-      }
-    }
-
-    // Technique (§16.7, TEX-24, TEX-25)
-    const minStroke =
-      input.minStrokeMm?.[input.technique] ?? DEFAULT_MIN_STROKE_MM[input.technique];
-    if (c.strokeMm !== undefined && c.strokeMm < minStroke) {
-      issues.push({
-        ...ref,
-        code: 'STROKE_TOO_THIN',
-        severity: 'error',
-        message: `Trait de ${c.strokeMm} mm, minimum ${minStroke} mm pour cette technique`,
-      });
-    }
-    if (
-      CUT_TECHNIQUES.includes(input.technique) &&
-      (el.kind === 'IMAGE' || el.kind === 'PATTERN' || c.gradient)
-    ) {
-      issues.push({
-        ...ref,
-        code: 'NOT_CUTTABLE',
-        severity: 'error',
-        message: 'Le flex et le flocage ne permettent ni image, ni motif, ni dégradé',
-      });
-    }
-    if (
-      c.style &&
-      STYLE_TECHNIQUES[c.style] &&
-      !STYLE_TECHNIQUES[c.style].includes(input.technique)
-    ) {
-      issues.push({
-        ...ref,
-        code: 'STYLE_TECHNIQUE',
-        severity: 'error',
-        message: `Le style ${c.style} n'est pas réalisable avec cette technique`,
-      });
-    }
-    if (
-      input.technique === 'EMBROIDERY' &&
-      isText(el.kind) &&
-      el.heightMm < MIN_EMBROIDERY_TEXT_MM
-    ) {
-      issues.push({
-        ...ref,
-        code: 'EMBROIDERY_TEXT',
-        severity: 'error',
-        message: `Texte brodé d'au moins ${MIN_EMBROIDERY_TEXT_MM} mm de haut`,
-      });
-    }
-    if (c.pixelWidth !== undefined && el.widthMm > 0) {
-      const dpi = c.pixelWidth / (el.widthMm / 25.4);
-      if (dpi < MIN_RASTER_DPI) {
-        issues.push({
-          ...ref,
-          code: 'LOW_RESOLUTION',
-          severity: 'error',
-          message: `Image à ${Math.round(dpi)} dpi à taille réelle, ${MIN_RASTER_DPI} dpi requis`,
-        });
-      }
-    }
-
-    // Règlement sportif (§16.3)
-    if (preset) issues.push(...checkPresetElement(el, c, preset, presetSeverity));
+  // Élément dans sa zone (TEX-34)
+  if (
+    el.offsetXMm < 0 ||
+    el.offsetYMm < 0 ||
+    el.offsetXMm + el.widthMm > zone.maxWidthMm + 0.5 ||
+    el.offsetYMm + el.heightMm > zone.maxHeightMm + 0.5
+  ) {
+    issues.push({
+      ...ref,
+      code: 'OUT_OF_ZONE',
+      severity: 'error',
+      message: `L'élément sort de la zone ${zone.key} (${zone.maxWidthMm} × ${zone.maxHeightMm} mm)`,
+    });
   }
 
-  if (preset) issues.push(...checkPresetLayout(input.elements, zones, preset, presetSeverity));
+  // Droits (§16.9)
+  if (AD_KINDS.includes(el.kind) && c.source === 'upload' && !c.rightsAttested) {
+    issues.push({
+      ...ref,
+      code: 'RIGHTS_REQUIRED',
+      severity: 'error',
+      message: 'Logo importé : attestez détenir les droits ou l’autorisation de son titulaire',
+    });
+  }
 
-  // Sublimation : polyester clair uniquement ; DTG : alerte sur vêtement foncé.
+  // Contraste avec le tissu (TEX-35)
+  for (const color of c.colors ?? []) {
+    const ratio = contrastRatio(color, input.garmentColor);
+    if (ratio < MIN_GARMENT_CONTRAST) {
+      issues.push({
+        ...ref,
+        code: 'LOW_CONTRAST',
+        severity: 'warning',
+        message: `Contraste faible entre ${color} et le tissu ${input.garmentColor} (${ratio.toFixed(1)}:1)`,
+      });
+    }
+  }
+
+  return [...issues, ...techniqueIssues(el, c, input, ref)];
+}
+
+/** Faisabilité selon la technique (§16.7, TEX-24, TEX-25) et résolution des images. */
+function techniqueIssues(
+  el: Element,
+  c: ElementContent,
+  input: CheckInput,
+  ref: Pick<Issue, 'elementId' | 'zoneKey'>,
+): Issue[] {
+  const issues: Issue[] = [];
+  const minStroke = input.minStrokeMm?.[input.technique] ?? DEFAULT_MIN_STROKE_MM[input.technique];
+  if (c.strokeMm !== undefined && c.strokeMm < minStroke) {
+    issues.push({
+      ...ref,
+      code: 'STROKE_TOO_THIN',
+      severity: 'error',
+      message: `Trait de ${c.strokeMm} mm, minimum ${minStroke} mm pour cette technique`,
+    });
+  }
+  if (
+    CUT_TECHNIQUES.includes(input.technique) &&
+    (el.kind === 'IMAGE' || el.kind === 'PATTERN' || c.gradient)
+  ) {
+    issues.push({
+      ...ref,
+      code: 'NOT_CUTTABLE',
+      severity: 'error',
+      message: 'Le flex et le flocage ne permettent ni image, ni motif, ni dégradé',
+    });
+  }
+  if (
+    c.style &&
+    STYLE_TECHNIQUES[c.style] &&
+    !STYLE_TECHNIQUES[c.style].includes(input.technique)
+  ) {
+    issues.push({
+      ...ref,
+      code: 'STYLE_TECHNIQUE',
+      severity: 'error',
+      message: `Le style ${c.style} n'est pas réalisable avec cette technique`,
+    });
+  }
+  if (input.technique === 'EMBROIDERY' && isText(el.kind) && el.heightMm < MIN_EMBROIDERY_TEXT_MM) {
+    issues.push({
+      ...ref,
+      code: 'EMBROIDERY_TEXT',
+      severity: 'error',
+      message: `Texte brodé d'au moins ${MIN_EMBROIDERY_TEXT_MM} mm de haut`,
+    });
+  }
+  const dpi =
+    c.pixelWidth !== undefined && el.widthMm > 0 ? c.pixelWidth / (el.widthMm / 25.4) : null;
+  if (dpi !== null && dpi < MIN_RASTER_DPI) {
+    issues.push({
+      ...ref,
+      code: 'LOW_RESOLUTION',
+      severity: 'error',
+      message: `Image à ${Math.round(dpi)} dpi à taille réelle, ${MIN_RASTER_DPI} dpi requis`,
+    });
+  }
+  return issues;
+}
+
+/** Sublimation : polyester clair uniquement ; DTG : alerte sur vêtement foncé. */
+function garmentIssues(input: CheckInput): Issue[] {
   const lum = relativeLuminance(input.garmentColor);
+  const issues: Issue[] = [];
   if (input.technique === 'SUBLIMATION' && lum < 0.6) {
     issues.push({
       code: 'SUBLIMATION_DARK',
@@ -348,7 +367,6 @@ export function checkDesign(input: CheckInput): Issue[] {
       message: 'DTG sur tissu foncé : sous-couche blanche nécessaire',
     });
   }
-
   return issues;
 }
 
@@ -369,44 +387,9 @@ function checkPresetElement(
       message: `Style ${c.style} interdit par le règlement`,
     });
   }
-
   if (el.kind === 'PLAYER_NUMBER' && preset.numbers) {
-    const n = preset.numbers;
-    const range = el.zoneKey.startsWith('back')
-      ? n.back
-      : el.zoneKey.startsWith('shorts')
-        ? n.shorts
-        : n.front;
-    const label = el.zoneKey.startsWith('back')
-      ? 'Numéro dos'
-      : el.zoneKey.startsWith('shorts')
-        ? 'Numéro de short'
-        : 'Numéro devant';
-    issues.push(
-      ...rangeIssues(el.heightMm, range, `${label} : hauteur`, 'NUMBER_HEIGHT', severity, ref),
-    );
-    if (c.strokeMm !== undefined) {
-      issues.push(
-        ...rangeIssues(
-          c.strokeMm,
-          n.stroke,
-          'Numéro : épaisseur du trait',
-          'NUMBER_STROKE',
-          severity,
-          ref,
-        ),
-      );
-    }
-    if (n.maxColors !== undefined && (c.colors?.length ?? 0) > n.maxColors) {
-      issues.push({
-        ...ref,
-        code: 'NUMBER_COLORS',
-        severity,
-        message: `Numéro en ${n.maxColors} couleur(s) au maximum`,
-      });
-    }
+    issues.push(...numberIssues(el, c, preset.numbers, severity, ref));
   }
-
   if (el.kind === 'PLAYER_NAME' && preset.names?.height) {
     issues.push(
       ...rangeIssues(
@@ -422,6 +405,55 @@ function checkPresetElement(
   return issues;
 }
 
+/** Hauteurs admises et libellé d'un numéro selon sa zone (dos, short ou devant). */
+function numberPlacement(zoneKey: string, n: NonNullable<PresetRules['numbers']>) {
+  if (zoneKey.startsWith('back')) return { range: n.back, label: 'Numéro dos' };
+  if (zoneKey.startsWith('shorts')) return { range: n.shorts, label: 'Numéro de short' };
+  return { range: n.front, label: 'Numéro devant' };
+}
+
+/** Numéro : hauteur, épaisseur du trait et nombre de couleurs selon le règlement. */
+function numberIssues(
+  el: Element,
+  c: ElementContent,
+  n: NonNullable<PresetRules['numbers']>,
+  severity: Severity,
+  ref: Pick<Issue, 'elementId' | 'zoneKey'>,
+): Issue[] {
+  const { range, label } = numberPlacement(el.zoneKey, n);
+  const issues = rangeIssues(
+    el.heightMm,
+    range,
+    `${label} : hauteur`,
+    'NUMBER_HEIGHT',
+    severity,
+    ref,
+  );
+  if (c.strokeMm !== undefined) {
+    issues.push(
+      ...rangeIssues(
+        c.strokeMm,
+        n.stroke,
+        'Numéro : épaisseur du trait',
+        'NUMBER_STROKE',
+        severity,
+        ref,
+      ),
+    );
+  }
+  if (n.maxColors !== undefined && (c.colors?.length ?? 0) > n.maxColors) {
+    issues.push({
+      ...ref,
+      code: 'NUMBER_COLORS',
+      severity,
+      message: `Numéro en ${n.maxColors} couleur(s) au maximum`,
+    });
+  }
+  return issues;
+}
+
+type Placed = { view: string; x1: number; x2: number; y1: number; y2: number };
+
 /** Écarts entre éléments : nom au-dessus du numéro, publicités loin des numéros. */
 function checkPresetLayout(
   elements: Element[],
@@ -429,8 +461,7 @@ function checkPresetLayout(
   preset: PresetRules,
   severity: Severity,
 ): Issue[] {
-  const issues: Issue[] = [];
-  const abs = (e: Element) => {
+  const abs = (e: Element): Placed | null => {
     const z = zones.get(e.zoneKey);
     if (!z) return null;
     // X en repère « gauche du porteur positive » : bord gauche de la zone = axe + largeur / 2.
@@ -438,51 +469,68 @@ function checkPresetLayout(
     const top = z.offsetYMm + e.offsetYMm;
     return { view: z.view, x1: left - e.widthMm, x2: left, y1: top, y2: top + e.heightMm };
   };
-
   const numbers = elements.filter((e) => e.kind === 'PLAYER_NUMBER');
   const gap = preset.names?.minGapAboveNumberMm;
-  if (gap !== undefined) {
-    for (const name of elements.filter((e) => e.kind === 'PLAYER_NAME')) {
-      const a = abs(name);
-      for (const num of numbers) {
-        const b = abs(num);
-        if (!a || !b || a.view !== b.view) continue;
-        const space = b.y1 - a.y2;
-        if (space < gap) {
-          issues.push({
-            elementId: name.id,
-            zoneKey: name.zoneKey,
-            code: 'NAME_NUMBER_GAP',
-            severity,
-            message: `Le nom doit être au moins ${gap / 10} cm au-dessus du numéro (écart actuel ${Math.max(0, round(space)) / 10} cm)`,
-          });
-        }
-      }
-    }
-  }
-
   const adGap = preset.adsGapFromNumbersMm;
-  if (adGap !== undefined) {
-    for (const ad of elements.filter((e) => AD_KINDS.includes(e.kind))) {
-      const a = abs(ad);
-      for (const num of numbers) {
-        const b = abs(num);
-        if (!a || !b || a.view !== b.view) continue;
-        const dx = Math.max(0, a.x1 - b.x2, b.x1 - a.x2);
-        const dy = Math.max(0, a.y1 - b.y2, b.y1 - a.y2);
-        if (Math.hypot(dx, dy) < adGap) {
-          issues.push({
-            elementId: ad.id,
-            zoneKey: ad.zoneKey,
-            code: 'AD_NUMBER_GAP',
-            severity,
-            message: `Publicités et logos à au moins ${adGap / 10} cm des numéros`,
-          });
-        }
-      }
+  return [
+    ...(gap === undefined ? [] : nameGapIssues(elements, numbers, abs, gap, severity)),
+    ...(adGap === undefined ? [] : adGapIssues(elements, numbers, abs, adGap, severity)),
+  ];
+}
+
+/** Paires (élément, numéro) placées sur une même vue. */
+function sameViewPairs(items: Element[], numbers: Element[], abs: (e: Element) => Placed | null) {
+  const pairs: { item: Element; a: Placed; b: Placed }[] = [];
+  for (const item of items) {
+    const a = abs(item);
+    for (const num of numbers) {
+      const b = abs(num);
+      if (a && b && a.view === b.view) pairs.push({ item, a, b });
     }
   }
-  return issues;
+  return pairs;
+}
+
+function nameGapIssues(
+  elements: Element[],
+  numbers: Element[],
+  abs: (e: Element) => Placed | null,
+  gap: number,
+  severity: Severity,
+): Issue[] {
+  const names = elements.filter((e) => e.kind === 'PLAYER_NAME');
+  return sameViewPairs(names, numbers, abs)
+    .filter(({ a, b }) => b.y1 - a.y2 < gap)
+    .map(({ item, a, b }) => ({
+      elementId: item.id,
+      zoneKey: item.zoneKey,
+      code: 'NAME_NUMBER_GAP',
+      severity,
+      message: `Le nom doit être au moins ${gap / 10} cm au-dessus du numéro (écart actuel ${Math.max(0, round(b.y1 - a.y2)) / 10} cm)`,
+    }));
+}
+
+function adGapIssues(
+  elements: Element[],
+  numbers: Element[],
+  abs: (e: Element) => Placed | null,
+  adGap: number,
+  severity: Severity,
+): Issue[] {
+  const ads = elements.filter((e) => AD_KINDS.includes(e.kind));
+  return sameViewPairs(ads, numbers, abs)
+    .filter(({ a, b }) => {
+      const dx = Math.max(0, a.x1 - b.x2, b.x1 - a.x2);
+      const dy = Math.max(0, a.y1 - b.y2, b.y1 - a.y2);
+      return Math.hypot(dx, dy) < adGap;
+    })
+    .map(({ item }) => ({
+      elementId: item.id,
+      zoneKey: item.zoneKey,
+      code: 'AD_NUMBER_GAP',
+      severity,
+      message: `Publicités et logos à au moins ${adGap / 10} cm des numéros`,
+    }));
 }
 
 function rangeIssues(

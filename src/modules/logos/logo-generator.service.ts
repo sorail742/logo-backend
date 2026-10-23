@@ -10,6 +10,7 @@ import {
 } from '../../shared/ai-schemas';
 import { AiProvider } from '../ai/ai-provider';
 import { parseSpec, specToSvg } from './logo-source';
+import { omit } from '../../common/utils/object.util';
 
 /** Distance de Hamming en deçà de laquelle un logo est jugé copié d'un autre (pHash 64 bits). */
 const SIMILARITY_THRESHOLD = 6;
@@ -49,7 +50,9 @@ export class LogoGeneratorService {
 
     const proposals: Proposal[] = [];
     const seen = new Set<string>();
-    for (const { withTagline, rationale: _rationale, ...composition } of compositions) {
+    for (const entry of compositions) {
+      const { withTagline } = entry;
+      const composition = omit(entry, ['withTagline', 'rationale']);
       const candidate = {
         ...composition,
         type: input.type,

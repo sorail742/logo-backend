@@ -9,6 +9,7 @@ import type {
   UpdateCommentDto,
 } from './comments.dto';
 import { resolveMentions, type Mentionable } from './mentions';
+import { omit } from '../../common/utils/object.util';
 
 interface Ctx {
   projectId: string;
@@ -23,7 +24,8 @@ type CommentRow = Comment & { author: { fullName: string } };
 
 /** Commentaire (type Comment du front), avec les membres mentionnés. */
 function toCommentDto(comment: CommentRow, members: Mentionable[]) {
-  const { author, projectId: _projectId, ...rest } = comment;
+  const { author } = comment;
+  const rest = omit(comment, ['author', 'projectId']);
   return {
     ...rest,
     authorName: author.fullName,

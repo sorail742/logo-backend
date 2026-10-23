@@ -22,6 +22,10 @@ export interface WorkspaceAccessOptions {
   /** Téléchargement : un Lecteur passe aussi si l'espace autorise les téléchargements (§3). */
   download?: boolean;
 }
+/** Le support a accès en lecture par défaut (§3). */
+const defaultStaff = (role: WorkspaceRole) =>
+  role === 'VIEWER' ? PlatformRole.SUPPORT : undefined;
+
 export const WorkspaceAccess = (
   role: WorkspaceRole,
   opts: Omit<WorkspaceAccessOptions, 'role'> = {},
@@ -29,7 +33,7 @@ export const WorkspaceAccess = (
   SetMetadata(WORKSPACE_ACCESS, {
     role,
     // Par défaut, le support a accès en lecture (§3) ; `staff: undefined` explicite le retire.
-    staff: 'staff' in opts ? opts.staff : role === 'VIEWER' ? PlatformRole.SUPPORT : undefined,
+    staff: 'staff' in opts ? opts.staff : defaultStaff(role),
     includeDeleted: opts.includeDeleted,
     download: opts.download,
   } satisfies WorkspaceAccessOptions);

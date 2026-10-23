@@ -4,6 +4,7 @@ import type { LogoSource } from '../../render/logo-assets';
 import { renderLogoSvg } from '../../render/logo';
 import { logoSpecSchema, type LogoSpec } from '../../render/logo-spec';
 import { optimizeSvg } from '../../render/svg';
+import { omit } from '../../common/utils/object.util';
 
 /** Dernière version d'un logo (listes) ; son SVG n'est renvoyé que pour un logo importé. */
 export const CURRENT_VERSION = {
@@ -25,7 +26,8 @@ export function toLogoDto<T extends { engine: LogoEngine; versions: VersionRow[]
   logo: T,
   withSvg = false,
 ) {
-  const { versions, phash: _phash, ...rest } = logo;
+  const { versions } = logo;
+  const rest = omit(logo, ['versions', 'phash']);
   const version = versions[0] ?? null;
   if (!version) return { ...rest, current: null };
   const original = logo.engine === LogoEngine.UPLOAD && version.number === 1;

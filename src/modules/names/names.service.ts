@@ -11,6 +11,7 @@ import { NameGeneratorService } from './name-generator.service';
 import { NAME_INCLUDE, toNameDto } from './name.presenter';
 import { PROJECT_INCLUDE, toProjectDto } from '../projects/project.presenter';
 import { GenerateNamesDto, ListNamesDto, PublicNameTryDto, UpdateNameDto } from './names.dto';
+import { omit } from '../../common/utils/object.util';
 
 @Injectable()
 export class NamesService {
@@ -52,7 +53,7 @@ export class NamesService {
       take: 500,
     });
 
-    const { id: _id, projectId: _pid, updatedAt: _u, ...brief } = project.brief;
+    const brief = omit(project.brief, ['id', 'projectId', 'updatedAt']);
     const input: NameGenerationInput = {
       entityType: project.entityType,
       brief,

@@ -17,6 +17,7 @@ import { FREE_DAILY_QUOTAS } from '../../shared/credit-costs';
 import { GENERATION_ATTEMPTS, GENERATION_QUEUE, GenerationJobData } from '../../shared/queues';
 import { CreditsService } from '../credits/credits.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { omit } from '../../common/utils/object.util';
 
 export interface EnqueueParams {
   workspaceId: string;
@@ -217,6 +218,7 @@ function validateIdempotencyKey(key: string | undefined): string {
 /** Résultat sans fichier ni lien : ce que voit un lecteur non autorisé à télécharger. */
 function withoutFiles(result: Prisma.JsonValue): Prisma.JsonValue {
   if (!result || typeof result !== 'object' || Array.isArray(result)) return result;
-  const { storageKey: _key, assetId: _asset, images, ...rest } = result as Record<string, Prisma.JsonValue>;
-  return { ...rest, ...(Array.isArray(images) && { images: [] }), restricted: true };
+  const record = result as Record<string, Prisma.JsonValue>;
+  const rest = omit(record, ['storageKey', 'assetId', 'images']);
+  return { ...rest, ...(Array.isArray(record.images) && { images: [] }), restricted: true };
 }
