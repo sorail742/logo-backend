@@ -1,6 +1,12 @@
 import { renderDesignPage } from './design';
 import { designDocSchema } from './design-doc';
-import { halftoneDots, hasEffects, letteringLayers } from './lettering';
+import {
+  halftoneDots,
+  hasEffects,
+  letteringLayers,
+  patternShapes,
+  textEffectsSchema,
+} from './lettering';
 
 const box = { x: 0, y: 0, width: 200, height: 100 };
 
@@ -65,6 +71,46 @@ describe('effets de lettrage', () => {
     const clip = defs.find((d) => d.startsWith('<clipPath'));
     expect(clip).toBe('<clipPath id="e1-clip"><path d="M0 0h10v10H0z"/></clipPath>');
     expect(defs.some((d) => d.startsWith('<mask id="e1-inline"'))).toBe(true);
+  });
+
+  it('dessine les textures de façon déterministe (même dessin au navigateur)', () => {
+    const shapes = (kind: 'stripes' | 'carbon' | 'distressed' | 'claws') =>
+      patternShapes(box, { kind, color: '#000000', size: 8, angle: -30 });
+    expect(shapes('distressed')).toBe(shapes('distressed'));
+    expect(shapes('claws').match(/<path /g)).toHaveLength(3);
+    expect(shapes('stripes')).toMatch(/^<g transform="rotate\(-30 100 50\)"><rect /);
+    expect(shapes('carbon').split('<rect').length - 1).toBeGreaterThan(100);
+  });
+
+  it('trace plusieurs lignes de liseré et un second contour cranté', () => {
+    const defs: string[] = [];
+    const svg = letteringLayers({
+      box,
+      defs,
+      pid: 'e2',
+      glyphs: '<path d="M0 0h10v10H0z"/>',
+      fill: '#ffffff',
+      effects: {
+        outline2: { color: '#111111', width: 4, notched: true },
+        inline: { color: '#1d4ed8', width: 2, inset: 3, lines: 3, gap: 1 },
+      },
+      size: 100,
+    });
+    const mask = defs.find((d) => d.startsWith('<mask'))!;
+    expect(mask.match(/stroke="#fff"/g)).toHaveLength(3);
+    // Anneaux : bords intérieurs à 3, 6 et 9 (largeur 2, écart 1).
+    expect(mask).toContain('stroke="#000" stroke-width="18"');
+    expect(svg).toContain('stroke-dasharray="6.4 4"');
+    expect(
+      textEffectsSchema.safeParse({
+        pattern: { kind: 'claws', color: '#000000', size: 9, angle: -60 },
+      }).success,
+    ).toBe(true);
+    expect(
+      textEffectsSchema.safeParse({
+        pattern: { kind: 'paillettes', color: '#000000', size: 9, angle: 0 },
+      }).success,
+    ).toBe(false);
   });
 
   it('conserve les effets du document et les rend côté serveur', () => {

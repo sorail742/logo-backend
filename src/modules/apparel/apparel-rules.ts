@@ -42,7 +42,7 @@ export interface ElementContent {
   colors?: string[]; // HEX
   edgeColors?: string[]; // HEX : couleurs au contact du tissu (contour extérieur), sinon `colors`
   strokeMm?: number; // épaisseur de trait la plus fine
-  style?: string; // CLASSIC_OUTLINE, GEOMETRIC_INLINE, NOTCHED, RIBBON_3D, HALFTONE
+  style?: string; // CLASSIC_OUTLINE, GEOMETRIC_INLINE, NOTCHED, RIBBON_3D, HALFTONE, TEXTURED
   gradient?: boolean;
   pixelWidth?: number; // images matricielles
   source?: 'library' | 'brand-kit' | 'upload';
@@ -170,6 +170,8 @@ export const STYLE_TECHNIQUES: Record<string, PrintTechnique[]> = {
   RIBBON_3D: ['SUBLIMATION', 'DTF', 'DTG'],
   // Trame de points : écrans de sérigraphie ou impression numérique ; trop fine pour la découpe.
   HALFTONE: ['SCREEN_PRINT', 'DTF', 'DTG', 'SUBLIMATION'],
+  // Rayures, carbone, usé, griffes : motifs fins, impression plutôt que découpe.
+  TEXTURED: ['SCREEN_PRINT', 'DTF', 'DTG', 'SUBLIMATION'],
 };
 
 /** Nom affiché des familles de style. */
@@ -179,6 +181,7 @@ const STYLE_LABELS: Record<string, string> = {
   NOTCHED: 'crans',
   RIBBON_3D: 'relief 3D',
   HALFTONE: 'trame de points',
+  TEXTURED: 'texture',
 };
 
 const CUT_TECHNIQUES: PrintTechnique[] = ['HEAT_TRANSFER_VINYL', 'FLOCK'];
