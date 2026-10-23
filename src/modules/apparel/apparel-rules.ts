@@ -40,8 +40,9 @@ export interface Element {
 export interface ElementContent {
   text?: string;
   colors?: string[]; // HEX
+  edgeColors?: string[]; // HEX : couleurs au contact du tissu (contour extérieur), sinon `colors`
   strokeMm?: number; // épaisseur de trait la plus fine
-  style?: string; // CLASSIC_OUTLINE, GEOMETRIC_INLINE, NOTCHED, RIBBON_3D…
+  style?: string; // CLASSIC_OUTLINE, GEOMETRIC_INLINE, NOTCHED, RIBBON_3D, HALFTONE
   gradient?: boolean;
   pixelWidth?: number; // images matricielles
   source?: 'library' | 'brand-kit' | 'upload';
@@ -167,6 +168,17 @@ export const STYLE_TECHNIQUES: Record<string, PrintTechnique[]> = {
   GEOMETRIC_INLINE: ['HEAT_TRANSFER_VINYL', 'SCREEN_PRINT', 'DTF', 'SUBLIMATION'],
   NOTCHED: ['HEAT_TRANSFER_VINYL', 'SCREEN_PRINT', 'DTF', 'SUBLIMATION'],
   RIBBON_3D: ['SUBLIMATION', 'DTF', 'DTG'],
+  // Trame de points : écrans de sérigraphie ou impression numérique ; trop fine pour la découpe.
+  HALFTONE: ['SCREEN_PRINT', 'DTF', 'DTG', 'SUBLIMATION'],
+};
+
+/** Nom affiché des familles de style. */
+const STYLE_LABELS: Record<string, string> = {
+  CLASSIC_OUTLINE: 'contour',
+  GEOMETRIC_INLINE: 'liseré',
+  NOTCHED: 'crans',
+  RIBBON_3D: 'relief 3D',
+  HALFTONE: 'trame de points',
 };
 
 const CUT_TECHNIQUES: PrintTechnique[] = ['HEAT_TRANSFER_VINYL', 'FLOCK'];
@@ -272,8 +284,9 @@ function elementIssues(el: Element, zone: Zone, input: CheckInput): Issue[] {
     });
   }
 
-  // Contraste avec le tissu (TEX-35)
-  for (const color of c.colors ?? []) {
+  // Contraste avec le tissu (TEX-35) : couleurs au bord des lettres (le liseré ou la trame,
+  // à l'intérieur, ne touchent pas le tissu).
+  for (const color of c.edgeColors?.length ? c.edgeColors : (c.colors ?? [])) {
     const ratio = contrastRatio(color, input.garmentColor);
     if (ratio < MIN_GARMENT_CONTRAST) {
       issues.push({
@@ -325,7 +338,7 @@ function techniqueIssues(
       ...ref,
       code: 'STYLE_TECHNIQUE',
       severity: 'error',
-      message: `Le style ${c.style} n'est pas réalisable avec cette technique`,
+      message: `La forme « ${STYLE_LABELS[c.style] ?? c.style} » n'est pas réalisable avec cette technique`,
     });
   }
   if (input.technique === 'EMBROIDERY' && isText(el.kind) && el.heightMm < MIN_EMBROIDERY_TEXT_MM) {

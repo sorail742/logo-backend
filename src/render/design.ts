@@ -12,6 +12,7 @@ import type {
   TextElement,
 } from './design-doc';
 import { closestWeight, getFont, shapeText, type TextStyle } from './fonts';
+import { hasEffects, letteringLayers } from './lettering';
 import { adjustFilter, effectsFilter, isNeutral, photoPlacement, vignetteGradient } from './photo';
 import { escapeXml } from './svg';
 
@@ -280,7 +281,7 @@ function renderText(el: TextElement, pid: string, defs: string[]) {
         const y = cy + radius * Math.cos(phi);
         return `<path transform="translate(${n(x)} ${n(y)}) rotate(${n(-deg)})" d="${g.d}"/>`;
       });
-    parts.push(`<g fill="${fill}"${stroke}>${glyphs.join('')}</g>`);
+    parts.push(paintGlyphs(el, glyphs.join(''), { fill, stroke, pid, defs }));
     return parts.join('');
   }
 
@@ -290,8 +291,27 @@ function renderText(el: TextElement, pid: string, defs: string[]) {
     .filter(Boolean)
     .map((d) => `<path d="${d}"/>`)
     .join('');
-  parts.push(`<g fill="${fill}"${stroke}>${paths}</g>`);
+  parts.push(paintGlyphs(el, paths, { fill, stroke, pid, defs }));
   return parts.join('');
+}
+
+/** Glyphes peints : simplement, ou en calques d'effets de lettrage. */
+function paintGlyphs(
+  el: TextElement,
+  glyphs: string,
+  paint: { fill: string; stroke: string; pid: string; defs: string[] },
+) {
+  if (!hasEffects(el.effects)) return `<g fill="${paint.fill}"${paint.stroke}>${glyphs}</g>`;
+  return letteringLayers({
+    glyphs,
+    pid: paint.pid,
+    fill: paint.fill,
+    stroke: el.stroke,
+    effects: el.effects,
+    box: { x: 0, y: 0, width: el.width, height: el.height },
+    size: el.fontSize,
+    defs: paint.defs,
+  });
 }
 
 // ─── Images, icônes, SVG ───

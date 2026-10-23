@@ -121,6 +121,16 @@ describe('checkDesign — zones, technique, droits', () => {
     expect(codes).toContain('ZONE_OVERLAP');
   });
 
+  it('refuse la trame de points en flex, l’accepte en sérigraphie', () => {
+    const halftone = backNumber(250, {
+      content: { colors: ['#FFFFFF'], strokeMm: 30, style: 'HALFTONE' },
+    });
+    const flex = checkDesign({ ...base, elements: [halftone] });
+    expect(flex.map((e) => e.code)).toContain('STYLE_TECHNIQUE');
+    const screen = checkDesign({ ...base, technique: 'SCREEN_PRINT', elements: [halftone] });
+    expect(screen.map((e) => e.code)).not.toContain('STYLE_TECHNIQUE');
+  });
+
   it('refuse un trait trop fin, une image et un dégradé en flex', () => {
     const thin = backNumber(300, { content: { strokeMm: 1.5, colors: ['#FFFFFF'] } });
     const img: Element = {

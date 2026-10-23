@@ -10,6 +10,7 @@ import {
   PNG_DATA_URL,
 } from '../../render/design-doc';
 import { isLibraryFont } from '../../render/fonts';
+import { textEffectsSchema } from '../../render/lettering';
 import { sanitizeSvg } from '../../render/svg';
 
 // Contenu d'un élément textile (même contrat que le front, src/lib/apparel/types.ts) : liste
@@ -48,6 +49,7 @@ const photoSchema = z.object({ ...photoFields, original: z.object(photoFields).o
 
 export const apparelContentSchema = z.object({
   colors: z.array(color).max(16).optional(),
+  edgeColors: z.array(color).max(4).optional(),
   source: z.enum(['library', 'brand-kit', 'upload']).optional(),
   rightsAttested: z.boolean().optional(),
   strokeMm: num(0, 1000).optional(),
@@ -68,6 +70,8 @@ export const apparelContentSchema = z.object({
     .optional(),
   curve: num(-100, 100).optional(),
   letterSpacing: num(-0.5, 2).optional(),
+  /** Forme du lettrage (second contour, liseré, relief, trame), en mm. */
+  effects: textEffectsSchema.nullable().optional(),
   photo: photoSchema.optional(),
   spotColors: z.number().int().min(1).max(16).optional(),
 });

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { HEX_COLOR } from './color';
 import { isLibraryFont } from './fonts';
+import { textEffectsSchema } from './lettering';
 import { ADJUST_RANGES } from './photo';
 
 // Document du Studio de création (même contrat que le front, src/lib/studio/types.ts) : pages,
@@ -108,6 +109,8 @@ const textSchema = z.object({
     .nullable()
     .optional(),
   lines: z.array(z.string().max(5000)).max(500).optional(),
+  /** Effets de lettrage (maillots, affiches) : src/render/lettering.ts. */
+  effects: textEffectsSchema.nullable().optional(),
 });
 
 const shapeSchema = z.object({
