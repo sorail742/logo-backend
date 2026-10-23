@@ -96,3 +96,11 @@ export class GenerateStudioImagesDto {
   @Matches(/^#[0-9a-fA-F]{6}$/, { each: true })
   palette?: string[];
 }
+
+/** Photo à détourer (data URL PNG ou JPEG, 4 Mo au plus une fois décodée). */
+export class CutoutStudioImageDto {
+  @IsString()
+  @MaxLength(5_600_000)
+  @Matches(/^data:image\/(png|jpeg);base64,[A-Za-z0-9+/=]+$/)
+  image!: string;
+}

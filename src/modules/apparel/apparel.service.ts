@@ -341,7 +341,15 @@ export class ApparelService {
         garmentColor: true,
         status: true,
         approvedAt: true,
-        template: { select: { name: true, category: true, views: true } },
+        // Zones : la page du BAT place chaque élément sur le vêtement.
+        template: {
+          select: {
+            name: true,
+            category: true,
+            views: true,
+            zones: { orderBy: { key: 'asc' } },
+          },
+        },
         elements: { orderBy: { zIndex: 'asc' } },
         roster: {
           select: {

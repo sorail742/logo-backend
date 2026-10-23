@@ -33,6 +33,13 @@ const envSchema = z.object({
     .optional()
     .transform((v) => v || undefined),
 
+  // Détourage par IA du Studio (remove.bg) : désactivé sans clé.
+  REMOVE_BG_API_KEY: z
+    .string()
+    .trim()
+    .optional()
+    .transform((v) => v || undefined),
+
   // Stockage des fichiers générés (§11.1) : disque local en développement, S3/MinIO sinon.
   STORAGE_DRIVER: z.enum(['local', 's3']).default('local'),
   STORAGE_DIR: z.string().default('./storage'),

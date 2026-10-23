@@ -20,10 +20,12 @@ import { AuditService } from '../audit/audit.service';
 import { projectEvent } from '../projects/project-activity';
 import {
   CreateStudioDesignDto,
+  CutoutStudioImageDto,
   ExportStudioDesignDto,
   GenerateStudioImagesDto,
   UpdateStudioDesignDto,
 } from './studio.dto';
+import { StudioCutoutService } from './studio-cutout.service';
 import { StudioImagesService } from './studio-images.service';
 import { StudioService } from './studio.service';
 
@@ -35,6 +37,7 @@ export class StudioController {
   constructor(
     private readonly studio: StudioService,
     private readonly images: StudioImagesService,
+    private readonly cutouts: StudioCutoutService,
     private readonly audit: AuditService,
   ) {}
 
@@ -81,6 +84,28 @@ export class StudioController {
       projectEvent(pid, user.id, 'studio.images', { style: dto.style, jobId: job.jobId }),
     );
     return job;
+  }
+
+  /** Détourage d'une photo par IA (1 crédit, remboursé en cas d'échec du fournisseur). */
+  @Post('projects/:pid/studio-cutout')
+  @WorkspaceAccess('EDITOR')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @ApiHeader({ name: 'Idempotency-Key', required: true })
+  async cutout(
+    @Param('pid', ParseUUIDPipe) pid: string,
+    @Body() dto: CutoutStudioImageDto,
+    @CurrentUser() user: AuthUser,
+    @CurrentWorkspace() ws: WorkspaceContext,
+    @Headers('idempotency-key') idempotencyKey?: string,
+  ) {
+    const result = await this.cutouts.cutout(
+      { projectId: pid, workspaceId: ws.workspaceId, actorId: user.id },
+      dto.image,
+      idempotencyKey,
+    );
+    await this.audit.log(projectEvent(pid, user.id, 'studio.cutout'));
+    return result;
   }
 
   @Get('studio-designs/:sdid')

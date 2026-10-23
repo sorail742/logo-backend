@@ -348,6 +348,7 @@ const proof = await call('POST', `/apparel-designs/${did}/proof`, { token, body:
 check('lien BAT créé', proof.status === 200 && !!proof.json.token, proof.json.url);
 const pubProof = await call('GET', `/public/proofs/${proof.json.token}`);
 check('BAT consultable sans compte', pubProof.status === 200 && pubProof.json.roster.entries.length === 3);
+check('BAT public : zones du support pour placer les éléments', pubProof.json.template.zones.some((z) => z.key === 'back_number' && z.maxWidthMm > 0), pubProof.json.template.zones?.length);
 const approve = await call('POST', `/public/proofs/${proof.json.token}/approve`, { body: { approverName: 'Président du club' } });
 check('BAT approuvé par le client → APPROVED', approve.status === 200 && approve.json.status === 'APPROVED', approve.json);
 const edited = await call('PATCH', `/apparel-designs/${did}`, { token, body: { garmentColor: '#C8102E' } });
@@ -746,8 +747,26 @@ const badDoc = structuredClone(studioDoc);
 badDoc.pages[0].elements[1].fontId = 'comic-sans';
 const invalid = await call('POST', `/projects/${pid}/studio-designs`, { token, body: { name: 'Invalide', format: 'flyer-a5', doc: badDoc } });
 check('Studio : document invalide → 400', invalid.status === 400, invalid.status);
+const PHOTO_PX = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+const retouchedPhoto = {
+  id: 'photo', type: 'image', x: 0, y: 0, width: 400, height: 300, rotation: 0, opacity: 1, src: `data:image/png;base64,${PHOTO_PX}`,
+  naturalWidth: 1, naturalHeight: 1, fit: 'cover', mask: 'none', blend: 'luminosity',
+  adjust: { exposure: 0.5, shadows: 30, tone: 'duotone', duotone: ['#112233', '#ffeedd'], curves: { rgb: [{ x: 0.2, y: 0.1 }, { x: 0.8, y: 0.9 }] } },
+  crop: { x: 0.1, y: 0.1, width: 0.8, height: 0.8 }, straighten: 5, cutout: `data:image/png;base64,${PHOTO_PX}`, outline: { color: '#ffffff', width: 6 }, glow: { color: '#ff0000', size: 10, opacity: 0.5 },
+};
+const retouchDoc = structuredClone(studioDoc);
+retouchDoc.pages[0].elements = [...retouchDoc.pages[0].elements.filter((e) => e.type !== 'svg'), retouchedPhoto];
+const retouched = await call('POST', `/projects/${pid}/studio-designs`, { token, body: { name: 'Photo retouchée', format: 'flyer-a5', doc: retouchDoc } });
+const outOfRange = structuredClone(retouchDoc);
+outOfRange.pages[0].elements.at(-1).adjust.exposure = 9;
+const rejected = await call('POST', `/projects/${pid}/studio-designs`, { token, body: { name: 'Hors bornes', format: 'flyer-a5', doc: outOfRange } });
+check('Studio : photo retouchée (réglages, recadrage, détourage, contour) acceptée, hors bornes refusée', retouched.status === 201 && retouched.json.doc.pages[0].elements.at(-1).adjust?.tone === 'duotone' && rejected.status === 400, [retouched.status, rejected.status]);
+const retouchPdf = await call('POST', `/studio-designs/${retouched.json.id}/export`, { token, body: { format: 'pdf' } });
+check('Studio : export PDF d’une photo retouchée', retouchPdf.status === 202 && (await waitJob(retouchPdf.json.jobId, token, 60000)) === 'SUCCEEDED', retouchPdf.status);
+const noCutout = await call('POST', `/projects/${pid}/studio-cutout`, { token, body: { image: `data:image/png;base64,${PHOTO_PX}` }, headers: { 'idempotency-key': crypto.randomUUID() } });
+check('Studio : détourage IA indisponible sans clé (501)', noCutout.status === 501 && noCutout.json.code === 'NOT_AVAILABLE', noCutout.status);
 const studioList = await call('GET', `/projects/${pid}/studio-designs`, { token });
-check('Studio : liste sans document', studioList.status === 200 && studioList.json.length === 1 && !('doc' in studioList.json[0]));
+check('Studio : liste sans document', studioList.status === 200 && studioList.json.length === 2 && studioList.json.every((d) => !('doc' in d)));
 const renamed = await call('PUT', `/studio-designs/${sdid}`, { token, body: { name: 'Flyer JPO', thumbnail: 'data:image/png;base64,iVBORw0KGgo=' } });
 check('Studio : sauvegarde (nom, aperçu)', renamed.status === 200 && renamed.json.name === 'Flyer JPO' && !!renamed.json.thumbnail, renamed.status);
 const pdfExport = await call('POST', `/studio-designs/${sdid}/export`, { token, body: { format: 'pdf', cropMarks: true } });
@@ -806,7 +825,7 @@ check(
 );
 
 const caps = await call('GET', '/library/capabilities', { token });
-check('bibliothèque : capacités', caps.status === 200 && caps.json.aiImages?.demo === true && typeof caps.json.photos === 'boolean', caps.json);
+check('bibliothèque : capacités', caps.status === 200 && caps.json.aiImages?.demo === true && typeof caps.json.photos === 'boolean' && caps.json.cutout === false, caps.json);
 const photos = await call('GET', '/library/photos?q=march%C3%A9', { token });
 check('banque de photos : 501 sans clé, résultats avec', caps.json.photos ? photos.status === 200 && Array.isArray(photos.json.photos) : photos.status === 501 && photos.json.code === 'NOT_AVAILABLE', photos.status);
 check('banque de photos : identifiant numérique exigé', (await call('GET', '/library/photos/abc/file', { token })).status === 400);
