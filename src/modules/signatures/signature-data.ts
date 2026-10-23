@@ -1,6 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
 import { SignatureKind } from '@prisma/client';
 import { z } from 'zod';
+import { zodProblem } from '../../common/validation/validation-problem';
 import { normalizeText } from '../moderation/moderation.service';
 import { HEX_COLOR } from '../../render/color';
 import {
@@ -29,10 +30,7 @@ const SCHEMAS = {
 } as const;
 
 function invalid(error: z.ZodError, message: string): never {
-  throw new BadRequestException({
-    message,
-    errors: error.issues.map((i) => `${i.path.join('.')}: ${i.message}`),
-  });
+  throw zodProblem(error, message);
 }
 
 /** Valide les champs d'une signature selon son type ; erreurs au format problem+json. */

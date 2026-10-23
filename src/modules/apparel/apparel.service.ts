@@ -11,6 +11,7 @@ import { ApparelDesignStatus, PrintTechnique, Prisma } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { randomToken } from '../../common/utils/crypto.util';
 import { AuditService } from '../audit/audit.service';
+import { parseElementContents } from './apparel-content';
 import { REFERENCE_SIZE, RULES_DISCLAIMER } from './apparel-defaults';
 import {
   checkDesign,
@@ -131,6 +132,7 @@ export class ApparelService {
         `Zones absentes de ce support : ${[...new Set(unknown)].join(', ')}`,
       );
     }
+    const contents = parseElementContents(elements.map((e) => e.content));
 
     await this.prisma.$transaction([
       this.prisma.designElement.deleteMany({ where: { designId: id } }),
@@ -139,7 +141,7 @@ export class ApparelService {
           designId: id,
           zoneKey: e.zoneKey,
           kind: e.kind,
-          content: e.content as Prisma.InputJsonValue,
+          content: contents[i],
           widthMm: e.widthMm,
           heightMm: e.heightMm,
           offsetXMm: e.offsetXMm,

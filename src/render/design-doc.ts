@@ -150,12 +150,12 @@ const iconSchema = z.object({
   strokeWidth: num(0.1, 12),
 });
 
-const IMAGE_DATA_URL = /^data:image\/(png|jpeg);base64,[A-Za-z0-9+/=]+$/;
-const PNG_DATA_URL = /^data:image\/png;base64,[A-Za-z0-9+/=]+$/;
+export const IMAGE_DATA_URL = /^data:image\/(png|jpeg);base64,[A-Za-z0-9+/=]+$/;
+export const PNG_DATA_URL = /^data:image\/png;base64,[A-Za-z0-9+/=]+$/;
 
 const curve = z.array(z.object({ x: num(0, 1), y: num(0, 1) })).max(16);
 /** Réglages de retouche (src/render/photo.ts) : chaque valeur dans sa plage. */
-const adjustSchema = z.object({
+export const adjustSchema = z.object({
   ...(Object.fromEntries(
     Object.entries(ADJUST_RANGES).map(([key, [min, max]]) => [key, num(min, max).optional()]),
   ) as Record<keyof typeof ADJUST_RANGES, z.ZodOptional<z.ZodNumber>>),
@@ -173,7 +173,7 @@ const adjustSchema = z.object({
 });
 export type ImageAdjust = z.infer<typeof adjustSchema>;
 
-const cropSchema = z
+export const cropSchema = z
   .object({ x: num(0, 1), y: num(0, 1), width: num(0.01, 1), height: num(0.01, 1) })
   .refine((c) => c.x + c.width <= 1.0001 && c.y + c.height <= 1.0001, 'Recadrage hors de l’image');
 const imageSchema = z.object({

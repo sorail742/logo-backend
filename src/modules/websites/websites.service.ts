@@ -11,6 +11,7 @@ import { randomBytes } from 'node:crypto';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { StorageService } from '../../common/storage/storage.service';
 import { slugify } from '../../common/utils/slug.util';
+import { zodProblem } from '../../common/validation/validation-problem';
 import { readableOn } from '../../render/color';
 import { closestWeight, getFont } from '../../render/fonts';
 import { getIcon, searchIcons } from '../../render/icons';
@@ -413,10 +414,7 @@ export class WebsitesService {
   private parse(raw: unknown): SiteContent {
     const parsed = parseSiteContent(raw);
     if (!parsed.success) {
-      throw new BadRequestException({
-        message: 'Contenu du site invalide',
-        errors: parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`),
-      });
+      throw zodProblem(parsed.error, 'Contenu du site invalide');
     }
     return parsed.data;
   }

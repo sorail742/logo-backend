@@ -1,10 +1,10 @@
-import { BadRequestException } from '@nestjs/common';
 import { LogoEngine, Prisma } from '@prisma/client';
 import type { LogoSource } from '../../render/logo-assets';
 import { renderLogoSvg } from '../../render/logo';
 import { logoSpecSchema, type LogoSpec } from '../../render/logo-spec';
 import { optimizeSvg } from '../../render/svg';
 import { omit } from '../../common/utils/object.util';
+import { zodProblem } from '../../common/validation/validation-problem';
 
 /** Dernière version d'un logo (listes) ; son SVG n'est renvoyé que pour un logo importé. */
 export const CURRENT_VERSION = {
@@ -39,10 +39,7 @@ export function toLogoDto<T extends { engine: LogoEngine; versions: VersionRow[]
 export function parseSpec(raw: unknown): LogoSpec {
   const parsed = logoSpecSchema.safeParse(raw);
   if (!parsed.success) {
-    throw new BadRequestException({
-      message: 'Spécification de logo invalide',
-      errors: parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`),
-    });
+    throw zodProblem(parsed.error, 'Spécification de logo invalide');
   }
   return parsed.data;
 }

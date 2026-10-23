@@ -1,11 +1,7 @@
-import {
-  BadRequestException,
-  Injectable,
-  PayloadTooLargeException,
-  UnprocessableEntityException,
-} from '@nestjs/common';
+import { Injectable, PayloadTooLargeException, UnprocessableEntityException } from '@nestjs/common';
 import { JobKind, Prisma } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { zodProblem } from '../../common/validation/validation-problem';
 import { designDocSchema, MAX_DOC_BYTES, type DesignDoc } from '../../render/design-doc';
 import { sanitizeSvg } from '../../render/svg';
 import { JobsService } from '../jobs/jobs.service';
@@ -52,10 +48,7 @@ export class StudioService {
     }
     const parsed = designDocSchema.safeParse(raw);
     if (!parsed.success) {
-      throw new BadRequestException({
-        message: 'Document de création invalide',
-        errors: parsed.error.issues.slice(0, 20).map((i) => `${i.path.join('.')}: ${i.message}`),
-      });
+      throw zodProblem(parsed.error, 'Document de création invalide', 20);
     }
     const doc = parsed.data;
     for (const page of doc.pages) {
