@@ -48,7 +48,7 @@ describe('écriture N’Ko', () => {
   });
 
   it('garde la police de secours hors de la bibliothèque proposée', () => {
-    expect(FONTS).toHaveLength(85);
+    expect(FONTS).toHaveLength(170);
     expect(isLibraryFont('noto-sans-nko')).toBe(false);
     expect(FONTS.filter((f) => f.scripts.includes('pular')).map((f) => f.id)).toContain(
       'montserrat',
