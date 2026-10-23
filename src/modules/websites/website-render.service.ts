@@ -11,6 +11,7 @@ import { brandAssets, type LogoSource } from '../../render/logo-assets';
 import { MOCKUP_SCENES, mockupSvg } from '../../render/mockups';
 import { svgToJpeg, svgToPng } from '../../render/raster';
 import {
+  PLATFORM_NAME,
   renderSiteHtml,
   siteMediaIds,
   siteMockupScenes,
@@ -21,9 +22,6 @@ import { socialKitSvg, type SocialFormat } from '../../render/social-kit';
 import { createZip, type ZipEntry } from '../../render/zip';
 import { workspacePlan } from '../billing/plan-features';
 import { logoSource } from '../logos/logo-source';
-
-/** Nom de la plateforme dans la mention en pied de page (même libellé que le front). */
-export const PLATFORM_NAME = 'Marka';
 
 /** Fichiers d'un site publié servis publiquement (image de partage, icônes, mises en situation). */
 export const SITE_FILE = /^(?:og|favicon|icon-180)\.png$|^mockup-[a-z]{2,20}\.jpg$/;

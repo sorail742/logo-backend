@@ -9,6 +9,9 @@ import { escapeXml as esc } from './svg';
 // Le même rendu sert l'aperçu de l'éditeur, le site publié et l'export ZIP.
 // Même module côté front (src/lib/render/site.ts).
 
+/** Nom de la plateforme dans la mention en pied de page. */
+export const PLATFORM_NAME = 'Marka';
+
 export type SiteTheme = 'modern' | 'elegant' | 'bold';
 export const SITE_THEMES: readonly SiteTheme[] = ['modern', 'elegant', 'bold'];
 export type SiteLanguage = 'fr' | 'en';
@@ -668,9 +671,11 @@ export function renderSiteHtml(input: SiteRenderInput): string {
   const chat = whatsapp
     ? `<a class="chat" href="${esc(whatsapp)}" target="_blank" rel="noopener" aria-label="${esc(labels.chat)}">${icon(UI_ICONS.chat)}<span>${esc(labels.whatsapp)}</span></a>`
     : '';
-  const script = content.sections.some((s) => s.type === 'contact' && s.visible && s.form)
-    ? `<script>${FORM_SCRIPT(labels.form.sent, labels.form.error, labels.form.sending)}</script>`
-    : '';
+  // Aperçu (formulaire inactif) : pas de script.
+  const script =
+    input.urls.form && content.sections.some((s) => s.type === 'contact' && s.visible && s.form)
+      ? `<script>${FORM_SCRIPT(labels.form.sent, labels.form.error, labels.form.sending)}</script>`
+      : '';
 
   return `<!doctype html><html lang="${content.language}"><head>${headMarkup(input, css)}</head><body class="theme-${content.theme}"><header class="site-header"><div class="container"><a class="brand" href="#${anchors.hero}" aria-label="${esc(input.name)}">${inlineSvg(input.logo.color, 'hd-')}</a>${navMarkup(shown, ctx)}</div></header><main>${body}</main>${footerMarkup(ctx)}${chat}${script}</body></html>`;
 }

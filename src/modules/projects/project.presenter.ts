@@ -11,6 +11,7 @@ export const PROJECT_INCLUDE = {
     take: 1,
     select: { versions: { orderBy: { number: 'desc' }, take: 1, select: { spec: true } } },
   },
+  website: { select: { published: true } },
   _count: {
     select: {
       logos: true,
@@ -31,7 +32,7 @@ export function toBriefDto(brief: NonNullable<ProjectRow['brief']>) {
 
 /** Projet avec l'avancement du parcours (§2.1) et l'aperçu de son logo. */
 export function toProjectDto(project: ProjectRow, userId: string) {
-  const { brief, chosenName, logos, _count, ...rest } = project;
+  const { brief, chosenName, logos, website, _count, ...rest } = project;
   return {
     ...rest,
     brief: brief && toBriefDto(brief),
@@ -42,6 +43,7 @@ export function toProjectDto(project: ProjectRow, userId: string) {
       logo: _count.logos > 0,
       signatures: _count.signatures > 0 || _count.slogans > 0,
       kit: _count.brandKits > 0,
+      site: !!website?.published,
     },
     previewSpec: logos[0]?.versions[0]?.spec ?? null,
   };

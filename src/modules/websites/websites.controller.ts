@@ -102,6 +102,12 @@ export class WebsitesController {
     await this.audit.log(projectEvent(ws.projectId!, user.id, 'site.delete', { slug }));
   }
 
+  @Get('websites/:webid/brand')
+  @WorkspaceAccess('VIEWER')
+  brand(@Param('webid', ParseUUIDPipe) webid: string) {
+    return this.websites.brand(webid);
+  }
+
   @Post('websites/:webid/media')
   @WorkspaceAccess('EDITOR')
   addMedia(@Param('webid', ParseUUIDPipe) webid: string, @Body() dto: AddWebsiteMediaDto) {

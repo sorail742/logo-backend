@@ -242,6 +242,16 @@ export class WebsitesService {
     return this.present(await this.find(id));
   }
 
+  /**
+   * Identité du site pour l'aperçu de l'éditeur : logo et symbole en toutes couleurs, texte
+   * vectorisé (même rendu que la page publiée, mises en situation composées par le front).
+   */
+  async brand(id: string) {
+    const site = await this.find(id);
+    const brand = await this.brandOf(site);
+    return { name: brand.name, logoId: brand.logoId, assets: brand.assets };
+  }
+
   async messages(id: string) {
     await this.find(id);
     const items = await this.prisma.websiteMessage.findMany({

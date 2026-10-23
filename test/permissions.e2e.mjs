@@ -175,6 +175,7 @@ await db.logo.create({
 await matrix('site : créer', 'POST', `/projects/${pid}/website`, { viewer: 403, outsider: 404, support: 404, editor: 201 });
 await matrix('site : voir', 'GET', `/projects/${pid}/website`, { owner: 200, editor: 200, viewer: 200, outsider: 404, support: 200 });
 const webid = (await call('GET', `/projects/${pid}/website`, { token: owner.token })).json.website.id;
+await matrix('site : logo de l’aperçu', 'GET', `/websites/${webid}/brand`, { owner: 200, editor: 200, viewer: 200, outsider: 404 });
 await matrix('site : modifier', 'PATCH', `/websites/${webid}`, { owner: 200, editor: 200, viewer: 403, outsider: 404, support: 404 }, { logoId: null });
 await matrix('site : publier', 'POST', `/websites/${webid}/publish`, { viewer: 403, outsider: 404, support: 404, editor: 200 });
 await matrix('site : messages reçus', 'GET', `/websites/${webid}/messages`, { owner: 200, editor: 200, viewer: 403, outsider: 404 });

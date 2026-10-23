@@ -641,9 +641,17 @@ const patched = await call('PATCH', `/websites/${webid}`, { token, body: { conte
 check('site : contenu et adresse enregistrés', patched.status === 200 && patched.json.slug === siteSlug && patched.json.content.sections[0].image?.id === siteMedia.json.id, patched.json.detail);
 const viewerSite = await call('GET', `/projects/${pid}/website`, { token });
 check('site : lu par le projet', viewerSite.status === 200 && viewerSite.json.website?.id === webid);
+const siteBrand = await call('GET', `/websites/${webid}/brand`, { token });
+check(
+  'site : logo de l’aperçu (texte vectorisé)',
+  siteBrand.status === 200 && siteBrand.json.logoId === viewerSite.json.website.displayedLogoId &&
+    ['color', 'white', 'black'].every((v) => siteBrand.json.assets.logo[v].svg.startsWith('<svg') && siteBrand.json.assets.mark[v].width > 0),
+  siteBrand.json.detail,
+);
 check('site : invisible avant publication', (await fetch(apiUrl(`/public/sites/${siteSlug}`))).status === 404);
 const published = await call('POST', `/websites/${webid}/publish`, { token });
 check('site : publié', published.status === 200 && published.json.published === true && published.json.dirty === false && published.json.url.endsWith(`/site/${siteSlug}`), published.json.detail);
+check('avancement du parcours : site publié', (await call('GET', `/projects/${pid}`, { token })).json.progress.site === true);
 const sitePage = await fetch(apiUrl(`/public/sites/${siteSlug}`));
 const siteHtml = await sitePage.text();
 const fileUrls = [...siteHtml.matchAll(/https?:\/\/[^"')\s]+\/public\/sites\/[^"')\s]+\/files\/[^"')\s]+/g)].map((m) => m[0].replaceAll('&amp;', '&'));
