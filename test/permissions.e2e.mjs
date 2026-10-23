@@ -129,6 +129,7 @@ check('accès du support inscrit au journal d’audit', staffAudit > 0, staffAud
 const doc = { version: 1, width: 1080, height: 1080, pages: [{ id: 'p1', background: { type: 'solid', color: '#ffffff' }, elements: [] }] };
 await matrix('créer une création', 'POST', `/projects/${pid}/studio-designs`, { owner: 201, editor: 201, viewer: 403, outsider: 404 }, { name: 'Publication', format: 'post-square', doc });
 const sdid = (await call('POST', `/projects/${pid}/studio-designs`, { token: owner.token, body: { name: 'Affiche', format: 'post-square', doc } })).json.id;
+await matrix('détourage IA (non configuré : 501)', 'POST', `/projects/${pid}/studio-cutout`, { viewer: 403, outsider: 404, editor: 501 }, { image: 'data:image/png;base64,iVBORw0KGgo=' });
 await matrix('enregistrer une création', 'PUT', `/studio-designs/${sdid}`, { owner: 200, editor: 200, viewer: 403, outsider: 404 }, { name: 'Affiche' });
 await matrix('exporter (téléchargements non autorisés)', 'POST', `/studio-designs/${sdid}/export`, { editor: 202, viewer: 403, outsider: 404 }, { format: 'svg' });
 const exportJob = (await call('POST', `/studio-designs/${sdid}/export`, { token: editor.token, body: { format: 'svg' } })).json.jobId;

@@ -13,6 +13,8 @@ export const CREDIT_COSTS = {
   BRAND_GUIDE_PDF: 3,
   // Studio de création : lot de 4 images
   STUDIO_IMAGES: 1,
+  // Studio de création : détourage d'une photo par IA
+  STUDIO_CUTOUT: 1,
   // Module textile (§16.12)
   APPAREL_PROPOSALS: 2,
   APPAREL_MOCKUP: 1,

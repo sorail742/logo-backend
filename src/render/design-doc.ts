@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { HEX_COLOR } from './color';
 import { isLibraryFont } from './fonts';
+import { ADJUST_RANGES } from './photo';
 
 // Document du Studio de création (même contrat que le front, src/lib/studio/types.ts) : pages,
 // éléments positionnés en px dans le repère de la page, rotation autour du centre.
@@ -48,6 +49,26 @@ const shadowSchema = z.object({
 });
 export type Shadow = z.infer<typeof shadowSchema>;
 
+/** Modes de fusion des calques (mix-blend-mode CSS, rendus aussi par resvg). */
+export const BLEND_MODES = [
+  'normal',
+  'multiply',
+  'screen',
+  'overlay',
+  'darken',
+  'lighten',
+  'color-dodge',
+  'color-burn',
+  'hard-light',
+  'soft-light',
+  'difference',
+  'exclusion',
+  'hue',
+  'saturation',
+  'color',
+  'luminosity',
+] as const;
+
 const base = {
   id: z.string().regex(/^[\w-]{1,40}$/),
   name: z.string().max(120).optional(),
@@ -65,9 +86,7 @@ const base = {
   locked: z.boolean().optional(),
   hidden: z.boolean().optional(),
   shadow: shadowSchema.nullable().optional(),
-  blend: z
-    .enum(['normal', 'multiply', 'screen', 'overlay', 'darken', 'lighten', 'soft-light'])
-    .optional(),
+  blend: z.enum(BLEND_MODES).optional(),
 };
 
 const textSchema = z.object({
@@ -132,6 +151,31 @@ const iconSchema = z.object({
 });
 
 const IMAGE_DATA_URL = /^data:image\/(png|jpeg);base64,[A-Za-z0-9+/=]+$/;
+const PNG_DATA_URL = /^data:image\/png;base64,[A-Za-z0-9+/=]+$/;
+
+const curve = z.array(z.object({ x: num(0, 1), y: num(0, 1) })).max(16);
+/** Réglages de retouche (src/render/photo.ts) : chaque valeur dans sa plage. */
+const adjustSchema = z.object({
+  ...(Object.fromEntries(
+    Object.entries(ADJUST_RANGES).map(([key, [min, max]]) => [key, num(min, max).optional()]),
+  ) as Record<keyof typeof ADJUST_RANGES, z.ZodOptional<z.ZodNumber>>),
+  tone: z.enum(['color', 'mono', 'sepia', 'duotone']).optional(),
+  duotone: z.tuple([color, color]).optional(),
+  invert: z.boolean().optional(),
+  curves: z
+    .object({
+      rgb: curve.optional(),
+      r: curve.optional(),
+      g: curve.optional(),
+      b: curve.optional(),
+    })
+    .optional(),
+});
+export type ImageAdjust = z.infer<typeof adjustSchema>;
+
+const cropSchema = z
+  .object({ x: num(0, 1), y: num(0, 1), width: num(0.01, 1), height: num(0.01, 1) })
+  .refine((c) => c.x + c.width <= 1.0001 && c.y + c.height <= 1.0001, 'Recadrage hors de l’image');
 const imageSchema = z.object({
   ...base,
   type: z.literal('image'),
@@ -153,6 +197,24 @@ const imageSchema = z.object({
       saturation: num(0, 3),
       blur: num(0, 200),
     })
+    .optional(),
+  adjust: adjustSchema.optional(),
+  crop: cropSchema.nullable().optional(),
+  straighten: num(-45, 45).optional(),
+  /** Masque de détourage (PNG en niveaux de gris, blanc = visible), aligné sur l'image entière. */
+  cutout: z
+    .string()
+    .max(MAX_IMAGE_BYTES * 1.4)
+    .regex(PNG_DATA_URL, 'Masque attendu en PNG intégré')
+    .nullable()
+    .optional(),
+  outline: z
+    .object({ color, width: num(0, 500) })
+    .nullable()
+    .optional(),
+  glow: z
+    .object({ color, size: num(0, 500), opacity: num(0, 1) })
+    .nullable()
     .optional(),
 });
 

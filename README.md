@@ -39,6 +39,8 @@ Test de bout en bout, API et worker lancés : `npm run test:smoke` (inscription,
 
 Banque de photos du Studio : facultative, activée par une clé gratuite [Pexels](https://www.pexels.com/api/) dans `PEXELS_API_KEY`.
 
+Détourage par IA dans l'atelier photo du Studio : facultatif, activé par une clé [remove.bg](https://www.remove.bg/api) dans `REMOVE_BG_API_KEY` (1 crédit par photo, rendu si le service échoue). Sans clé, l'atelier garde le détourage local : fond uni, baguette magique et pinceaux.
+
 Fichiers générés : par défaut sur disque (`STORAGE_DIR`, servis par URL signée `/api/v1/files`) ; `STORAGE_DRIVER=s3` utilise le stockage S3 de docker-compose (RustFS, console sur http://localhost:9001) ou tout stockage S3 (URL présignées).
 
 ## Structure
@@ -206,7 +208,17 @@ produit les fichiers définitifs.
   `GET /library/photos/:id/file` (fichier relayé par l'API : hôte `images.pexels.com` seul,
   JPEG, PNG ou WebP de 15 Mo au plus, ramené à 2 400 px). Sans `PEXELS_API_KEY` : 501
   `NOT_AVAILABLE`, sans appel sortant. `GET /library/capabilities` indique au front le
-  fournisseur d'images (`aiImages.demo`) et la disponibilité des photos.
+  fournisseur d'images (`aiImages.demo`), la disponibilité des photos et du détourage IA.
+- **Retouche photo** ([src/render/photo.ts](src/render/photo.ts), même module que le front) :
+  réglages non destructifs d'une image du Studio (`adjust` : exposition, contraste, hautes
+  lumières, ombres, blancs, noirs, tons moyens, température, teinte, vibrance, saturation,
+  rotation de teinte, clarté, netteté, flou, vignette, grain, voile, N&B, sépia, bichromie,
+  négatif, courbes RVB et par canal), recadrage (`crop`), redressement (`straighten`), masque de
+  détourage (`cutout`, PNG), contour (`outline`) et lueur (`glow`), modes de fusion complets.
+  Chaque réglage devient une primitive de filtre SVG : l'aperçu du navigateur et l'export
+  (resvg, PDF tramé à 300 dpi) donnent la même image. `POST /projects/:pid/studio-cutout`
+  (`Idempotency-Key`) renvoie le masque du sujet détouré par remove.bg (1 crédit, rendu en cas
+  d'échec ; 501 sans `REMOVE_BG_API_KEY`).
 
 ## Module 5 — décoration textile (§16)
 

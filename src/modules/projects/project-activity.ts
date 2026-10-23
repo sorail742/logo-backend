@@ -46,6 +46,7 @@ export const PROJECT_ACTIONS = {
   'studio.create': (after) => `a créé « ${text(after.name)} » dans le Studio`,
   'studio.export': (after) => `a exporté une création du Studio (${text(after.format).toUpperCase()})`,
   'studio.images': () => 'a généré des images dans le Studio',
+  'studio.cutout': () => 'a détouré une photo dans le Studio (IA)',
   'site.create': () => 'a créé le site web',
   'site.publish': (after) => `a publié le site web (/site/${text(after.slug)})`,
   'site.unpublish': () => 'a dépublié le site web',

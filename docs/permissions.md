@@ -44,7 +44,7 @@ paiements et l'abonnement sont conservés.
 | Voir projets, noms, logos, slogans, signatures, kits, créations, site web, historique | Oui | Oui | Oui | Lecture | Lecture |
 | Commenter, répondre, voter pour un nom | Oui | Oui | Oui | — | — |
 | Résoudre le fil d'un autre | — | Oui | Oui | — | — |
-| Créer un projet, lancer une génération (noms, logos, slogans, images) | — | Oui | Oui | — | — |
+| Créer un projet, lancer une génération (noms, logos, slogans, images, détourage IA) | — | Oui | Oui | — | — |
 | Éditer brief, logos, slogans, signatures, kit, créations du Studio, site web | — | Oui | Oui | — | — |
 | Partager le kit (lien public), publier ou dépublier le site web | — | Oui | Oui | — | — |
 | Lire les messages reçus par le formulaire du site | — | Oui | Oui | — | — |

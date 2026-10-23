@@ -8,6 +8,7 @@ import { PrismaService } from '../../common/prisma/prisma.service';
 import { FONTS } from '../../render/fonts';
 import { searchIcons } from '../../render/icons';
 import { AiProvider } from '../ai/ai-provider';
+import { StudioCutoutService } from '../studio/studio-cutout.service';
 import { PhotosService, type PhotoOrientation } from './photos.service';
 
 export class SearchIconsDto {
@@ -63,6 +64,7 @@ export class LibraryController {
     private readonly prisma: PrismaService,
     private readonly photos: PhotosService,
     private readonly ai: AiProvider,
+    private readonly cutouts: StudioCutoutService,
   ) {}
 
   /** Ressources activées sur cette plateforme (le front adapte le Studio en conséquence). */
@@ -71,6 +73,7 @@ export class LibraryController {
     return {
       aiImages: { provider: this.ai.name, demo: this.ai.demo },
       photos: this.photos.enabled,
+      cutout: this.cutouts.enabled,
     };
   }
 
