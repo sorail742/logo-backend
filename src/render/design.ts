@@ -293,6 +293,33 @@ export function shapeTextWidth(el: TextElement) {
   return Math.max(0, ...textLines(el).map((line) => shapeText(line, style).width));
 }
 
+// Nombres d'opentype : séparés par une espace ou par le signe moins, sans exposant.
+const PATH_TOKEN = /[MLQCZ]|-?[\d.]+/gi;
+
+/**
+ * Tracé d'un glyphe posé : rotation puis translation appliquées aux coordonnées (commandes
+ * absolues M, L, Q, C, Z d'opentype, toutes par paires x y).
+ */
+function placePath(d: string, at: { x: number; y: number; deg: number }) {
+  const a = (at.deg * Math.PI) / 180;
+  const cos = Math.cos(a);
+  const sin = Math.sin(a);
+  const out: string[] = [];
+  let x: number | null = null;
+  for (const token of d.match(PATH_TOKEN) ?? []) {
+    if (/[MLQCZ]/i.test(token)) {
+      out.push(token);
+    } else if (x === null) {
+      x = Number(token);
+    } else {
+      const y = Number(token);
+      out.push(`${n(at.x + x * cos - y * sin)} ${n(at.y + x * sin + y * cos)}`);
+      x = null;
+    }
+  }
+  return out.join(' ');
+}
+
 function renderText(el: TextElement, pid: string, defs: string[]) {
   const fill = paintValue(el.fill, `${pid}-f`, defs);
   const stroke =
@@ -304,13 +331,12 @@ function renderText(el: TextElement, pid: string, defs: string[]) {
       `<rect x="${n(-pad)}" y="${n(-pad)}" width="${n(el.width + pad * 2)}" height="${n(el.height + pad * 2)}" rx="${n(el.highlight.radius)}" fill="${el.highlight.color}"/>`,
     );
   }
-  const glyphs = textGlyphs(el)
-    .map(({ d, at }) =>
-      at
-        ? `<path transform="translate(${n(at.x)} ${n(at.y)}) rotate(${n(at.deg)})" d="${d}"/>`
-        : `<path d="${d}"/>`,
-    )
+  // Un seul tracé pour tout le texte, glyphes de l'arc déjà posés : les dégradés et bandes de
+  // couleurs s'étendent sur tout le texte, comme sur l'élément <text> du navigateur.
+  const d = textGlyphs(el)
+    .map((glyph) => (glyph.at ? placePath(glyph.d, glyph.at) : glyph.d))
     .join('');
+  const glyphs = d ? `<path d="${d}"/>` : '';
   parts.push(paintGlyphs(el, glyphs, { fill, stroke, pid, defs }));
   return parts.join('');
 }

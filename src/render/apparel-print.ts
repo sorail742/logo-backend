@@ -170,7 +170,8 @@ export function effectMargin(el: DesignElement) {
   const e = el.effects;
   // Approches et jambages qui sortent de la boîte : 8 % du corps.
   const overhang = el.fontSize * 0.08;
-  return (el.stroke?.width ?? 0) + (e?.outline2?.width ?? 0) + (e?.extrude?.depth ?? 0) + overhang;
+  const outer = (el.stroke?.width ?? 0) + (e?.outline2?.width ?? 0);
+  return outer + (e?.extrude?.depth ?? 0) + (e?.glow?.size ?? 0) + overhang;
 }
 
 /**
@@ -364,8 +365,11 @@ export function pieceColors(piece: PrintPiece) {
     else gradient ||= el.fill.type !== 'none';
     add(el.stroke?.color);
     const e = el.effects;
-    for (const layer of [e?.outline2, e?.inline, e?.extrude, e?.halftone, e?.pattern])
+    for (const layer of [e?.outline2, e?.inline, e?.extrude, e?.halftone, e?.pattern, e?.glow])
       add(layer?.color);
+    for (const band of e?.pattern?.colors ?? []) add(band);
+    // Halo néon et reflet holographique : transparences, comme un dégradé.
+    gradient ||= Boolean(e?.glow) || e?.pattern?.kind === 'holo';
   }
   return { colors: [...colors], photo, gradient };
 }

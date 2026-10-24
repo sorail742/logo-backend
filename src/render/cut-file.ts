@@ -178,9 +178,9 @@ function textSkipped(el: TextElement) {
     skipped.push(`dégradé du texte « ${el.text} » (le flex est d’une seule couleur)`);
   }
   const e = el.effects;
-  if (e?.inline || e?.halftone || e?.pattern || e?.extrude) {
+  if ([e?.inline, e?.halftone, e?.pattern, e?.extrude, e?.glow].some(Boolean)) {
     skipped.push(
-      `effets du texte « ${el.text} » (liseré, trame, texture ou relief : non découpables)`,
+      `effets du texte « ${el.text} » (liseré, trame, texture, bandes, relief ou néon : non découpables)`,
     );
   }
   return skipped;

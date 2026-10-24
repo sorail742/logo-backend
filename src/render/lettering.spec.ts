@@ -155,4 +155,114 @@ describe('effets de lettrage', () => {
     expect(svg).toContain('<mask id=');
     expect(svg).toMatch(/<use href="#[\w-]+-g" fill="#ffffff"\/>/);
   });
+
+  it('peint les lettres en bandes de drapeau sur toute la boîte et ajoute un halo néon', () => {
+    const defs: string[] = [];
+    const svg = letteringLayers({
+      box,
+      defs,
+      pid: 'e3',
+      glyphs: '<path d="M0 0h10v10H0z"/>',
+      fill: '#ffffff',
+      effects: {
+        pattern: {
+          kind: 'bands',
+          color: '#ce1126',
+          colors: ['#fcd116', '#009460'],
+          size: 10,
+          angle: 0,
+        },
+        glow: { color: '#22d3ee', size: 12 },
+      },
+      size: 100,
+    });
+    const bands = defs.find((d) => d.includes('id="e3-bands"'))!;
+    // Trois bandes nettes (arrêts doublés), de gauche à droite des lettres.
+    expect(bands).toContain('x1="0" y1="0.5" x2="1" y2="0.5"');
+    expect(bands.match(/<stop /g)).toHaveLength(6);
+    expect(bands).toContain(
+      'offset="0.33" stop-color="#ce1126"/><stop offset="0.33" stop-color="#fcd116"',
+    );
+    expect(svg).toContain('fill="url(#e3-bands)"');
+    // Halo : six traits translucides, sous les lettres.
+    expect(svg.match(/opacity="0.16"/g)).toHaveLength(6);
+    expect(svg.indexOf('#22d3ee')).toBeLessThan(svg.indexOf('url(#e3-bands)'));
+    // Les bandes remplacent le remplissage : pas de découpe de texture.
+    expect(defs.some((d) => d.startsWith('<clipPath'))).toBe(false);
+  });
+
+  it('dessine pixels, étoiles et camouflage, un second contour dentelé et un liseré cousu', () => {
+    for (const kind of ['pixels', 'stars', 'camo'] as const) {
+      const shapes = patternShapes(box, { kind, color: '#000000', size: 12, angle: 0 });
+      expect(shapes.length).toBeGreaterThan(100);
+      expect(shapes).toBe(patternShapes(box, { kind, color: '#000000', size: 12, angle: 0 }));
+    }
+    const defs: string[] = [];
+    const svg = letteringLayers({
+      box,
+      defs,
+      pid: 'e4',
+      glyphs: '<path d="M0 0h10v10H0z"/>',
+      fill: '#ffffff',
+      effects: {
+        outline2: { color: '#111111', width: 5, dotted: true },
+        inline: { color: '#1d4ed8', width: 2, inset: 4, dashed: true },
+        pattern: { kind: 'holo', color: '#ffffff', size: 10, angle: 45 },
+      },
+      size: 100,
+    });
+    expect(svg).toContain('stroke-dasharray="0 8.5"');
+    expect(svg).toContain('stroke-dasharray="6 4"');
+    expect(svg).toContain('fill="url(#e4-holo)" opacity="0.6"');
+  });
+
+  it('rend un texte courbé en un seul tracé (bandes continues sur tout le mot)', () => {
+    const doc = designDocSchema.parse({
+      version: 1,
+      width: 800,
+      height: 400,
+      pages: [
+        {
+          id: 'p1',
+          background: { type: 'solid', color: '#ffffff' },
+          elements: [
+            {
+              id: 't1',
+              type: 'text',
+              x: 0,
+              y: 0,
+              width: 800,
+              height: 300,
+              rotation: 0,
+              opacity: 1,
+              text: 'GUINÉE',
+              lines: ['GUINÉE'],
+              fontId: 'oswald',
+              fontWeight: 700,
+              fontSize: 120,
+              letterSpacing: 0,
+              lineHeight: 1.1,
+              align: 'center',
+              uppercase: false,
+              curve: 40,
+              fill: { type: 'solid', color: '#ffffff' },
+              effects: {
+                pattern: {
+                  kind: 'bands',
+                  color: '#ce1126',
+                  colors: ['#fcd116', '#009460'],
+                  size: 10,
+                  angle: 0,
+                },
+              },
+            },
+          ],
+        },
+      ],
+    });
+    const svg = renderDesignPage(doc, 0);
+    const group = /<g id="[\w-]+-g">(.*?)<\/g>/.exec(svg)![1];
+    expect(group.match(/<path /g)).toHaveLength(1);
+    expect(group).not.toContain('transform');
+  });
 });
