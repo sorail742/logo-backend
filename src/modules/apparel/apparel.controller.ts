@@ -93,6 +93,12 @@ export class ApparelController {
     return this.apparel.updateDesign(did, dto);
   }
 
+  @Post('apparel-designs/:did/duplicate')
+  @WorkspaceAccess('EDITOR')
+  duplicate(@Param('did', ParseUUIDPipe) did: string) {
+    return this.apparel.duplicateDesign(did);
+  }
+
   @Delete('apparel-designs/:did')
   @WorkspaceAccess('EDITOR')
   @HttpCode(HttpStatus.NO_CONTENT)

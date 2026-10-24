@@ -351,6 +351,13 @@ check('BAT consultable sans compte', pubProof.status === 200 && pubProof.json.ro
 check('BAT public : zones du support pour placer les éléments', pubProof.json.template.zones.some((z) => z.key === 'back_number' && z.maxWidthMm > 0), pubProof.json.template.zones?.length);
 const approve = await call('POST', `/public/proofs/${proof.json.token}/approve`, { body: { approverName: 'Président du club' } });
 check('BAT approuvé par le client → APPROVED', approve.status === 200 && approve.json.status === 'APPROVED', approve.json);
+const copy = await call('POST', `/apparel-designs/${did}/duplicate`, { token, body: {} });
+const stillApproved = await call('GET', `/apparel-designs/${did}`, { token });
+check(
+  'dupliquer une tenue approuvée : copie en brouillon (impressions et effectif), original intact',
+  copy.status === 201 && copy.json.status === 'DRAFT' && copy.json.elements.length === stillApproved.json.elements.length && copy.json.roster?.entries.length === 3 && stillApproved.json.status === 'APPROVED',
+  { status: copy.status, copy: copy.json.status, original: stillApproved.json.status },
+);
 const edited = await call('PATCH', `/apparel-designs/${did}`, { token, body: { garmentColor: '#C8102E' } });
 check('modifier une tenue approuvée la repasse en brouillon', edited.json.status === 'DRAFT' && edited.json.approvedAt === null, edited.json.status);
 const oldProof = await call('GET', `/public/proofs/${proof.json.token}`);
