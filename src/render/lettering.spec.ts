@@ -4,6 +4,7 @@ import {
   halftoneDots,
   hasEffects,
   letteringLayers,
+  PATTERN_KINDS,
   patternShapes,
   textEffectsSchema,
 } from './lettering';
@@ -74,7 +75,7 @@ describe('effets de lettrage', () => {
   });
 
   it('dessine les textures de façon déterministe (même dessin au navigateur)', () => {
-    const shapes = (kind: 'stripes' | 'carbon' | 'distressed' | 'claws') =>
+    const shapes = (kind: (typeof PATTERN_KINDS)[number]) =>
       patternShapes(box, { kind, color: '#000000', size: 8, angle: -30 });
     expect(shapes('distressed')).toBe(shapes('distressed'));
     expect(shapes('claws').match(/<path /g)).toHaveLength(3);

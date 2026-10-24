@@ -41,7 +41,7 @@ export const textEffectsSchema = z.object({
     .optional(),
   /** Texture dans les lettres : rayures, carbone, usé, griffes ; `size` : pas ou largeur. */
   pattern: z
-    .object({ kind: z.enum(PATTERN_KINDS), color, size: num(0.5, 1000), angle: num(-360, 360) })
+    .object({ color, kind: z.enum(PATTERN_KINDS), size: num(0.5, 1000), angle: num(-360, 360) })
     .nullable()
     .optional(),
 });
