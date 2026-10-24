@@ -1,8 +1,10 @@
+import { randomUUID } from 'node:crypto';
 import {
   Body,
   Controller,
   Delete,
   Get,
+  Headers,
   HttpCode,
   HttpStatus,
   Param,
@@ -11,7 +13,7 @@ import {
   Post,
   Put,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiHeader, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import type { AuthUser, WorkspaceContext } from '../../common/auth-user';
 import {
@@ -30,20 +32,27 @@ import {
   CheckDesignDto,
   CreateApparelDesignDto,
   PrintShopDto,
+  ProductionExportDto,
   ProofDto,
   RosterImportDto,
   SaveElementsDto,
   SaveRosterDto,
   UpdateApparelDesignDto,
 } from './apparel.dto';
+import { projectEvent } from '../projects/project-activity';
 import { ApparelService } from './apparel.service';
+import { ProductionService } from './production.service';
 
 /** Module 5 — décoration textile (§16.11). */
 @ApiTags('apparel')
 @ApiBearerAuth()
 @Controller()
 export class ApparelController {
-  constructor(private readonly apparel: ApparelService) {}
+  constructor(
+    private readonly apparel: ApparelService,
+    private readonly production: ProductionService,
+    private readonly audit: AuditService,
+  ) {}
 
   @Get('apparel/templates')
   templates() {
@@ -132,6 +141,33 @@ export class ApparelController {
   @HttpCode(HttpStatus.OK)
   proof(@Param('did', ParseUUIDPipe) did: string, @Body() dto: ProofDto) {
     return this.apparel.proof(did, dto.revoke ?? false);
+  }
+
+  /** Pack atelier : fichiers du support d'impression, un fichier par joueur, fiche technique (202 + jobId). */
+  @Post('apparel-designs/:did/production-export')
+  @WorkspaceAccess('EDITOR', { download: true })
+  @HttpCode(HttpStatus.ACCEPTED)
+  @ApiHeader({ name: 'Idempotency-Key', required: false, description: 'Générée si absente' })
+  async productionExport(
+    @Param('did', ParseUUIDPipe) did: string,
+    @Body() dto: ProductionExportDto,
+    @CurrentUser() user: AuthUser,
+    @CurrentWorkspace() ws: WorkspaceContext,
+    @Headers('idempotency-key') idempotencyKey?: string,
+  ) {
+    const job = await this.production.request(
+      { projectId: ws.projectId!, workspaceId: ws.workspaceId, actorId: user.id },
+      did,
+      dto,
+      idempotencyKey ?? randomUUID(),
+    );
+    await this.audit.log(
+      projectEvent(ws.projectId!, user.id, 'apparel.production_export', {
+        support: dto.support ?? null,
+        jobId: job.jobId,
+      }),
+    );
+    return job;
   }
 
   @Get('workspaces/:wid/print-shops')

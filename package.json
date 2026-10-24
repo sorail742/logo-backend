@@ -48,6 +48,7 @@
     "bullmq": "^5.56.0",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.2",
+    "clipper-lib": "6.4.2",
     "cookie-parser": "^1.4.7",
     "google-auth-library": "^9.15.1",
     "helmet": "^8.1.0",
@@ -70,6 +71,7 @@
     "@nestjs/cli": "^11.0.7",
     "@nestjs/schematics": "^11.0.5",
     "@nestjs/testing": "^11.1.0",
+    "@types/clipper-lib": "6.4.0",
     "@types/cookie-parser": "^1.4.9",
     "@types/express": "^5.0.3",
     "@types/jest": "^29.5.14",
@@ -92,13 +94,22 @@
     "typescript-eslint": "^8.35.0"
   },
   "jest": {
-    "moduleFileExtensions": ["js", "json", "ts"],
+    "moduleFileExtensions": [
+      "js",
+      "json",
+      "ts"
+    ],
     "rootDir": "src",
     "testRegex": ".*\\.spec\\.ts$",
     "transform": {
       "^.+\\.ts$": "ts-jest"
     },
-    "collectCoverageFrom": ["**/*.service.ts", "**/*.util.ts", "shared/**/*.ts", "render/**/*.ts"],
+    "collectCoverageFrom": [
+      "**/*.service.ts",
+      "**/*.util.ts",
+      "shared/**/*.ts",
+      "render/**/*.ts"
+    ],
     "coverageDirectory": "../coverage",
     "testEnvironment": "node"
   }

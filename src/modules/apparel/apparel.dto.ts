@@ -13,6 +13,7 @@ import {
   IsArray,
   IsBoolean,
   IsEnum,
+  IsIn,
   IsInt,
   IsNumber,
   IsObject,
@@ -27,7 +28,11 @@ import {
   ValidateNested,
 } from 'class-validator';
 
+import { SHEET_FORMATS, type SheetFormatKey } from '../../render/gang-sheet';
+import { PRINT_SUPPORTS, type PrintSupport } from './production-pack';
+
 const HEX = /^#[0-9A-Fa-f]{6}$/;
+const SHEET_FORMAT_KEYS = Object.keys(SHEET_FORMATS) as SheetFormatKey[];
 
 export class CreateApparelDesignDto {
   @ApiProperty()
@@ -262,4 +267,65 @@ export class AdminRulePresetDto {
   @ApiProperty({ example: 'LOCAL_LIGUE_CONAKRY' }) @Matches(/^[A-Z][A-Z0-9_]{1,39}$/) code: string;
   @ApiProperty() @IsString() @Length(1, 120) name: string;
   @ApiProperty({ description: 'Voir PresetRules' }) @IsObject() rules: Record<string, unknown>;
+}
+
+/** Pack atelier (§16.7-16.8) : support d'impression, miroir, planche et joueurs à exporter. */
+export class ProductionExportDto {
+  @ApiPropertyOptional({
+    enum: PRINT_SUPPORTS,
+    description:
+      'Support intermédiaire (film DTF, papier transfert, flex…) ; celui de la technique par défaut',
+  })
+  @IsOptional()
+  @IsIn(PRINT_SUPPORTS)
+  support?: PrintSupport;
+
+  @ApiPropertyOptional({ description: 'Miroir ; par défaut celui conseillé pour le support' })
+  @IsOptional()
+  @IsBoolean()
+  mirror?: boolean;
+
+  @ApiPropertyOptional({ enum: SHEET_FORMAT_KEYS })
+  @IsOptional()
+  @IsIn(SHEET_FORMAT_KEYS)
+  sheetFormat?: SheetFormatKey;
+
+  @ApiPropertyOptional({ description: 'Laize du rouleau (mm)' })
+  @IsOptional()
+  @IsInt()
+  @Min(100)
+  @Max(1600)
+  rollWidthMm?: number;
+
+  @ApiPropertyOptional({ description: 'Longueur d’une page de rouleau (mm)' })
+  @IsOptional()
+  @IsInt()
+  @Min(200)
+  @Max(3000)
+  rollPageMm?: number;
+
+  @ApiPropertyOptional({ description: 'Repères de coupe autour des pièces' })
+  @IsOptional()
+  @IsBoolean()
+  cutMarks?: boolean;
+
+  @ApiPropertyOptional({ description: 'Joueurs à exporter (TEX-44) ; tout l’effectif par défaut' })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(500)
+  @IsUUID('all', { each: true })
+  entryIds?: string[];
+
+  @ApiPropertyOptional({ description: 'Sans effectif : nombre de vêtements identiques' })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(1000)
+  copies?: number;
+
+  @ApiPropertyOptional({ description: 'Sans effectif : taille de ces vêtements' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  copiesSize?: string;
 }

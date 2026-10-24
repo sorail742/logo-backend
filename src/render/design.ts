@@ -242,27 +242,23 @@ export function textLines(el: TextElement) {
   return lines;
 }
 
-function renderText(el: TextElement, pid: string, defs: string[]) {
-  const style = textStyle(el);
-  const fill = paintValue(el.fill, `${pid}-f`, defs);
-  const stroke =
-    el.stroke && el.stroke.width > 0 ? `${strokeAttrs(el.stroke, 2)} paint-order="stroke"` : '';
-  const { box, baseline } = lineMetrics(el);
-  const parts: string[] = [];
-  if (el.highlight) {
-    const pad = el.highlight.padding;
-    parts.push(
-      `<rect x="${n(-pad)}" y="${n(-pad)}" width="${n(el.width + pad * 2)}" height="${n(el.height + pad * 2)}" rx="${n(el.highlight.radius)}" fill="${el.highlight.color}"/>`,
-    );
-  }
+/** Glyphe d'un texte : tracé, et position sur l'arc pour un texte en courbe. */
+export interface PlacedGlyph {
+  d: string;
+  at?: { x: number; y: number; deg: number };
+}
 
+/** Glyphes d'un texte dans le repère de sa boîte (même géométrie pour l'affichage et la découpe). */
+export function textGlyphs(el: TextElement): PlacedGlyph[] {
+  const style = textStyle(el);
+  const { box, baseline } = lineMetrics(el);
   if (el.curve) {
     // Chaque glyphe est posé sur l'arc, tangent au cercle.
     const { bend, radius, sagitta } = curveGeometry(el);
     // Angle de chaque glyphe depuis le sommet de l'arc, texte centré sur l'arc.
     const shaped = shapeText(textLines(el).join(' '), style);
     const cx = el.width / 2;
-    const glyphs = shaped
+    return shaped
       .glyphs()
       .filter((g) => g.d)
       .map((g) => {
@@ -271,27 +267,51 @@ function renderText(el: TextElement, pid: string, defs: string[]) {
         if (bend > 0) {
           // Arc bombé vers le haut : centre sous le sommet, glyphes à l'extérieur.
           const cy = baseline + radius;
-          const x = cx + radius * Math.sin(phi);
-          const y = cy - radius * Math.cos(phi);
-          return `<path transform="translate(${n(x)} ${n(y)}) rotate(${n(deg)})" d="${g.d}"/>`;
+          return {
+            d: g.d,
+            at: { x: cx + radius * Math.sin(phi), y: cy - radius * Math.cos(phi), deg },
+          };
         }
         // Arc en creux : centre au-dessus, glyphes à l'intérieur.
         const cy = baseline + sagitta - radius;
-        const x = cx + radius * Math.sin(phi);
-        const y = cy + radius * Math.cos(phi);
-        return `<path transform="translate(${n(x)} ${n(y)}) rotate(${n(-deg)})" d="${g.d}"/>`;
+        return {
+          d: g.d,
+          at: { x: cx + radius * Math.sin(phi), y: cy + radius * Math.cos(phi), deg: -deg },
+        };
       });
-    parts.push(paintGlyphs(el, glyphs.join(''), { fill, stroke, pid, defs }));
-    return parts.join('');
   }
-
   const { anchor, x } = textAnchor(el);
-  const paths = textLines(el)
+  return textLines(el)
     .map((line, i) => shapeText(line, style).toPath(x, i * box + baseline, anchor))
     .filter(Boolean)
-    .map((d) => `<path d="${d}"/>`)
+    .map((d) => ({ d }));
+}
+
+/** Largeur naturelle d'un texte (ligne la plus longue) : ajustement d'un nom à sa zone. */
+export function shapeTextWidth(el: TextElement) {
+  const style = textStyle(el);
+  return Math.max(0, ...textLines(el).map((line) => shapeText(line, style).width));
+}
+
+function renderText(el: TextElement, pid: string, defs: string[]) {
+  const fill = paintValue(el.fill, `${pid}-f`, defs);
+  const stroke =
+    el.stroke && el.stroke.width > 0 ? `${strokeAttrs(el.stroke, 2)} paint-order="stroke"` : '';
+  const parts: string[] = [];
+  if (el.highlight) {
+    const pad = el.highlight.padding;
+    parts.push(
+      `<rect x="${n(-pad)}" y="${n(-pad)}" width="${n(el.width + pad * 2)}" height="${n(el.height + pad * 2)}" rx="${n(el.highlight.radius)}" fill="${el.highlight.color}"/>`,
+    );
+  }
+  const glyphs = textGlyphs(el)
+    .map(({ d, at }) =>
+      at
+        ? `<path transform="translate(${n(at.x)} ${n(at.y)}) rotate(${n(at.deg)})" d="${d}"/>`
+        : `<path d="${d}"/>`,
+    )
     .join('');
-  parts.push(paintGlyphs(el, paths, { fill, stroke, pid, defs }));
+  parts.push(paintGlyphs(el, glyphs, { fill, stroke, pid, defs }));
   return parts.join('');
 }
 

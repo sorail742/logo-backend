@@ -13,6 +13,7 @@ import { NameGeneratorService } from '../modules/names/name-generator.service';
 import { NotificationsService } from '../modules/notifications/notifications.service';
 import { SignatureBatchService } from '../modules/signatures/signature-batch.service';
 import { SloganGeneratorService } from '../modules/slogans/slogan-generator.service';
+import { ProductionService } from '../modules/apparel/production.service';
 import { StudioExportService } from '../modules/studio/studio-export.service';
 import { StudioImagesService } from '../modules/studio/studio-images.service';
 
@@ -22,6 +23,7 @@ const READY_MESSAGES: Partial<Record<JobKind, { title: string; page: string; ema
   LOGO_EXPORT: { title: 'Export du logo prêt', page: 'logos', email: false },
   SIGNATURE: { title: 'Signatures en lot prêtes', page: 'signatures', email: false },
   DESIGN_EXPORT: { title: 'Export de création prêt', page: 'studio', email: false },
+  PRODUCTION_PACK: { title: 'Pack atelier prêt', page: 'textile', email: true },
 };
 
 /**
@@ -45,6 +47,7 @@ export class GenerationProcessor extends WorkerHost {
     private readonly notifications: NotificationsService,
     private readonly studioExports: StudioExportService,
     private readonly studioImages: StudioImagesService,
+    private readonly production: ProductionService,
   ) {
     super();
   }
@@ -106,8 +109,12 @@ export class GenerationProcessor extends WorkerHost {
         const { images, provider } = await this.studioImages.runJob(jobId);
         return { images: images.length, provider };
       }
+      case JobKind.PRODUCTION_PACK: {
+        const { fileName, pieces, sheets } = await this.production.runJob(jobId);
+        return { fileName, pieces, sheets };
+      }
       default:
-        // Module textile : propositions, maquettes et pack atelier à venir.
+        // Module textile : propositions et maquettes générées à venir.
         throw new UnrecoverableError(`Type de génération ${kind} pas encore disponible`);
     }
   }
