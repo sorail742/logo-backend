@@ -36,6 +36,12 @@ export function toHandle(name: string): string {
     .replace(/[^a-z0-9]/g, '');
 }
 
+/** Réponse d'une page de profil : 404 = libre, 2xx = pris, sinon indéterminé. */
+function handleStatus(res: Response): CheckStatus {
+  if (res.status === 404) return 'AVAILABLE';
+  return res.ok ? 'TAKEN' : 'UNKNOWN';
+}
+
 @Injectable()
 export class AvailabilityService {
   constructor(
@@ -135,8 +141,7 @@ export class AvailabilityService {
             headers: { 'User-Agent': 'logo-backend' },
             signal: AbortSignal.timeout(3000),
           });
-          const status: CheckStatus =
-            res.status === 404 ? 'AVAILABLE' : res.ok ? 'TAKEN' : 'UNKNOWN';
+          const status = handleStatus(res);
           return { kind: 'SOCIAL', target: network, status, details };
         } catch {
           return { kind: 'SOCIAL', target: network, status: 'UNKNOWN', details };

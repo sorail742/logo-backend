@@ -45,6 +45,7 @@ export const PROJECT_ACTIONS = {
   'comments.create': (after) => `a commenté ${text(after.target) || 'le projet'}`,
   'studio.create': (after) => `a créé « ${text(after.name)} » dans le Studio`,
   'studio.export': (after) => `a exporté une création du Studio (${text(after.format).toUpperCase()})`,
+  'apparel.production_export': () => 'a préparé le pack atelier d’une tenue (fichiers d’impression)',
   'studio.images': () => 'a généré des images dans le Studio',
   'studio.cutout': () => 'a détouré une photo dans le Studio (IA)',
   'site.create': () => 'a créé le site web',

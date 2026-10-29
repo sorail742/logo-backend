@@ -5,9 +5,11 @@ import {
   PublicProofController,
 } from './apparel.controller';
 import { ApparelService } from './apparel.service';
+import { ProductionService } from './production.service';
 
 @Module({
   controllers: [ApparelController, PublicProofController, AdminApparelController],
-  providers: [ApparelService],
+  providers: [ApparelService, ProductionService],
+  exports: [ProductionService],
 })
 export class ApparelModule {}

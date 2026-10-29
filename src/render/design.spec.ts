@@ -128,7 +128,12 @@ describe('rendu serveur des créations du Studio', () => {
   it('convertit le texte en tracés, y compris en arc', () => {
     const svg = renderDesignPage(doc(), 0);
     expect(svg).not.toContain('<text');
-    expect(svg.match(/<path transform="translate\([^)]+\) rotate\(/g)?.length).toBeGreaterThan(10);
+    // Texte en arc : glyphes déjà posés sur l'arc, réunis en un seul tracé par texte.
+    expect(svg).not.toContain('<path transform=');
+    const longest = Math.max(
+      ...[...svg.matchAll(/<path d="([^"]+)"/g)].map((m) => m[1].split('M').length),
+    );
+    expect(longest).toBeGreaterThan(10);
     expect(svg).toContain('<linearGradient id="stitle-f"');
     expect(svg).toContain('clip-path="url(#sphoto-clip)"');
     // Le rendu se trame sans erreur.

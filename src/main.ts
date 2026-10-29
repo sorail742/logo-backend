@@ -6,7 +6,12 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import { Logger } from 'nestjs-pino';
+import { z } from 'zod';
 import { AppModule } from './app.module';
+import {
+  frenchZodErrorMap,
+  validationExceptionFactory,
+} from './common/validation/validation-problem';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, { bufferLogs: true });
@@ -24,8 +29,16 @@ async function bootstrap() {
 
   app.setGlobalPrefix('api');
   app.enableVersioning({ type: VersioningType.URI, defaultVersion: '1' });
+  // Erreurs de saisie en français, détaillées par champ (`fields`).
+  z.setErrorMap(frenchZodErrorMap);
   app.useGlobalPipes(
-    new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
+    new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
+      validationError: { target: true, value: true },
+      exceptionFactory: validationExceptionFactory,
+    }),
   );
 
   const doc = new DocumentBuilder()

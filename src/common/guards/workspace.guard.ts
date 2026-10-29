@@ -99,76 +99,7 @@ export class WorkspaceGuard implements CanActivate {
       return { workspaceId: ws.id, viewerDownloads: ws.viewerDownloads };
     }
 
-    let projectId: string | undefined = params.pid;
-    if (!projectId && params.nid) {
-      const name = await this.prisma.nameSuggestion.findUnique({
-        where: { id: params.nid },
-        select: { projectId: true },
-      });
-      projectId = name?.projectId;
-    }
-    if (!projectId && params.lid) {
-      const logo = await this.prisma.logo.findUnique({
-        where: { id: params.lid },
-        select: { projectId: true },
-      });
-      projectId = logo?.projectId;
-    }
-    if (!projectId && params.did) {
-      const design = await this.prisma.apparelDesign.findUnique({
-        where: { id: params.did },
-        select: { projectId: true },
-      });
-      projectId = design?.projectId;
-    }
-    if (!projectId && params.sid) {
-      const signature = await this.prisma.signature.findUnique({
-        where: { id: params.sid },
-        select: { projectId: true },
-      });
-      const slogan = signature
-        ? null
-        : await this.prisma.slogan.findUnique({
-            where: { id: params.sid },
-            select: { projectId: true },
-          });
-      projectId = signature?.projectId ?? slogan?.projectId;
-    }
-    if (!projectId && params.kid) {
-      const kit = await this.prisma.brandKit.findUnique({
-        where: { id: params.kid },
-        select: { projectId: true },
-      });
-      projectId = kit?.projectId;
-    }
-    if (!projectId && params.sdid) {
-      const design = await this.prisma.studioDesign.findUnique({
-        where: { id: params.sdid },
-        select: { projectId: true },
-      });
-      projectId = design?.projectId;
-    }
-    if (!projectId && params.cid) {
-      const comment = await this.prisma.comment.findUnique({
-        where: { id: params.cid },
-        select: { projectId: true },
-      });
-      projectId = comment?.projectId;
-    }
-    if (!projectId && params.jid) {
-      const job = await this.prisma.generationJob.findUnique({
-        where: { id: params.jid },
-        select: { projectId: true },
-      });
-      projectId = job?.projectId;
-    }
-    if (!projectId && params.webid) {
-      const site = await this.prisma.website.findUnique({
-        where: { id: params.webid },
-        select: { projectId: true },
-      });
-      projectId = site?.projectId;
-    }
+    const projectId = await this.projectIdOf(params);
     if (!projectId) throw new NotFoundException('Ressource introuvable');
 
     const project = await this.prisma.project.findUnique({
@@ -188,5 +119,38 @@ export class WorkspaceGuard implements CanActivate {
       projectId: project.id,
       viewerDownloads: project.workspace.viewerDownloads,
     };
+  }
+
+  /**
+   * Projet d'une ressource désignée par un paramètre de route, dans l'ordre de priorité ; un
+   * identifiant inconnu laisse place au paramètre suivant.
+   */
+  private async projectIdOf(params: Record<string, string>): Promise<string | undefined> {
+    if (params.pid) return params.pid;
+    const select = { projectId: true } as const;
+    const lookups: [string, (id: string) => Promise<{ projectId: string } | null>][] = [
+      ['nid', (id) => this.prisma.nameSuggestion.findUnique({ where: { id }, select })],
+      ['lid', (id) => this.prisma.logo.findUnique({ where: { id }, select })],
+      ['did', (id) => this.prisma.apparelDesign.findUnique({ where: { id }, select })],
+      [
+        'sid',
+        async (id) =>
+          (await this.prisma.signature.findUnique({ where: { id }, select })) ??
+          this.prisma.slogan.findUnique({ where: { id }, select }),
+      ],
+      ['kid', (id) => this.prisma.brandKit.findUnique({ where: { id }, select })],
+      ['sdid', (id) => this.prisma.studioDesign.findUnique({ where: { id }, select })],
+      ['cid', (id) => this.prisma.comment.findUnique({ where: { id }, select })],
+      ['jid', (id) => this.prisma.generationJob.findUnique({ where: { id }, select })],
+      ['webid', (id) => this.prisma.website.findUnique({ where: { id }, select })],
+    ];
+    for (const [param, find] of lookups) {
+      const id = params[param];
+      if (!id) continue;
+      // Recherches successives : la première ressource trouvée désigne le projet.
+      const row = await find(id);
+      if (row) return row.projectId;
+    }
+    return undefined;
   }
 }

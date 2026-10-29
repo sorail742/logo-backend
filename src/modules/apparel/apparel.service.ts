@@ -11,6 +11,7 @@ import { ApparelDesignStatus, PrintTechnique, Prisma } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { randomToken } from '../../common/utils/crypto.util';
 import { AuditService } from '../audit/audit.service';
+import { parseElementContents } from './apparel-content';
 import { REFERENCE_SIZE, RULES_DISCLAIMER } from './apparel-defaults';
 import {
   checkDesign,
@@ -114,6 +115,59 @@ export class ApparelService {
     });
   }
 
+  /**
+   * Copie en brouillon d'une tenue, avec ses impressions et son effectif : variante (domicile,
+   * extérieur), nouvelle saison ou fête de l'année suivante, sans toucher à la tenue validée.
+   */
+  async duplicateDesign(id: string) {
+    const source = await this.prisma.apparelDesign.findUniqueOrThrow({
+      where: { id },
+      include: { elements: true, roster: { include: { entries: true } } },
+    });
+    const { roster } = source;
+    return this.prisma.apparelDesign.create({
+      data: {
+        projectId: source.projectId,
+        templateId: source.templateId,
+        rulePresetId: source.rulePresetId,
+        name: `${source.name} (copie)`.slice(0, 120),
+        technique: source.technique,
+        garmentColor: source.garmentColor,
+        elements: {
+          create: source.elements.map((el) => ({
+            zoneKey: el.zoneKey,
+            kind: el.kind,
+            content: el.content as Prisma.InputJsonValue,
+            widthMm: el.widthMm,
+            heightMm: el.heightMm,
+            offsetXMm: el.offsetXMm,
+            offsetYMm: el.offsetYMm,
+            rotationDeg: el.rotationDeg,
+            zIndex: el.zIndex,
+          })),
+        },
+        roster: roster
+          ? {
+              create: {
+                name: roster.name,
+                entries: {
+                  create: roster.entries.map((e) => ({
+                    playerName: e.playerName,
+                    displayName: e.displayName,
+                    number: e.number,
+                    size: e.size,
+                    quantity: e.quantity,
+                    role: e.role,
+                  })),
+                },
+              },
+            }
+          : undefined,
+      },
+      include: DESIGN_INCLUDE,
+    });
+  }
+
   async deleteDesign(id: string) {
     await this.prisma.apparelDesign.delete({ where: { id } });
   }
@@ -131,6 +185,7 @@ export class ApparelService {
         `Zones absentes de ce support : ${[...new Set(unknown)].join(', ')}`,
       );
     }
+    const contents = parseElementContents(elements.map((e) => e.content));
 
     await this.prisma.$transaction([
       this.prisma.designElement.deleteMany({ where: { designId: id } }),
@@ -139,7 +194,7 @@ export class ApparelService {
           designId: id,
           zoneKey: e.zoneKey,
           kind: e.kind,
-          content: e.content as Prisma.InputJsonValue,
+          content: contents[i],
           widthMm: e.widthMm,
           heightMm: e.heightMm,
           offsetXMm: e.offsetXMm,

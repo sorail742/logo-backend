@@ -1,3 +1,4 @@
+import { crc32 } from 'node:zlib';
 import { Resvg } from '@resvg/resvg-js';
 import jpeg from 'jpeg-js';
 import { hexToRgb } from './color';
@@ -52,6 +53,25 @@ function prepare(svg: string, options: RasterOptions) {
 export function svgToPng(svg: string, options: RasterOptions): Buffer {
   const prepared = prepare(svg, options);
   return render(prepared.svg, prepared.width).asPng();
+}
+
+/**
+ * Inscrit la résolution d'impression dans un PNG (bloc pHYs, après l'en-tête) : un logiciel
+ * d'impression l'ouvre alors à sa taille réelle (300 dpi pour les fichiers d'atelier).
+ */
+export function pngWithDpi(png: Buffer, dpi: number): Buffer {
+  const perMeter = Math.round(dpi / 0.0254);
+  const body = Buffer.alloc(13);
+  body.write('pHYs', 0, 'latin1');
+  body.writeUInt32BE(perMeter, 4);
+  body.writeUInt32BE(perMeter, 8);
+  body.writeUInt8(1, 12); // unité : le mètre
+  const chunk = Buffer.alloc(21);
+  chunk.writeUInt32BE(9, 0);
+  body.copy(chunk, 4);
+  chunk.writeUInt32BE(crc32(body), 17);
+  // Signature (8 octets) puis IHDR (25 octets) : le bloc pHYs se place juste après.
+  return Buffer.concat([png.subarray(0, 33), chunk, png.subarray(33)]);
 }
 
 /** Pixels RGBA (palette d'un import, empreinte). */

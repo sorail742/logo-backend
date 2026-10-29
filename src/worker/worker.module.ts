@@ -1,6 +1,7 @@
 import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
 import { CoreModule } from '../core.module';
+import { ApparelModule } from '../modules/apparel/apparel.module';
 import { BrandKitsModule } from '../modules/brand-kits/brand-kits.module';
 import { LogosModule } from '../modules/logos/logos.module';
 import { NamesModule } from '../modules/names/names.module';
@@ -23,6 +24,7 @@ import { MaintenanceProcessor } from './maintenance.processor';
     SignaturesModule,
     BrandKitsModule,
     StudioModule,
+    ApparelModule,
   ],
   providers: [GenerationProcessor, EmailProcessor, MaintenanceProcessor],
 })

@@ -12,6 +12,7 @@ import type {
   TextElement,
 } from './design-doc';
 import { closestWeight, getFont, shapeText, type TextStyle } from './fonts';
+import { hasEffects, letteringLayers } from './lettering';
 import { adjustFilter, effectsFilter, isNeutral, photoPlacement, vignetteGradient } from './photo';
 import { escapeXml } from './svg';
 
@@ -241,27 +242,23 @@ export function textLines(el: TextElement) {
   return lines;
 }
 
-function renderText(el: TextElement, pid: string, defs: string[]) {
-  const style = textStyle(el);
-  const fill = paintValue(el.fill, `${pid}-f`, defs);
-  const stroke =
-    el.stroke && el.stroke.width > 0 ? `${strokeAttrs(el.stroke, 2)} paint-order="stroke"` : '';
-  const { box, baseline } = lineMetrics(el);
-  const parts: string[] = [];
-  if (el.highlight) {
-    const pad = el.highlight.padding;
-    parts.push(
-      `<rect x="${n(-pad)}" y="${n(-pad)}" width="${n(el.width + pad * 2)}" height="${n(el.height + pad * 2)}" rx="${n(el.highlight.radius)}" fill="${el.highlight.color}"/>`,
-    );
-  }
+/** Glyphe d'un texte : tracé, et position sur l'arc pour un texte en courbe. */
+export interface PlacedGlyph {
+  d: string;
+  at?: { x: number; y: number; deg: number };
+}
 
+/** Glyphes d'un texte dans le repère de sa boîte (même géométrie pour l'affichage et la découpe). */
+export function textGlyphs(el: TextElement): PlacedGlyph[] {
+  const style = textStyle(el);
+  const { box, baseline } = lineMetrics(el);
   if (el.curve) {
     // Chaque glyphe est posé sur l'arc, tangent au cercle.
     const { bend, radius, sagitta } = curveGeometry(el);
     // Angle de chaque glyphe depuis le sommet de l'arc, texte centré sur l'arc.
     const shaped = shapeText(textLines(el).join(' '), style);
     const cx = el.width / 2;
-    const glyphs = shaped
+    return shaped
       .glyphs()
       .filter((g) => g.d)
       .map((g) => {
@@ -270,28 +267,97 @@ function renderText(el: TextElement, pid: string, defs: string[]) {
         if (bend > 0) {
           // Arc bombé vers le haut : centre sous le sommet, glyphes à l'extérieur.
           const cy = baseline + radius;
-          const x = cx + radius * Math.sin(phi);
-          const y = cy - radius * Math.cos(phi);
-          return `<path transform="translate(${n(x)} ${n(y)}) rotate(${n(deg)})" d="${g.d}"/>`;
+          return {
+            d: g.d,
+            at: { x: cx + radius * Math.sin(phi), y: cy - radius * Math.cos(phi), deg },
+          };
         }
         // Arc en creux : centre au-dessus, glyphes à l'intérieur.
         const cy = baseline + sagitta - radius;
-        const x = cx + radius * Math.sin(phi);
-        const y = cy + radius * Math.cos(phi);
-        return `<path transform="translate(${n(x)} ${n(y)}) rotate(${n(-deg)})" d="${g.d}"/>`;
+        return {
+          d: g.d,
+          at: { x: cx + radius * Math.sin(phi), y: cy + radius * Math.cos(phi), deg: -deg },
+        };
       });
-    parts.push(`<g fill="${fill}"${stroke}>${glyphs.join('')}</g>`);
-    return parts.join('');
   }
-
   const { anchor, x } = textAnchor(el);
-  const paths = textLines(el)
+  return textLines(el)
     .map((line, i) => shapeText(line, style).toPath(x, i * box + baseline, anchor))
     .filter(Boolean)
-    .map((d) => `<path d="${d}"/>`)
+    .map((d) => ({ d }));
+}
+
+/** Largeur naturelle d'un texte (ligne la plus longue) : ajustement d'un nom à sa zone. */
+export function shapeTextWidth(el: TextElement) {
+  const style = textStyle(el);
+  return Math.max(0, ...textLines(el).map((line) => shapeText(line, style).width));
+}
+
+// Nombres d'opentype : séparés par une espace ou par le signe moins, sans exposant.
+const PATH_TOKEN = /[MLQCZ]|-?[\d.]+/gi;
+
+/**
+ * Tracé d'un glyphe posé : rotation puis translation appliquées aux coordonnées (commandes
+ * absolues M, L, Q, C, Z d'opentype, toutes par paires x y).
+ */
+function placePath(d: string, at: { x: number; y: number; deg: number }) {
+  const a = (at.deg * Math.PI) / 180;
+  const cos = Math.cos(a);
+  const sin = Math.sin(a);
+  const out: string[] = [];
+  let x: number | null = null;
+  for (const token of d.match(PATH_TOKEN) ?? []) {
+    if (/[MLQCZ]/i.test(token)) {
+      out.push(token);
+    } else if (x === null) {
+      x = Number(token);
+    } else {
+      const y = Number(token);
+      out.push(`${n(at.x + x * cos - y * sin)} ${n(at.y + x * sin + y * cos)}`);
+      x = null;
+    }
+  }
+  return out.join(' ');
+}
+
+function renderText(el: TextElement, pid: string, defs: string[]) {
+  const fill = paintValue(el.fill, `${pid}-f`, defs);
+  const stroke =
+    el.stroke && el.stroke.width > 0 ? `${strokeAttrs(el.stroke, 2)} paint-order="stroke"` : '';
+  const parts: string[] = [];
+  if (el.highlight) {
+    const pad = el.highlight.padding;
+    parts.push(
+      `<rect x="${n(-pad)}" y="${n(-pad)}" width="${n(el.width + pad * 2)}" height="${n(el.height + pad * 2)}" rx="${n(el.highlight.radius)}" fill="${el.highlight.color}"/>`,
+    );
+  }
+  // Un seul tracé pour tout le texte, glyphes de l'arc déjà posés : les dégradés et bandes de
+  // couleurs s'étendent sur tout le texte, comme sur l'élément <text> du navigateur.
+  const d = textGlyphs(el)
+    .map((glyph) => (glyph.at ? placePath(glyph.d, glyph.at) : glyph.d))
     .join('');
-  parts.push(`<g fill="${fill}"${stroke}>${paths}</g>`);
+  const glyphs = d ? `<path d="${d}"/>` : '';
+  parts.push(paintGlyphs(el, glyphs, { fill, stroke, pid, defs }));
   return parts.join('');
+}
+
+/** Glyphes peints : simplement, ou en calques d'effets de lettrage. */
+function paintGlyphs(
+  el: TextElement,
+  glyphs: string,
+  paint: { fill: string; stroke: string; pid: string; defs: string[] },
+) {
+  if (!hasEffects(el.effects)) return `<g fill="${paint.fill}"${paint.stroke}>${glyphs}</g>`;
+  return letteringLayers({
+    glyphs,
+    pid: paint.pid,
+    fill: paint.fill,
+    stroke: el.stroke,
+    effects: el.effects,
+    box: { x: 0, y: 0, width: el.width, height: el.height },
+    size: el.fontSize,
+    defs: paint.defs,
+  });
 }
 
 // ─── Images, icônes, SVG ───

@@ -1,5 +1,6 @@
 import type { Prisma } from '@prisma/client';
 import { NAME_INCLUDE, toNameDto } from '../names/name.presenter';
+import { omit } from '../../common/utils/object.util';
 
 /** Relations nécessaires à la présentation d'un projet (type Project du front). */
 export const PROJECT_INCLUDE = {
@@ -26,7 +27,7 @@ type ProjectRow = Prisma.ProjectGetPayload<{ include: typeof PROJECT_INCLUDE }>;
 
 /** Brief tel que l'éditeur l'attend : champs texte facultatifs vides plutôt que null. */
 export function toBriefDto(brief: NonNullable<ProjectRow['brief']>) {
-  const { id: _id, projectId: _pid, updatedAt: _u, ...fields } = brief;
+  const fields = omit(brief, ['id', 'projectId', 'updatedAt']);
   return { ...fields, audience: fields.audience ?? '', tone: fields.tone ?? '' };
 }
 

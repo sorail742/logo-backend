@@ -1,25 +1,14 @@
 import { Global, Module } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { AiProvider } from './ai-provider';
 import { MockAiProvider } from './providers/mock.provider';
 
-/** Choix du fournisseur actif par configuration (AI_PROVIDER). */
+/**
+ * Fournisseur actif : AI_PROVIDER n'admet pour l'instant que « mock » (validé au démarrage) ;
+ * un nouveau fournisseur s'ajoute ici avec son choix par configuration.
+ */
 @Global()
 @Module({
-  providers: [
-    MockAiProvider,
-    {
-      provide: AiProvider,
-      inject: [ConfigService, MockAiProvider],
-      useFactory: (config: ConfigService, mock: MockAiProvider): AiProvider => {
-        switch (config.get<string>('AI_PROVIDER')) {
-          case 'mock':
-          default:
-            return mock;
-        }
-      },
-    },
-  ],
+  providers: [MockAiProvider, { provide: AiProvider, useExisting: MockAiProvider }],
   exports: [AiProvider],
 })
 export class AiModule {}

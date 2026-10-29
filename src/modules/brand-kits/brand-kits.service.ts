@@ -7,7 +7,7 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { JobKind, JobStatus, Prisma, type BrandKit } from '@prisma/client';
-import * as argon2 from 'argon2';
+import { argon2id, hash, verify } from 'argon2';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { StorageService } from '../../common/storage/storage.service';
 import { randomToken } from '../../common/utils/crypto.util';
@@ -117,9 +117,7 @@ export class BrandKitsService {
       }
       data = {
         shareToken: kit.shareToken ?? randomToken(18),
-        sharePasswordHash: dto.password
-          ? await argon2.hash(dto.password, { type: argon2.argon2id })
-          : null,
+        sharePasswordHash: dto.password ? await hash(dto.password, { type: argon2id }) : null,
         shareExpiresAt: expiresAt,
       };
     } else {
@@ -157,7 +155,7 @@ export class BrandKitsService {
           code: 'PASSWORD_REQUIRED',
         });
       }
-      if (!(await argon2.verify(kit.sharePasswordHash, password).catch(() => false))) {
+      if (!(await verify(kit.sharePasswordHash, password).catch(() => false))) {
         throw new UnauthorizedException({
           message: 'Mot de passe incorrect',
           code: 'PASSWORD_INVALID',

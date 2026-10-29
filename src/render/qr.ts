@@ -75,7 +75,7 @@ function gfMultiply(x: number, y: number) {
 }
 
 function rsDivisor(degree: number) {
-  const result = new Array<number>(degree).fill(0);
+  const result = Array.from<number>({ length: degree }).fill(0);
   result[degree - 1] = 1;
   let root = 1;
   for (let i = 0; i < degree; i++) {
@@ -136,9 +136,11 @@ class Matrix {
 
   constructor(readonly version: number) {
     this.size = version * 4 + 17;
-    this.dark = Array.from({ length: this.size }, () => new Array<boolean>(this.size).fill(false));
+    this.dark = Array.from({ length: this.size }, () =>
+      Array.from<boolean>({ length: this.size }).fill(false),
+    );
     this.reserved = Array.from({ length: this.size }, () =>
-      new Array<boolean>(this.size).fill(false),
+      Array.from<boolean>({ length: this.size }).fill(false),
     );
   }
 
