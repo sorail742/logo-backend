@@ -1,10 +1,10 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
+  ApparelDesignStatus,
   DesignElementKind,
+  GarmentCategory,
   GarmentView,
   PrintTechnique,
-  ProductCategory,
-  SizeScaling,
 } from '@prisma/client';
 import { Type } from 'class-transformer';
 import {
@@ -231,22 +231,15 @@ export class AdminZoneDto {
   @ApiProperty() @IsInt() @Min(0) @Max(2000) offsetYMm: number;
   @ApiProperty() @IsInt() @Min(5) @Max(2000) maxWidthMm: number;
   @ApiProperty() @IsInt() @Min(5) @Max(2000) maxHeightMm: number;
-  @ApiProperty({ enum: SizeScaling }) @IsEnum(SizeScaling) scaling: SizeScaling;
+  @ApiProperty({ enum: ['FIXED', 'PROPORTIONAL'] }) @IsIn(['FIXED', 'PROPORTIONAL']) scaling: string;
   @ApiPropertyOptional() @IsOptional() @IsObject() rules?: Record<string, unknown>;
 }
 
 export class AdminTemplateDto {
-  @ApiProperty({ enum: ProductCategory }) @IsEnum(ProductCategory) category: ProductCategory;
+  @ApiProperty({ enum: GarmentCategory }) @IsEnum(GarmentCategory) category: GarmentCategory;
   @ApiProperty() @IsString() @Length(1, 80) name: string;
-
-  @ApiProperty({
-    description: 'Clé de stockage du SVG par vue',
-    example: { FRONT: 'templates/cap/front.svg' },
-  })
-  @IsObject()
-  views: Record<string, string>;
-
-  @ApiPropertyOptional() @IsOptional() @IsBoolean() isActive?: boolean;
+  @ApiPropertyOptional() @IsOptional() @IsString() description?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() material?: string;
 
   @ApiProperty({ type: [AdminSizeDto] })
   @IsArray()

@@ -56,8 +56,8 @@ const input = (patch: Partial<PackInput> = {}): PackInput => ({
     proofUrl: null,
     approvedAt: null,
   },
-  zones: jersey.zones,
-  sizes: DEFAULT_SIZES,
+  zones: jersey.zones as any,
+  sizes: DEFAULT_SIZES as any,
   referenceSize: 'M',
   elements: [number, name, sponsor],
   players: [
@@ -110,7 +110,7 @@ describe('pack atelier : pièces', () => {
     const piece = buildPiece({
       key: 'k',
       player: 'k',
-      zone: { ...zone('back_name') },
+      zone: { ...zone('back_name') } as any,
       sizes: ['M'],
       elements: [name],
       scale: 1,

@@ -3,7 +3,8 @@
  * sans base de données. Unités : millimètres ; repère : bas du col, au milieu ;
  * X positif = côté gauche du porteur (TEX-02).
  */
-import type { DesignElementKind, PrintTechnique, SizeScaling } from '@prisma/client';
+import type { DesignElementKind, PrintTechnique } from '@prisma/client';
+import type { SizeScaling } from './apparel-defaults';
 import { contrastRatio, relativeLuminance } from '../../shared/color';
 import { parseCsv } from '../../shared/csv';
 
@@ -188,7 +189,8 @@ const STYLE_LABELS: Record<string, string> = {
 };
 
 const CUT_TECHNIQUES: PrintTechnique[] = ['HEAT_TRANSFER_VINYL', 'FLOCK'];
-export const MIN_RASTER_DPI = 300;
+export const MIN_RASTER_DPI = 150;
+export const WARN_RASTER_DPI = 200;
 export const MIN_EMBROIDERY_TEXT_MM = 5;
 export const MIN_GARMENT_CONTRAST = 3;
 
@@ -357,13 +359,22 @@ function techniqueIssues(
   }
   const dpi =
     c.pixelWidth !== undefined && el.widthMm > 0 ? c.pixelWidth / (el.widthMm / 25.4) : null;
-  if (dpi !== null && dpi < MIN_RASTER_DPI) {
-    issues.push({
-      ...ref,
-      code: 'LOW_RESOLUTION',
-      severity: 'error',
-      message: `Image à ${Math.round(dpi)} dpi à taille réelle, ${MIN_RASTER_DPI} dpi requis`,
-    });
+  if (dpi !== null) {
+    if (dpi < MIN_RASTER_DPI) {
+      issues.push({
+        ...ref,
+        code: 'LOW_RESOLUTION',
+        severity: 'error',
+        message: `Image à ${Math.round(dpi)} dpi à taille réelle, ${MIN_RASTER_DPI} dpi minimum requis (bloquant)`,
+      });
+    } else if (dpi < WARN_RASTER_DPI) {
+      issues.push({
+        ...ref,
+        code: 'LOW_RESOLUTION_WARNING',
+        severity: 'warning',
+        message: `Image à ${Math.round(dpi)} dpi à taille réelle : alerte résolution (< ${WARN_RASTER_DPI} dpi), risque de flou`,
+      });
+    }
   }
   return issues;
 }

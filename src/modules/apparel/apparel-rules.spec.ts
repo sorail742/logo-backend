@@ -13,7 +13,7 @@ import {
 
 const preset = (code: string) => DEFAULT_RULE_PRESETS.find((p) => p.code === code)!.rules;
 const football = DEFAULT_TEMPLATES.find((t) => t.category === 'FOOTBALL_JERSEY')!.zones as Zone[];
-const tshirt = DEFAULT_TEMPLATES.find((t) => t.category === 'TSHIRT')!.zones as Zone[];
+const tshirt = DEFAULT_TEMPLATES.find((t) => t.category === 'T_SHIRT')!.zones as Zone[];
 const size = (l: string) => DEFAULT_SIZES.find((s) => s.label === l)!;
 
 const backNumber = (heightMm: number, extra: Partial<Element> = {}): Element => ({
@@ -222,14 +222,14 @@ describe('zones et tailles (TEX-03)', () => {
 
   it('une zone proportionnelle suit la largeur de poitrine', () => {
     expect(resolveZone(sponsor, size('XL'), size('M')).maxWidthMm).toBeCloseTo(
-      250 * (580 / 520),
+      sponsor.maxWidthMm * (580 / 520),
       0,
     );
   });
 
   it('une zone fixe reste identique en adulte et se réduit pour un enfant', () => {
-    expect(resolveZone(number, size('3XL'), size('M')).maxHeightMm).toBe(350);
-    expect(resolveZone(number, size('8 ANS'), size('M')).maxHeightMm).toBeLessThan(350);
+    expect(resolveZone(number, size('3XL'), size('M')).maxHeightMm).toBe(number.maxHeightMm);
+    expect(resolveZone(number, size('8 ANS'), size('M')).maxHeightMm).toBeLessThan(number.maxHeightMm);
   });
 });
 

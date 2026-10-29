@@ -234,8 +234,6 @@ model Workspace {
   payments          Payment[]
   ledger            CreditLedgerEntry[]
   associationProofs AssociationProof[]
-  printShops        PrintShopProfile[]
-  numberFonts       NumberFontSet[]
   creditRequests    CreditAdjustmentRequest[]
 }
 
@@ -284,7 +282,6 @@ model Project {
   brandKits      BrandKit[]
   apparelDesigns ApparelDesign[]
   studioDesigns  StudioDesign[]
-  website        Website?
   jobs           GenerationJob[]
   comments       Comment[]
 
@@ -660,16 +657,31 @@ model AuditLog {
 }
 
 // ─── Module 5 : décoration textile ───
-enum ProductCategory {
-  TSHIRT
+enum PrintTechnique {
+  DTF                  // Transfert numérique direct sur film (polyvalent, sous-couche blanche chokée)
+  SCREEN_PRINT         // Sérigraphie (tons directs, typons séparés 1 à 6 couleurs)
+  EMBROIDERY           // Broderie (fils Madeira/Gunold, estimation de points)
+  HEAT_TRANSFER_VINYL  // Flex / Vinyle thermocollant (découpe plotter vectorielle)
+  FLOCK                // Flocage velours
+  SUBLIMATION          // Sublimation (polyester clair/blanc)
+  DTG                  // Impression directe jet d'encre sur textile
+}
+
+enum ApparelDesignStatus {
+  DRAFT         // En cours d'édition
+  PROOF_SENT    // BAT envoyé au client
+  APPROVED      // Validé et signé par le client
+  IN_PRODUCTION // En cours de fabrication atelier
+}
+
+enum GarmentCategory {
+  T_SHIRT
   POLO
   FOOTBALL_JERSEY
   BASKETBALL_JERSEY
   SHORTS
   HOODIE
   CAP
-  BAG
-  OTHER
 }
 
 enum GarmentView {
@@ -678,22 +690,7 @@ enum GarmentView {
   LEFT_SLEEVE
   RIGHT_SLEEVE
   SHORTS_FRONT
-  OTHER
-}
-
-enum PrintTechnique {
-  SCREEN_PRINT
-  HEAT_TRANSFER_VINYL
-  FLOCK
-  DTF
-  DTG
-  SUBLIMATION
-  EMBROIDERY
-}
-
-enum SizeScaling {
-  FIXED
-  PROPORTIONAL
+  SHORTS_BACK
 }
 
 enum DesignElementKind {
@@ -706,74 +703,25 @@ enum DesignElementKind {
   PATTERN
 }
 
-enum ApparelDesignStatus {
-  DRAFT
-  PROOF_SENT
-  APPROVED
-  IN_PRODUCTION
-}
-
-model ProductTemplate {
-  id        String          @id @default(uuid())
-  category  ProductCategory
-  name      String
-  views     Json // { FRONT: clé du SVG, BACK: … }
-  isActive  Boolean         @default(true)
-  createdAt DateTime        @default(now())
-  sizes     ProductSize[]
-  zones     PrintZone[]
-  designs   ApparelDesign[]
-}
-
-model ProductSize {
-  id           String          @id @default(uuid())
-  templateId   String
-  label        String // 4 ans … 3XL
-  chestWidthMm Int // largeur de poitrine à plat
-  bodyLengthMm Int
-  sortOrder    Int
-  template     ProductTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
-
-  @@unique([templateId, label])
-}
-
-model PrintZone {
-  id          String          @id @default(uuid())
-  templateId  String
-  key         String // left_chest, back_number…
-  view        GarmentView
-  label       String
-  offsetXMm   Int // depuis l'axe ; positif = gauche du porteur
-  offsetYMm   Int // depuis le bas du col
-  maxWidthMm  Int
-  maxHeightMm Int
-  scaling     SizeScaling     @default(PROPORTIONAL)
-  rules       Json? // ex. { minStrokeMm: 20 }
-  template    ProductTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
-
-  @@unique([templateId, key])
+model ApparelTemplate {
+  id          String            @id @default(uuid())
+  category    GarmentCategory
+  name        String
+  description String?
+  material    String?           // ex: "100% Coton peigné 180g" ou "100% Polyester respirant"
+  sizes       Json              // [{ label: "S", chestWidthMm: 480, heightMm: 700 }, ...]
+  zones       Json              // [{ key: "chest_left", name: "Cœur", view: "FRONT", maxWidthMm: 90, maxHeightMm: 90, ... }]
+  designs     ApparelDesign[]
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
 }
 
 model RulePreset {
-  id      String          @id @default(uuid())
-  code    String          @unique // FOOTBALL_MEN, FOOTBALL_WOMEN, FIBA, LOCAL_…
-  name    String
-  rules   Json // hauteurs, traits, écarts, numéros autorisés, couleurs
-  designs ApparelDesign[]
-}
-
-model PrintShopProfile {
-  id            String           @id @default(uuid())
-  workspaceId   String
-  name          String
-  techniques    PrintTechnique[]
-  maxPrintWMm   Int
-  maxPrintHMm   Int
-  minStrokeMm   Json? // par technique
-  vinylColors   Json? // couleurs de flex en stock
-  garmentSizes  Json? // mesures réelles du fournisseur
-  mirrorDefault Boolean          @default(false)
-  workspace     Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  id          String          @id @default(uuid())
+  code        String          @unique // FOOTBALL_MEN, FOOTBALL_WOMEN, FIBA, FFF, NBA, FREE
+  name        String
+  rules       Json            // Règles d'interdiction, dimensions min/max des numéros, zones protégées
+  designs     ApparelDesign[]
 }
 
 model ApparelDesign {
@@ -782,70 +730,61 @@ model ApparelDesign {
   templateId   String
   rulePresetId String?
   name         String
-  technique    PrintTechnique
-  garmentColor String // HEX
+  technique    PrintTechnique      @default(DTF)
+  garmentColor String              // Code HEX (ex: "#0D6E5F")
   status       ApparelDesignStatus @default(DRAFT)
-  proofToken   String?             @unique // lien BAT
+  proofToken   String?             @unique // Token aléatoire 32 caractères pour le BAT public
   approvedAt   DateTime?
+  approverName String?
   createdAt    DateTime            @default(now())
   updatedAt    DateTime            @updatedAt
   project      Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  template     ProductTemplate     @relation(fields: [templateId], references: [id])
+  template     ApparelTemplate     @relation(fields: [templateId], references: [id])
   rulePreset   RulePreset?         @relation(fields: [rulePresetId], references: [id])
-  elements     DesignElement[]
+  elements     ApparelElement[]
   roster       TeamRoster?
   exports      ProductionExport[]
+
+  @@index([projectId])
 }
 
-model DesignElement {
+model ApparelElement {
   id          String            @id @default(uuid())
   designId    String
-  zoneKey     String
+  zoneKey     String            // ex: "chest_left", "front_full", "back_full"
   kind        DesignElementKind
-  content     Json // SVG, texte, police, couleurs, assetId
+  content     Json              // photo: { src, naturalWidth, naturalHeight }, text, fontId
   widthMm     Float
   heightMm    Float
-  offsetXMm   Float             @default(0) // dans la zone
+  offsetXMm   Float             @default(0)
   offsetYMm   Float             @default(0)
   rotationDeg Float             @default(0)
   zIndex      Int               @default(0)
   design      ApparelDesign     @relation(fields: [designId], references: [id], onDelete: Cascade)
+
+  @@index([designId])
 }
 
 model TeamRoster {
   id       String        @id @default(uuid())
   designId String        @unique
-  name     String
-  design   ApparelDesign @relation(fields: [designId], references: [id], onDelete: Cascade)
+  name     String        @default("Effectif")
   entries  RosterEntry[]
+  design   ApparelDesign @relation(fields: [designId], references: [id], onDelete: Cascade)
 }
 
 model RosterEntry {
   id          String     @id @default(uuid())
   rosterId    String
   playerName  String
-  displayName String // nom imprimé au dos
-  number      String? // texte pour accepter "0" et "00"
-  size        String
+  displayName String     // Nom imprimé au dos (ex: "CAMARA")
+  number      String?    // Floqué (ex: "10", "07", "00")
+  size        String     // S, M, L, XL...
   quantity    Int        @default(1)
-  role        String? // joueur, gardien, staff
+  role        String?    // Joueur, Gardien, Staff
   roster      TeamRoster @relation(fields: [rosterId], references: [id], onDelete: Cascade)
 
-  @@unique([rosterId, number])
-}
-
-model NumberFontSet {
-  id          String       @id @default(uuid())
-  workspaceId String? // null = bibliothèque de la plateforme
-  name        String
-  style       String // CLASSIC_OUTLINE, GEOMETRIC_INLINE, NOTCHED, RIBBON_3D…
-  glyphs      Json // tracés SVG 0-9 et A-Z
-  colorCount  Int          @default(1)
-  minStrokeMm Float
-  license     LicenseKind?
-  fontFileKey String? // OTF généré
-  createdAt   DateTime     @default(now())
-  workspace   Workspace?   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  @@index([rosterId])
 }
 
 model ProductionExport {
@@ -854,57 +793,10 @@ model ProductionExport {
   technique   PrintTechnique
   mirrored    Boolean        @default(false)
   status      JobStatus      @default(QUEUED)
-  zipKey      String?
-  techPackKey String?
+  zipUrl      String?
+  techPackUrl String?
   createdAt   DateTime       @default(now())
   design      ApparelDesign  @relation(fields: [designId], references: [id], onDelete: Cascade)
-}
 
-/// Site web de la marque (une page complète), publié sous /site/<slug>.
-model Website {
-  id          String           @id @default(uuid())
-  projectId   String           @unique
-  slug        String           @unique
-  /// Logo affiché (sa version courante) ; à défaut, le favori ou le plus récent du projet.
-  logoId      String?
-  content     Json
-  published   Boolean          @default(false)
-  publishedAt DateTime?
-  /// Page publiée, rendue à la publication et à chaque modification d'un site en ligne.
-  html        String?
-  views       Int              @default(0)
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
-  project     Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  media       WebsiteMedia[]
-  messages    WebsiteMessage[]
-}
-
-/// Image téléversée pour le site (visuel d'accueil, galerie).
-model WebsiteMedia {
-  id         String   @id @default(uuid())
-  websiteId  String
-  storageKey String
-  mimeType   String
-  sizeBytes  Int
-  alt        String   @default("")
-  createdAt  DateTime @default(now())
-  website    Website  @relation(fields: [websiteId], references: [id], onDelete: Cascade)
-
-  @@index([websiteId])
-}
-
-/// Message reçu par le formulaire de contact du site publié.
-model WebsiteMessage {
-  id        String    @id @default(uuid())
-  websiteId String
-  name      String
-  email     String?
-  phone     String?
-  message   String
-  readAt    DateTime?
-  createdAt DateTime  @default(now())
-  website   Website   @relation(fields: [websiteId], references: [id], onDelete: Cascade)
-
-  @@index([websiteId, createdAt])
+  @@index([designId])
 }

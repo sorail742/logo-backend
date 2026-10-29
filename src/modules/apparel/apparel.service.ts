@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import {
   BadRequestException,
   ConflictException,
@@ -9,14 +10,13 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { ApparelDesignStatus, PrintTechnique, Prisma } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
-import { randomToken } from '../../common/utils/crypto.util';
 import { AuditService } from '../audit/audit.service';
-import { parseElementContents } from './apparel-content';
 import { REFERENCE_SIZE, RULES_DISCLAIMER } from './apparel-defaults';
 import {
   checkDesign,
   checkRoster,
   Element,
+  ElementContent,
   fitText,
   Issue,
   parseRosterCsv,
@@ -29,20 +29,16 @@ import {
   AdminTemplateDto,
   CreateApparelDesignDto,
   DesignElementDto,
-  PrintShopDto,
   RosterEntryDto,
   UpdateApparelDesignDto,
 } from './apparel.dto';
 
 const DESIGN_INCLUDE = {
-  template: { select: { id: true, name: true, category: true } },
+  template: true,
   rulePreset: true,
   elements: { orderBy: { zIndex: 'asc' } },
   roster: { include: { entries: { orderBy: { number: 'asc' } } } },
 } satisfies Prisma.ApparelDesignInclude;
-
-/** Statuts qui exigent une nouvelle validation après toute modification. */
-const LOCKED: ApparelDesignStatus[] = ['PROOF_SENT', 'APPROVED'];
 
 @Injectable()
 export class ApparelService {
@@ -52,20 +48,17 @@ export class ApparelService {
     private readonly config: ConfigService,
   ) {}
 
-  // ─── Supports et préréglages ───
+  // ─── Gabarits et préréglages ───
 
   templates() {
-    return this.prisma.productTemplate.findMany({
-      where: { isActive: true },
-      include: { sizes: { orderBy: { sortOrder: 'asc' } }, zones: { orderBy: { key: 'asc' } } },
+    return this.prisma.apparelTemplate.findMany({
       orderBy: { name: 'asc' },
     });
   }
 
   template(id: string) {
-    return this.prisma.productTemplate.findUniqueOrThrow({
+    return this.prisma.apparelTemplate.findUniqueOrThrow({
       where: { id },
-      include: { sizes: { orderBy: { sortOrder: 'asc' } }, zones: { orderBy: { key: 'asc' } } },
     });
   }
 
@@ -77,14 +70,22 @@ export class ApparelService {
   // ─── Tenues ───
 
   async createDesign(projectId: string, dto: CreateApparelDesignDto) {
-    const template = await this.prisma.productTemplate.findUnique({
+    await this.prisma.apparelTemplate.findUniqueOrThrow({
       where: { id: dto.templateId },
     });
-    if (!template?.isActive) throw new BadRequestException('Support introuvable ou désactivé');
-    if (dto.rulePresetId)
+    if (dto.rulePresetId) {
       await this.prisma.rulePreset.findUniqueOrThrow({ where: { id: dto.rulePresetId } });
+    }
     return this.prisma.apparelDesign.create({
-      data: { projectId, ...dto },
+      data: {
+        projectId,
+        templateId: dto.templateId,
+        rulePresetId: dto.rulePresetId,
+        name: dto.name,
+        technique: dto.technique,
+        garmentColor: dto.garmentColor,
+        status: ApparelDesignStatus.DRAFT,
+      },
       include: DESIGN_INCLUDE,
     });
   }
@@ -104,20 +105,46 @@ export class ApparelService {
     return this.prisma.apparelDesign.findUniqueOrThrow({ where: { id }, include: DESIGN_INCLUDE });
   }
 
+  /**
+   * Modification d'une tenue.
+   * RÈGLE CRUCIALE : si proofToken existait, le révoquer et repasser la tenue au statut DRAFT
+   * (toute modification invalide un BAT déjà envoyé).
+   */
   async updateDesign(id: string, dto: UpdateApparelDesignDto) {
     const design = await this.prisma.apparelDesign.findUniqueOrThrow({ where: { id } });
-    if (dto.rulePresetId)
+    if (dto.rulePresetId) {
       await this.prisma.rulePreset.findUniqueOrThrow({ where: { id: dto.rulePresetId } });
+    }
+    const revokeData: Prisma.ApparelDesignUpdateInput = design.proofToken
+      ? {
+          proofToken: null,
+          status: ApparelDesignStatus.DRAFT,
+          approvedAt: null,
+          approverName: null,
+        }
+      : {};
+
+    const { rulePresetId, ...restDto } = dto;
+    const rulePresetUpdate: Prisma.ApparelDesignUpdateInput =
+      rulePresetId === null
+        ? { rulePreset: { disconnect: true } }
+        : rulePresetId !== undefined
+          ? { rulePreset: { connect: { id: rulePresetId } } }
+          : {};
+
     return this.prisma.apparelDesign.update({
       where: { id },
-      data: { ...dto, ...this.unlock(design.status) },
+      data: {
+        ...restDto,
+        ...rulePresetUpdate,
+        ...revokeData,
+      },
       include: DESIGN_INCLUDE,
     });
   }
 
   /**
-   * Copie en brouillon d'une tenue, avec ses impressions et son effectif : variante (domicile,
-   * extérieur), nouvelle saison ou fête de l'année suivante, sans toucher à la tenue validée.
+   * Duplication complète de la tenue avec éléments et effectif.
    */
   async duplicateDesign(id: string) {
     const source = await this.prisma.apparelDesign.findUniqueOrThrow({
@@ -133,6 +160,7 @@ export class ApparelService {
         name: `${source.name} (copie)`.slice(0, 120),
         technique: source.technique,
         garmentColor: source.garmentColor,
+        status: ApparelDesignStatus.DRAFT,
         elements: {
           create: source.elements.map((el) => ({
             zoneKey: el.zoneKey,
@@ -172,79 +200,78 @@ export class ApparelService {
     await this.prisma.apparelDesign.delete({ where: { id } });
   }
 
-  /** Enregistre l'état complet de l'éditeur (remplacement). */
+  /**
+   * Remplacement atomique de tous les éléments d'une tenue (sauvegarde auto du Studio).
+   * Valider que chaque zoneKey appartient au template.
+   */
   async saveElements(id: string, elements: DesignElementDto[]) {
     const design = await this.prisma.apparelDesign.findUniqueOrThrow({
       where: { id },
-      include: { template: { include: { zones: { select: { key: true } } } } },
+      include: { template: true },
     });
-    const keys = new Set(design.template.zones.map((z) => z.key));
-    const unknown = elements.filter((e) => !keys.has(e.zoneKey)).map((e) => e.zoneKey);
-    if (unknown.length) {
+    const templateZones = (design.template.zones as unknown as Zone[]) || [];
+    const validZoneKeys = new Set(templateZones.map((z) => z.key));
+    const unknown = elements.filter((e) => !validZoneKeys.has(e.zoneKey)).map((e) => e.zoneKey);
+    if (unknown.length > 0) {
       throw new BadRequestException(
-        `Zones absentes de ce support : ${[...new Set(unknown)].join(', ')}`,
+        `Zones absentes de ce gabarit : ${[...new Set(unknown)].join(', ')}`,
       );
     }
-    const contents = parseElementContents(elements.map((e) => e.content));
+
+    const revokeData: Prisma.ApparelDesignUpdateInput = design.proofToken
+      ? {
+          proofToken: null,
+          status: ApparelDesignStatus.DRAFT,
+          approvedAt: null,
+          approverName: null,
+        }
+      : {};
 
     await this.prisma.$transaction([
-      this.prisma.designElement.deleteMany({ where: { designId: id } }),
-      this.prisma.designElement.createMany({
+      this.prisma.apparelElement.deleteMany({ where: { designId: id } }),
+      this.prisma.apparelElement.createMany({
         data: elements.map((e, i) => ({
           designId: id,
           zoneKey: e.zoneKey,
           kind: e.kind,
-          content: contents[i],
+          content: e.content as Prisma.InputJsonValue,
           widthMm: e.widthMm,
           heightMm: e.heightMm,
-          offsetXMm: e.offsetXMm,
-          offsetYMm: e.offsetYMm,
+          offsetXMm: e.offsetXMm ?? 0,
+          offsetYMm: e.offsetYMm ?? 0,
           rotationDeg: e.rotationDeg ?? 0,
           zIndex: e.zIndex ?? i,
         })),
       }),
-      this.prisma.apparelDesign.update({ where: { id }, data: this.unlock(design.status) }),
+      this.prisma.apparelDesign.update({ where: { id }, data: revokeData }),
     ]);
     return this.getDesign(id);
   }
 
-  /** Une tenue modifiée après envoi du BAT doit être revalidée. */
-  private unlock(status: ApparelDesignStatus): Prisma.ApparelDesignUncheckedUpdateInput {
-    return LOCKED.includes(status)
-      ? { status: ApparelDesignStatus.DRAFT, approvedAt: null, proofToken: null }
-      : {};
-  }
+  // ─── Contrôle de conformité (POST /apparel-designs/:did/check) ───
 
-  // ─── Contrôle de conformité (TEX-10, POST /check) ───
-
-  async check(id: string, opts: { workspaceId?: string; printShopId?: string } = {}) {
+  async check(id: string) {
     const design = await this.prisma.apparelDesign.findUniqueOrThrow({
       where: { id },
       include: {
-        template: { include: { zones: true, sizes: true } },
+        template: true,
         rulePreset: true,
         elements: true,
         roster: { include: { entries: true } },
       },
     });
 
-    let minStrokeMm: Partial<Record<PrintTechnique, number>> | undefined;
-    if (opts.printShopId) {
-      const shop = await this.prisma.printShopProfile.findFirst({
-        where: { id: opts.printShopId, ...(opts.workspaceId && { workspaceId: opts.workspaceId }) },
-      });
-      if (!shop) throw new NotFoundException('Profil atelier introuvable');
-      minStrokeMm = (shop.minStrokeMm ?? undefined) as typeof minStrokeMm;
-      if (!shop.techniques.includes(design.technique)) {
-        throw new BadRequestException('Cet atelier ne propose pas la technique choisie');
-      }
-    }
-
     const preset = (design.rulePreset?.rules ?? null) as PresetRules | null;
-    const zones: Zone[] = design.template.zones;
+    const zones = (design.template.zones as unknown as Zone[]) || [];
     const elements: Element[] = design.elements.map((e) => ({
-      ...e,
-      content: (e.content ?? {}) as Element['content'],
+      id: e.id,
+      zoneKey: e.zoneKey,
+      kind: e.kind,
+      widthMm: e.widthMm,
+      heightMm: e.heightMm,
+      offsetXMm: e.offsetXMm,
+      offsetYMm: e.offsetYMm,
+      content: (e.content ?? {}) as ElementContent,
     }));
 
     const issues: Issue[] = checkDesign({
@@ -253,32 +280,28 @@ export class ApparelService {
       technique: design.technique,
       garmentColor: design.garmentColor,
       preset,
-      minStrokeMm,
     });
 
     if (design.roster) {
+      const templateSizes = (design.template.sizes as unknown as Array<{ label: string }>) || [];
+      const sizeLabels = templateSizes.map((s) => s.label);
       const entries = design.roster.entries;
-      issues.push(
-        ...checkRoster(
-          entries,
-          design.template.sizes.map((s) => s.label),
-          preset,
-        ),
-      );
+      issues.push(...checkRoster(entries, sizeLabels, preset));
       issues.push(...this.checkNames(entries, zones, elements, preset));
     }
 
     const errors = issues.filter((i) => i.severity === 'error');
+    const warnings = issues.filter((i) => i.severity === 'warning');
+
     return {
       ok: errors.length === 0,
       errors,
-      warnings: issues.filter((i) => i.severity === 'warning'),
+      warnings,
       disclaimer: design.rulePreset ? RULES_DISCLAIMER : undefined,
       referenceSize: REFERENCE_SIZE,
     };
   }
 
-  /** Le nom le plus long doit tenir dans sa zone sans descendre sous le minimum (TEX-23). */
   private checkNames(
     entries: RosterRow[],
     zones: Zone[],
@@ -303,7 +326,7 @@ export class ApparelService {
     });
   }
 
-  // ─── Effectif (TEX-40 à TEX-44) ───
+  // ─── Effectif (TeamRoster) ───
 
   getRoster(designId: string) {
     return this.prisma.teamRoster.findUnique({
@@ -314,15 +337,16 @@ export class ApparelService {
 
   async importRoster(designId: string, csv: string, name?: string) {
     const { rows, errors } = parseRosterCsv(csv);
-    if (errors.length)
+    if (errors.length) {
       throw new UnprocessableEntityException({ message: 'Fichier d’effectif invalide', errors });
+    }
     return this.saveRoster(designId, name ?? 'Effectif', rows);
   }
 
   async saveRoster(designId: string, name: string, rows: (RosterRow | RosterEntryDto)[]) {
     const design = await this.prisma.apparelDesign.findUniqueOrThrow({
       where: { id: designId },
-      include: { template: { include: { sizes: true } }, rulePreset: true },
+      include: { template: true, rulePreset: true },
     });
     const normalized: RosterRow[] = rows.map((r) => ({
       playerName: r.playerName.trim(),
@@ -333,9 +357,11 @@ export class ApparelService {
       role: r.role?.trim() || null,
     }));
 
+    const templateSizes = (design.template.sizes as unknown as Array<{ label: string }>) || [];
+    const sizeLabels = templateSizes.map((s) => s.label);
     const issues = checkRoster(
       normalized,
-      design.template.sizes.map((s) => s.label),
+      sizeLabels,
       design.rulePreset?.rules as PresetRules | null,
     );
     if (issues.some((i) => i.severity === 'error')) {
@@ -350,7 +376,15 @@ export class ApparelService {
       });
       await tx.rosterEntry.deleteMany({ where: { rosterId: roster.id } });
       await tx.rosterEntry.createMany({
-        data: normalized.map((r) => ({ ...r, rosterId: roster.id, quantity: r.quantity ?? 1 })),
+        data: normalized.map((r) => ({
+          rosterId: roster.id,
+          playerName: r.playerName,
+          displayName: r.displayName,
+          number: r.number,
+          size: r.size,
+          quantity: r.quantity ?? 1,
+          role: r.role,
+        })),
       });
     });
 
@@ -358,58 +392,61 @@ export class ApparelService {
     return { roster, summary: sizeSummary(normalized) };
   }
 
-  // ─── BAT (TEX-37) ───
+  // ─── BAT (Bon à tirer public) ───
 
+  /**
+   * POST /apparel-designs/:did/proof : Génère le token public de BAT (32 caractères hex)
+   * et passe à PROOF_SENT. Rejette avec code HTTP 422 si l'audit check a des erreurs bloquantes.
+   * Si { revoke: true }, annule le token.
+   */
   async proof(designId: string, revoke = false) {
     const design = await this.prisma.apparelDesign.findUniqueOrThrow({ where: { id: designId } });
     if (revoke) {
       await this.prisma.apparelDesign.update({
         where: { id: designId },
-        data: { proofToken: null, ...(design.status === 'PROOF_SENT' && { status: 'DRAFT' }) },
+        data: {
+          proofToken: null,
+          status: design.status === 'PROOF_SENT' ? ApparelDesignStatus.DRAFT : design.status,
+        },
       });
       return { revoked: true };
     }
-    if (design.status === 'APPROVED' || design.status === 'IN_PRODUCTION') {
+    if (design.status === ApparelDesignStatus.APPROVED || design.status === ApparelDesignStatus.IN_PRODUCTION) {
       throw new ConflictException('Cette tenue est déjà approuvée');
     }
     const report = await this.check(designId);
     if (!report.ok) {
       throw new UnprocessableEntityException({
-        message: 'Corrigez les erreurs avant d’envoyer le BAT',
+        message: 'Corrigez les erreurs bloquantes avant d’envoyer le BAT',
         issues: report.errors,
       });
     }
-    const token = design.proofToken ?? randomToken(24);
+
+    // Token aléatoire de 32 caractères hexadécimaux
+    const token = design.proofToken ?? randomBytes(16).toString('hex');
     await this.prisma.apparelDesign.update({
       where: { id: designId },
-      data: { proofToken: token, status: 'PROOF_SENT' },
+      data: { proofToken: token, status: ApparelDesignStatus.PROOF_SENT },
     });
-    return { token, url: `${this.config.getOrThrow<string>('APP_URL')}/bat/${token}` };
+    return {
+      token,
+      url: `${this.config.getOrThrow<string>('APP_URL')}/bat/${token}`,
+    };
   }
 
+  /**
+   * GET /public/proofs/:token : Route publique (sans auth) pour consultation du BAT
+   * avec rendu des faces et tableau d'effectif.
+   */
   async publicProof(token: string) {
     const design = await this.prisma.apparelDesign.findUnique({
       where: { proofToken: token },
-      select: {
-        name: true,
-        technique: true,
-        garmentColor: true,
-        status: true,
-        approvedAt: true,
-        // Zones : la page du BAT place chaque élément sur le vêtement.
-        template: {
-          select: {
-            name: true,
-            category: true,
-            views: true,
-            zones: { orderBy: { key: 'asc' } },
-          },
-        },
+      include: {
+        template: true,
         elements: { orderBy: { zIndex: 'asc' } },
         roster: {
-          select: {
-            name: true,
-            entries: { select: { displayName: true, number: true, size: true, quantity: true } },
+          include: {
+            entries: { orderBy: { number: 'asc' } },
           },
         },
       },
@@ -418,19 +455,32 @@ export class ApparelService {
     return design;
   }
 
-  /** Approbation horodatée et tracée (adresse IP, nom du signataire). */
+  /**
+   * POST /public/proofs/:token/approve : Route publique (sans auth) :
+   * Validation et signature par le client (approverName). Statut -> APPROVED, horodatage approvedAt.
+   */
   async approveProof(token: string, approverName: string, ip: string) {
     const design = await this.prisma.apparelDesign.findUnique({ where: { proofToken: token } });
     if (!design) throw new NotFoundException('BAT introuvable ou révoqué');
-    if (design.status === 'APPROVED')
-      return { status: design.status, approvedAt: design.approvedAt };
-    if (design.status !== 'PROOF_SENT')
+    if (design.status === ApparelDesignStatus.APPROVED) {
+      return {
+        status: design.status,
+        approvedAt: design.approvedAt,
+        approverName: design.approverName,
+      };
+    }
+    if (design.status !== ApparelDesignStatus.PROOF_SENT) {
       throw new GoneException('Ce BAT n’est plus en attente d’approbation');
+    }
 
     const approvedAt = new Date();
     const updated = await this.prisma.apparelDesign.updateMany({
-      where: { id: design.id, status: 'PROOF_SENT', proofToken: token },
-      data: { status: 'APPROVED', approvedAt },
+      where: { id: design.id, status: ApparelDesignStatus.PROOF_SENT, proofToken: token },
+      data: {
+        status: ApparelDesignStatus.APPROVED,
+        approvedAt,
+        approverName,
+      },
     });
     if (updated.count === 0) throw new GoneException('Ce BAT a été modifié entre-temps');
 
@@ -442,55 +492,35 @@ export class ApparelService {
       after: { approverName, approvedAt },
       ip,
     });
-    return { status: 'APPROVED', approvedAt };
+    return { status: ApparelDesignStatus.APPROVED, approvedAt, approverName };
   }
 
-  // ─── Profils atelier (TEX-05) ───
+  // ─── Administration (Gabarits & Préréglages) ───
 
-  printShops(workspaceId: string) {
-    return this.prisma.printShopProfile.findMany({
-      where: { workspaceId },
-      orderBy: { name: 'asc' },
+  createTemplate(dto: AdminTemplateDto) {
+    return this.prisma.apparelTemplate.create({
+      data: {
+        category: dto.category,
+        name: dto.name,
+        description: dto.description,
+        material: dto.material,
+        sizes: dto.sizes as unknown as Prisma.InputJsonValue,
+        zones: dto.zones as unknown as Prisma.InputJsonValue,
+      },
     });
   }
 
-  createPrintShop(workspaceId: string, dto: PrintShopDto) {
-    const data = toShopData(dto) as Omit<
-      Prisma.PrintShopProfileUncheckedCreateInput,
-      'workspaceId'
-    >;
-    return this.prisma.printShopProfile.create({ data: { ...data, workspaceId } });
-  }
-
-  async updatePrintShop(workspaceId: string, id: string, dto: Partial<PrintShopDto>) {
-    const shop = await this.prisma.printShopProfile.findFirst({ where: { id, workspaceId } });
-    if (!shop) throw new NotFoundException('Profil atelier introuvable');
-    return this.prisma.printShopProfile.update({ where: { id }, data: toShopData(dto) });
-  }
-
-  // ─── Administration (TEX-04) ───
-
-  async createTemplate(dto: AdminTemplateDto) {
-    assertUniqueKeys(dto);
-    const { sizes, zones, ...data } = dto;
-    return this.prisma.productTemplate.create({
-      data: { ...data, sizes: { create: sizes }, zones: { create: zones.map(zoneData) } },
-      include: { sizes: true, zones: true },
-    });
-  }
-
-  /** Remplace intégralement tailles et zones : un nouveau support sans déploiement. */
-  async updateTemplate(id: string, dto: AdminTemplateDto) {
-    assertUniqueKeys(dto);
-    const { sizes, zones, ...data } = dto;
-    return this.prisma.$transaction(async (tx) => {
-      await tx.productSize.deleteMany({ where: { templateId: id } });
-      await tx.printZone.deleteMany({ where: { templateId: id } });
-      return tx.productTemplate.update({
-        where: { id },
-        data: { ...data, sizes: { create: sizes }, zones: { create: zones.map(zoneData) } },
-        include: { sizes: true, zones: true },
-      });
+  updateTemplate(id: string, dto: AdminTemplateDto) {
+    return this.prisma.apparelTemplate.update({
+      where: { id },
+      data: {
+        category: dto.category,
+        name: dto.name,
+        description: dto.description,
+        material: dto.material,
+        sizes: dto.sizes as unknown as Prisma.InputJsonValue,
+        zones: dto.zones as unknown as Prisma.InputJsonValue,
+      },
     });
   }
 
@@ -512,24 +542,4 @@ function sizeSummary(rows: RosterRow[]) {
     garments: Object.values(bySize).reduce((a, b) => a + b, 0),
     bySize,
   };
-}
-
-function toShopData(dto: Partial<PrintShopDto>) {
-  return {
-    ...dto,
-    minStrokeMm: dto.minStrokeMm as Prisma.InputJsonValue | undefined,
-    vinylColors: dto.vinylColors as Prisma.InputJsonValue | undefined,
-    garmentSizes: dto.garmentSizes as Prisma.InputJsonValue | undefined,
-  } as Prisma.PrintShopProfileUncheckedUpdateInput;
-}
-
-function zoneData(z: AdminTemplateDto['zones'][number]) {
-  return { ...z, rules: z.rules as Prisma.InputJsonValue | undefined };
-}
-
-function assertUniqueKeys(dto: AdminTemplateDto) {
-  const dup = (arr: string[]) => arr.find((v, i) => arr.indexOf(v) !== i);
-  const zone = dup(dto.zones.map((z) => z.key));
-  const size = dup(dto.sizes.map((s) => s.label));
-  if (zone || size) throw new BadRequestException(`Doublon : ${zone ?? size}`);
 }

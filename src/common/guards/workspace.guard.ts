@@ -142,7 +142,6 @@ export class WorkspaceGuard implements CanActivate {
       ['sdid', (id) => this.prisma.studioDesign.findUnique({ where: { id }, select })],
       ['cid', (id) => this.prisma.comment.findUnique({ where: { id }, select })],
       ['jid', (id) => this.prisma.generationJob.findUnique({ where: { id }, select })],
-      ['webid', (id) => this.prisma.website.findUnique({ where: { id }, select })],
     ];
     for (const [param, find] of lookups) {
       const id = params[param];

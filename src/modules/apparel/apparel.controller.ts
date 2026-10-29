@@ -25,13 +25,12 @@ import {
   WorkspaceAccess,
 } from '../../common/decorators';
 import { AuditService } from '../audit/audit.service';
+import { projectEvent } from '../projects/project-activity';
 import {
   AdminRulePresetDto,
   AdminTemplateDto,
   ApproveProofDto,
-  CheckDesignDto,
   CreateApparelDesignDto,
-  PrintShopDto,
   ProductionExportDto,
   ProofDto,
   RosterImportDto,
@@ -39,11 +38,10 @@ import {
   SaveRosterDto,
   UpdateApparelDesignDto,
 } from './apparel.dto';
-import { projectEvent } from '../projects/project-activity';
 import { ApparelService } from './apparel.service';
 import { ProductionService } from './production.service';
 
-/** Module 5 — décoration textile (§16.11). */
+/** Module textile & création de tenues (ApparelController). */
 @ApiTags('apparel')
 @ApiBearerAuth()
 @Controller()
@@ -115,12 +113,8 @@ export class ApparelController {
   @Post('apparel-designs/:did/check')
   @WorkspaceAccess('EDITOR')
   @HttpCode(HttpStatus.OK)
-  check(
-    @Param('did', ParseUUIDPipe) did: string,
-    @Body() dto: CheckDesignDto,
-    @CurrentWorkspace() ws: WorkspaceContext,
-  ) {
-    return this.apparel.check(did, { workspaceId: ws.workspaceId, printShopId: dto.printShopId });
+  check(@Param('did', ParseUUIDPipe) did: string) {
+    return this.apparel.check(did);
   }
 
   @Post('apparel-designs/:did/roster/import')
@@ -149,7 +143,9 @@ export class ApparelController {
     return this.apparel.proof(did, dto.revoke ?? false);
   }
 
-  /** Pack atelier : fichiers du support d'impression, un fichier par joueur, fiche technique (202 + jobId). */
+  /**
+   * Pack atelier : génération BullMQ du pack atelier (2 crédits).
+   */
   @Post('apparel-designs/:did/production-export')
   @WorkspaceAccess('EDITOR', { download: true })
   @HttpCode(HttpStatus.ACCEPTED)
@@ -175,31 +171,9 @@ export class ApparelController {
     );
     return job;
   }
-
-  @Get('workspaces/:wid/print-shops')
-  @WorkspaceAccess('OWNER')
-  printShops(@Param('wid', ParseUUIDPipe) wid: string) {
-    return this.apparel.printShops(wid);
-  }
-
-  @Post('workspaces/:wid/print-shops')
-  @WorkspaceAccess('OWNER')
-  createPrintShop(@Param('wid', ParseUUIDPipe) wid: string, @Body() dto: PrintShopDto) {
-    return this.apparel.createPrintShop(wid, dto);
-  }
-
-  @Patch('workspaces/:wid/print-shops/:id')
-  @WorkspaceAccess('OWNER')
-  updatePrintShop(
-    @Param('wid', ParseUUIDPipe) wid: string,
-    @Param('id', ParseUUIDPipe) id: string,
-    @Body() dto: PrintShopDto,
-  ) {
-    return this.apparel.updatePrintShop(wid, id, dto);
-  }
 }
 
-/** BAT consulté et approuvé par le client, sans compte (TEX-37). */
+/** BAT consulté et approuvé par le client, sans compte (PublicProofController). */
 @ApiTags('apparel')
 @Public()
 @Throttle({ default: { limit: 20, ttl: 60_000 } })
@@ -219,7 +193,7 @@ export class PublicProofController {
   }
 }
 
-/** Supports, zones, tailles et préréglages (TEX-04, TEX-12). */
+/** Administration des gabarits et préréglages. */
 @ApiTags('admin')
 @ApiBearerAuth()
 @Roles('ADMIN')
@@ -240,7 +214,7 @@ export class AdminApparelController {
     await this.audit.log({
       actorId: user.id,
       action: 'apparel.template.create',
-      entityType: 'ProductTemplate',
+      entityType: 'ApparelTemplate',
       entityId: t.id,
       after: dto,
       ip,
@@ -248,29 +222,27 @@ export class AdminApparelController {
     return t;
   }
 
-  @Put('templates/:tid')
+  @Patch('templates/:id')
   async updateTemplate(
     @CurrentUser() user: AuthUser,
-    @Param('tid', ParseUUIDPipe) tid: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: AdminTemplateDto,
     @ClientIp() ip: string,
   ) {
-    const before = await this.apparel.template(tid);
-    const t = await this.apparel.updateTemplate(tid, dto);
+    const t = await this.apparel.updateTemplate(id, dto);
     await this.audit.log({
       actorId: user.id,
       action: 'apparel.template.update',
-      entityType: 'ProductTemplate',
-      entityId: tid,
-      before,
+      entityType: 'ApparelTemplate',
+      entityId: id,
       after: dto,
       ip,
     });
     return t;
   }
 
-  @Put('rule-presets')
-  async upsertPreset(
+  @Post('rule-presets')
+  async upsertRulePreset(
     @CurrentUser() user: AuthUser,
     @Body() dto: AdminRulePresetDto,
     @ClientIp() ip: string,
@@ -278,7 +250,7 @@ export class AdminApparelController {
     const p = await this.apparel.upsertRulePreset(dto);
     await this.audit.log({
       actorId: user.id,
-      action: 'apparel.preset.upsert',
+      action: 'apparel.rule_preset.upsert',
       entityType: 'RulePreset',
       entityId: p.id,
       after: dto,

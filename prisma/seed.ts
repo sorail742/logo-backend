@@ -180,33 +180,30 @@ async function main() {
     data: { isActive: false },
   });
 
-  // Module textile : préréglages sportifs et supports (créés une seule fois, ensuite gérés par l'admin).
+  // Module textile : préréglages sportifs et gabarits (créés une seule fois).
   await Promise.all(
     DEFAULT_RULE_PRESETS.map((p) =>
       prisma.rulePreset.upsert({
         where: { code: p.code },
         create: { code: p.code, name: p.name, rules: p.rules as object },
-        update: {},
+        update: { name: p.name, rules: p.rules as object },
       }),
     ),
   );
-  const existing = await prisma.productTemplate.findMany({ select: { category: true, name: true } });
-  const missing = DEFAULT_TEMPLATES.filter(
-    (t) => !existing.some((e) => e.category === t.category && e.name === t.name),
+  const existingApparel = await prisma.apparelTemplate.findMany({ select: { category: true, name: true } });
+  const missingApparel = DEFAULT_TEMPLATES.filter(
+    (t) => !existingApparel.some((e: { category: string; name: string }) => e.category === t.category && e.name === t.name),
   );
   await Promise.all(
-    missing.map((t) =>
-      prisma.productTemplate.create({
+    missingApparel.map((t) =>
+      prisma.apparelTemplate.create({
         data: {
           category: t.category,
           name: t.name,
-          views: {},
-          sizes: {
-            create: DEFAULT_SIZES.filter(
-              (s) => t.category !== 'POLO' || !s.label.includes('ANS'),
-            ).map((s, i) => ({ ...s, sortOrder: i })),
-          },
-          zones: { create: t.zones },
+          description: t.description,
+          material: t.material,
+          sizes: t.sizes as unknown as object,
+          zones: t.zones as unknown as object,
         },
       }),
     ),

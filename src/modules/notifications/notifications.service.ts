@@ -5,7 +5,7 @@ import { MailService } from '../mail/mail.service';
 
 /** Types affichés par le front (AppNotification). */
 export type NotificationType =
-  'INVITATION' | 'COMMENT' | 'EXPORT_READY' | 'LOW_CREDITS' | 'PAYMENT' | 'SITE_MESSAGE';
+  'INVITATION' | 'COMMENT' | 'EXPORT_READY' | 'LOW_CREDITS' | 'PAYMENT';
 
 export interface NotificationContent {
   type: NotificationType;

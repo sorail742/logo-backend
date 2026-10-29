@@ -1,50 +1,56 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { AssetKind, JobKind, JobStatus, Prisma } from '@prisma/client';
+import {
+  AssetKind,
+  JobKind,
+  JobStatus,
+  PrintTechnique,
+  Prisma,
+} from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { StorageService } from '../../common/storage/storage.service';
 import { slugify } from '../../common/utils/slug.util';
 import type { PrintContent, PrintElement } from '../../render/apparel-print';
 import type { SheetFormatKey } from '../../render/gang-sheet';
 import { createZip } from '../../render/zip';
+import { CREDIT_COSTS } from '../../shared/credit-costs';
 import { JobsService } from '../jobs/jobs.service';
-import { EXPORT_RETENTION_DAYS } from '../logos/logo-export.service';
 import { REFERENCE_SIZE } from './apparel-defaults';
-import type { PresetRules } from './apparel-rules';
+import type { PresetRules, Size, Zone } from './apparel-rules';
 import type { ProductionExportDto } from './apparel.dto';
 import {
   buildProductionPack,
+  type PrintSupport,
   SUPPORTS,
   TECHNIQUE_SUPPORT,
-  type PrintSupport,
 } from './production-pack';
 
 interface Ctx {
-  workspaceId: string;
   projectId: string;
+  workspaceId: string;
   actorId: string;
 }
 
-/** Entrée d'une tâche PRODUCTION_PACK. */
 export interface ProductionPackInput {
   designId: string;
-  exportId: string;
   support: PrintSupport;
   mirror: boolean;
+  exportId: string;
   sheetFormat?: SheetFormatKey;
   rollWidthMm?: number;
   rollPageMm?: number;
   cutMarks?: boolean;
   entryIds?: string[];
-  copies: number;
+  copies?: number;
   copiesSize?: string;
 }
 
-/** Résultat enregistré dans GenerationJob.result (lien signé exposé par GET /jobs/:jid). */
+const EXPORT_RETENTION_DAYS = 30;
+
 export interface ProductionPackResult {
-  assetId: string;
   storageKey: string;
   fileName: string;
+  assetId: string;
   sizeBytes: number;
   pieces: number;
   sheets: number;
@@ -53,9 +59,8 @@ export interface ProductionPackResult {
 }
 
 /**
- * Pack atelier (cahier des charges §16.7-16.8) : la demande est validée ici puis le worker
- * produit l'archive (fichiers du support, un fichier par joueur, planches, fiche technique,
- * gabarits 1:1).
+ * Pack atelier : génération de l'archive (fichiers du support, un fichier par joueur,
+ * planches, fiche technique, gabarits 1:1). Déclenche la tâche BullMQ (2 crédits).
  */
 @Injectable()
 export class ProductionService {
@@ -104,7 +109,7 @@ export class ProductionService {
       projectId: ctx.projectId,
       kind: JobKind.PRODUCTION_PACK,
       input: input as unknown as Prisma.InputJsonValue,
-      cost: 0,
+      cost: CREDIT_COSTS.PRODUCTION_PACK, // 2 crédits
       actorId: ctx.actorId,
       idempotencyKey,
     });
@@ -119,7 +124,7 @@ export class ProductionService {
     const design = await this.prisma.apparelDesign.findUniqueOrThrow({
       where: { id: input.designId },
       include: {
-        template: { include: { sizes: { orderBy: { sortOrder: 'asc' } }, zones: true } },
+        template: true,
         rulePreset: true,
         elements: { orderBy: { zIndex: 'asc' } },
         roster: { include: { entries: { orderBy: { number: 'asc' } } } },
@@ -133,6 +138,9 @@ export class ProductionService {
       ? { format: input.sheetFormat, rollWidthMm: input.rollWidthMm, rollPageMm: input.rollPageMm }
       : undefined;
 
+    const templateZones = (design.template.zones as unknown as Zone[]) || [];
+    const templateSizes = (design.template.sizes as unknown as Size[]) || [];
+
     try {
       const pack = await buildProductionPack({
         design: {
@@ -145,8 +153,11 @@ export class ProductionService {
             : null,
           approvedAt: design.approvedAt,
         },
-        zones: design.template.zones,
-        sizes: design.template.sizes,
+        zones: templateZones.map((z) => ({
+          ...z,
+          label: (z as unknown as { label?: string; name?: string }).label ?? (z as unknown as { label?: string; name?: string }).name ?? z.key,
+        })),
+        sizes: templateSizes,
         referenceSize: REFERENCE_SIZE,
         elements: design.elements.map((el): PrintElement => ({
           zoneKey: el.zoneKey,
@@ -166,7 +177,7 @@ export class ProductionService {
           quantity: e.quantity,
           role: e.role,
         })),
-        copies: input.copies,
+        copies: input.copies ?? 1,
         copiesSize: input.copiesSize,
         support: input.support,
         mirror: input.mirror,
@@ -197,7 +208,11 @@ export class ProductionService {
       });
       await this.prisma.productionExport.update({
         where: { id: input.exportId },
-        data: { status: JobStatus.SUCCEEDED, zipKey: storageKey, techPackKey },
+        data: {
+          status: JobStatus.SUCCEEDED,
+          zipUrl: storageKey,
+          techPackUrl: techPackKey,
+        },
       });
       const result: ProductionPackResult = {
         storageKey,
