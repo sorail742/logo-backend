@@ -26,6 +26,15 @@ const envSchema = z.object({
 
   AI_PROVIDER: z.enum(['mock']).default('mock'),
 
+  // Paiements (Phase 6, §8) : Orange Money, cartes et webhooks
+  ORANGE_MONEY_CLIENT_ID: z.string().optional(),
+  ORANGE_MONEY_CLIENT_SECRET: z.string().optional(),
+  ORANGE_MONEY_MERCHANT_KEY: z.string().optional(),
+  ORANGE_MONEY_API_URL: z.string().url().optional(),
+  CARD_PAYMENT_SECRET_KEY: z.string().optional(),
+  PAYMENT_WEBHOOK_SECRET: z.string().optional(),
+  INVOICE_TAX_PERCENT: z.coerce.number().default(18),
+
   // Banque de photos du Studio (Pexels) : désactivée sans clé.
   PEXELS_API_KEY: z
     .string()

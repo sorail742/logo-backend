@@ -1,11 +1,12 @@
 import { InjectQueue, Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger, OnApplicationBootstrap } from '@nestjs/common';
-import { AssetKind } from '@prisma/client';
+import { AssetKind, SubscriptionStatus } from '@prisma/client';
 import { Job, Queue } from 'bullmq';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { StorageService } from '../common/storage/storage.service';
 import { MAINTENANCE_QUEUE } from '../shared/queues';
 import { CreditsService } from '../modules/credits/credits.service';
+import { NotificationsService } from '../modules/notifications/notifications.service';
 import { EXPORT_RETENTION_DAYS } from '../modules/logos/logo-export.service';
 import { TRASH_RETENTION_DAYS } from '../modules/projects/projects.service';
 
@@ -25,6 +26,7 @@ export class MaintenanceProcessor extends WorkerHost implements OnApplicationBoo
     private readonly prisma: PrismaService,
     private readonly credits: CreditsService,
     private readonly storage: StorageService,
+    private readonly notifications: NotificationsService,
   ) {
     super();
   }
@@ -108,12 +110,62 @@ export class MaintenanceProcessor extends WorkerHost implements OnApplicationBoo
     const drift = await this.credits.reconcileBalances();
     if (drift.length) this.logger.error({ drift }, 'Écart entre soldes et grand livre corrigé');
 
+    // Abonnements (PAY-08) : rappel à J-3, 3 jours de grâce avant expiration
+    const threeDays = 3 * day;
+    const expiringSoon = await this.prisma.subscription.findMany({
+      where: {
+        status: SubscriptionStatus.ACTIVE,
+        currentPeriodEnd: { gte: new Date(now), lte: new Date(now + threeDays) },
+      },
+      include: {
+        workspace: {
+          include: { members: { where: { role: 'OWNER' }, select: { userId: true } } },
+        },
+        plan: { select: { name: true } },
+      },
+    });
+
+    for (const sub of expiringSoon) {
+      const ownerIds = sub.workspace.members.map((m) => m.userId);
+      await this.notifications.notify(
+        ownerIds,
+        {
+          type: 'PAYMENT',
+          title: 'Renouvellement d’abonnement proche',
+          body: `Votre offre ${sub.plan.name} arrive à échéance sous 3 jours.`,
+          href: '/app/billing',
+        },
+        { email: true },
+      );
+    }
+
+    // Période de grâce de 3 jours : passage à PAST_DUE
+    const pastDue = await this.prisma.subscription.updateMany({
+      where: {
+        status: SubscriptionStatus.ACTIVE,
+        currentPeriodEnd: { lt: new Date(now), gte: new Date(now - threeDays) },
+      },
+      data: { status: SubscriptionStatus.PAST_DUE },
+    });
+
+    // Au-delà de la période de grâce : passage à EXPIRED
+    const expired = await this.prisma.subscription.updateMany({
+      where: {
+        status: { in: [SubscriptionStatus.ACTIVE, SubscriptionStatus.PAST_DUE] },
+        currentPeriodEnd: { lt: new Date(now - threeDays) },
+      },
+      data: { status: SubscriptionStatus.EXPIRED },
+    });
+
     const summary = {
       purgedProjects: projects.count,
       anonymizedUsers: users.length,
       purgedTokens: tokens.count,
       purgedExports: purged.length,
       balanceDrift: drift.length,
+      subscriptionsReminded: expiringSoon.length,
+      subscriptionsPastDue: pastDue.count,
+      subscriptionsExpired: expired.count,
     };
     this.logger.log(summary, 'Maintenance nocturne terminée');
     return summary;
