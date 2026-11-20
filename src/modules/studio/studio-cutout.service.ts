@@ -111,10 +111,7 @@ export class StudioCutoutService {
     const height = metadata.height || 0;
     if (!width || !height) throw new Error('Dimensions d’image invalides');
 
-    const { data, info } = await s
-      .ensureAlpha()
-      .raw()
-      .toBuffer({ resolveWithObject: true });
+    const { data } = await s.ensureAlpha().raw().toBuffer({ resolveWithObject: true });
 
     // Vérifier si l'image a déjà de la transparence
     let hasTransparentPixels = false;

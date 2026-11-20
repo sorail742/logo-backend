@@ -104,7 +104,10 @@ export class LogosController {
   ) {
     const version = await this.logos.saveVersion(lid, dto);
     await this.audit.log(
-      projectEvent(ws.projectId!, user.id, 'logos.version', { logoId: lid, number: version.number }),
+      projectEvent(ws.projectId!, user.id, 'logos.version', {
+        logoId: lid,
+        number: version.number,
+      }),
     );
     return version;
   }
@@ -134,7 +137,9 @@ export class LogosController {
       dto,
       idempotencyKey ?? randomUUID(),
     );
-    await this.audit.log(projectEvent(ws.projectId!, user.id, 'logos.export', { logoId: lid, jobId: job.jobId }));
+    await this.audit.log(
+      projectEvent(ws.projectId!, user.id, 'logos.export', { logoId: lid, jobId: job.jobId }),
+    );
     return job;
   }
 }

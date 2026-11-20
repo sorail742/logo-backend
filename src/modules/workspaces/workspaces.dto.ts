@@ -41,7 +41,9 @@ export class CreateInvitationDto {
   @IsEmail()
   email?: string;
 
-  @ApiPropertyOptional({ description: 'Créer un lien d’invitation même si une adresse est fournie' })
+  @ApiPropertyOptional({
+    description: 'Créer un lien d’invitation même si une adresse est fournie',
+  })
   @IsOptional()
   @IsBoolean()
   asLink?: boolean;

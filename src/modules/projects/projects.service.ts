@@ -42,14 +42,20 @@ export class ProjectsService {
   async create(workspaceId: string, userId: string, { existingName, ...dto }: CreateProjectDto) {
     const name = existingName?.trim();
     if (!name) {
-      const project = await this.prisma.project.create({ data: { workspaceId, ...dto }, include: PROJECT_INCLUDE });
+      const project = await this.prisma.project.create({
+        data: { workspaceId, ...dto },
+        include: PROJECT_INCLUDE,
+      });
       return toProjectDto(project, userId);
     }
 
     // Parcours « J'ai déjà un nom » (§2.2) : le nom saisi devient le nom retenu.
     const blocked = await this.moderation.findBlocked(name, 'NAME');
     if (blocked.length) {
-      throw new UnprocessableEntityException({ message: 'Ce nom contient un terme non autorisé', terms: blocked });
+      throw new UnprocessableEntityException({
+        message: 'Ce nom contient un terme non autorisé',
+        terms: blocked,
+      });
     }
     const id = await this.prisma.$transaction(async (tx) => {
       const project = await tx.project.create({
@@ -98,7 +104,8 @@ export class ProjectsService {
     const project = await this.prisma.project.findUniqueOrThrow({ where: { id: projectId } });
     if (project.deletedAt) {
       const limit = Date.now() - TRASH_RETENTION_DAYS * 86_400_000;
-      if (project.deletedAt.getTime() < limit) throw new GoneException('Projet définitivement supprimé');
+      if (project.deletedAt.getTime() < limit)
+        throw new GoneException('Projet définitivement supprimé');
       await this.prisma.project.update({ where: { id: projectId }, data: { deletedAt: null } });
     }
     return this.get(projectId, userId);

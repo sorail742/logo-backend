@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { PaymentProvider } from '@prisma/client';
-import { IsEnum, IsInt, IsOptional, IsString, IsUrl, Matches, Max, Min } from 'class-validator';
+import { IsEnum, IsInt, IsOptional, IsString, IsUrl, Max, Min } from 'class-validator';
 
 export class CreateCheckoutDto {
   @ApiPropertyOptional({ description: 'Code de l’offre (PACK, PRO, AGENCY, ASSOCIATION)' })
@@ -8,7 +8,10 @@ export class CreateCheckoutDto {
   @IsString()
   planCode?: string;
 
-  @ApiPropertyOptional({ description: 'Nombre de crédits unitaires à acheter (si hors abonnement)', example: 100 })
+  @ApiPropertyOptional({
+    description: 'Nombre de crédits unitaires à acheter (si hors abonnement)',
+    example: 100,
+  })
   @IsOptional()
   @IsInt()
   @Min(10)
@@ -49,4 +52,3 @@ export class SimulatePaymentDto {
   @IsOptional()
   fail?: boolean;
 }
-

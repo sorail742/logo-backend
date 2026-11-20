@@ -13,7 +13,11 @@ export interface PlanFeatures {
   emailSignatureBranding?: boolean;
 }
 
-const FREE_DEFAULTS: PlanFeatures = { watermark: true, maxPngSize: 512, emailSignatureBranding: true };
+const FREE_DEFAULTS: PlanFeatures = {
+  watermark: true,
+  maxPngSize: 512,
+  emailSignatureBranding: true,
+};
 
 /** Un abonnement donne accès à son offre jusqu'à son échéance, sauf s'il a expiré. */
 export function isSubscriptionActive(
@@ -28,7 +32,10 @@ export function isSubscriptionActive(
 
 /** Code de l'offre en vigueur (FREE sans abonnement actif). */
 export function activePlanCode(
-  subscription: (Pick<Subscription, 'status' | 'currentPeriodEnd'> & { plan: { code: string } }) | null | undefined,
+  subscription:
+    | (Pick<Subscription, 'status' | 'currentPeriodEnd'> & { plan: { code: string } })
+    | null
+    | undefined,
 ) {
   return isSubscriptionActive(subscription) ? subscription.plan.code : 'FREE';
 }

@@ -3,6 +3,7 @@ import { inflate, pathPolygons, pieceCutLayers, union } from '../../render/cut-f
 import { packPieces } from '../../render/gang-sheet';
 import { pngSize } from '../../render/raster';
 import { DEFAULT_SIZES, DEFAULT_TEMPLATES } from './apparel-defaults';
+import type { Size, Zone } from './apparel-rules';
 import { buildProductionPack, collectPieces, SUPPORTS, type PackInput } from './production-pack';
 
 const jersey = DEFAULT_TEMPLATES.find((t) => t.category === 'FOOTBALL_JERSEY')!;
@@ -56,8 +57,8 @@ const input = (patch: Partial<PackInput> = {}): PackInput => ({
     proofUrl: null,
     approvedAt: null,
   },
-  zones: jersey.zones as any,
-  sizes: DEFAULT_SIZES as any,
+  zones: jersey.zones as (Zone & { label: string })[],
+  sizes: DEFAULT_SIZES as Size[],
   referenceSize: 'M',
   elements: [number, name, sponsor],
   players: [
@@ -110,7 +111,7 @@ describe('pack atelier : pièces', () => {
     const piece = buildPiece({
       key: 'k',
       player: 'k',
-      zone: { ...zone('back_name') } as any,
+      zone: { ...zone('back_name') } as Zone & { label: string },
       sizes: ['M'],
       elements: [name],
       scale: 1,

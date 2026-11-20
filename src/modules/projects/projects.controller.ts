@@ -40,7 +40,11 @@ export class ProjectsController {
     @CurrentWorkspace() ws: WorkspaceContext,
   ) {
     // La corbeille relève de qui peut supprimer et restaurer : propriétaire, ou admin.
-    if (q.trash && ws.role !== WorkspaceRole.OWNER && !(ws.role === null && user.role !== 'SUPPORT')) {
+    if (
+      q.trash &&
+      ws.role !== WorkspaceRole.OWNER &&
+      !(ws.role === null && user.role !== 'SUPPORT')
+    ) {
       throw new ForbiddenException('La corbeille est réservée au propriétaire de l’espace');
     }
     return this.projects.list(wid, user.id, q);
@@ -91,7 +95,9 @@ export class ProjectsController {
   ) {
     await this.projects.softDelete(pid);
     // Historique du projet ; l'adresse IP n'est conservée que pour une action du personnel.
-    await this.audit.log(projectEvent(pid, user.id, 'project.delete', undefined, ws.role === null ? ip : undefined));
+    await this.audit.log(
+      projectEvent(pid, user.id, 'project.delete', undefined, ws.role === null ? ip : undefined),
+    );
   }
 
   @Post('projects/:pid/restore')
@@ -103,7 +109,9 @@ export class ProjectsController {
     @ClientIp() ip: string,
   ) {
     const project = await this.projects.restore(pid, user.id);
-    await this.audit.log(projectEvent(pid, user.id, 'project.restore', undefined, ws.role === null ? ip : undefined));
+    await this.audit.log(
+      projectEvent(pid, user.id, 'project.restore', undefined, ws.role === null ? ip : undefined),
+    );
     return project;
   }
 

@@ -70,7 +70,11 @@ export class AdminController {
 
   /** Le support propose un ajustement ; un admin le valide ou le refuse (§3). */
   @Post('credits/requests')
-  requestCredits(@CurrentUser() actor: AuthUser, @Body() dto: AdjustCreditsDto, @ClientIp() ip: string) {
+  requestCredits(
+    @CurrentUser() actor: AuthUser,
+    @Body() dto: AdjustCreditsDto,
+    @ClientIp() ip: string,
+  ) {
     return this.admin.requestCreditAdjustment(actor, dto, ip);
   }
 
@@ -98,7 +102,11 @@ export class AdminController {
 
   @Post('blocked-terms')
   @Roles('ADMIN')
-  addBlockedTerm(@CurrentUser() actor: AuthUser, @Body() dto: BlockedTermDto, @ClientIp() ip: string) {
+  addBlockedTerm(
+    @CurrentUser() actor: AuthUser,
+    @Body() dto: BlockedTermDto,
+    @ClientIp() ip: string,
+  ) {
     return this.admin.addBlockedTerm(actor, dto, ip);
   }
 

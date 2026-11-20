@@ -2,7 +2,13 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PaymentProvider, PaymentStatus } from '@prisma/client';
 import { randomBytes } from 'node:crypto';
-import type { CheckoutResult, InitiateCheckoutParams, PaymentAdapter, WebhookResult } from './payment-adapter.interface';
+import type {
+  CheckoutResult,
+  InitiateCheckoutParams,
+  PaymentAdapter,
+  WebhookResult,
+} from './payment-adapter.interface';
+import { firstWebhookString, parseWebhookAmount } from './webhook.util';
 
 /**
  * Adaptateur Orange Money Web Payment (PAY-01).
@@ -25,10 +31,11 @@ export class OrangeMoneyAdapter implements PaymentAdapter {
     // Mode réel avec identifiants Orange Money Developer
     if (clientId && clientSecret && merchantKey) {
       try {
+        const credentials = Buffer.from([clientId, clientSecret].join(':')).toString('base64');
         const tokenRes = await fetch(`${apiUrl}/oauth/v3/token`, {
           method: 'POST',
           headers: {
-            Authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString('base64')}`,
+            Authorization: `Basic ${credentials}`,
             'Content-Type': 'application/x-www-form-urlencoded',
           },
           body: 'grant_type=client_credentials',
@@ -91,15 +98,27 @@ export class OrangeMoneyAdapter implements PaymentAdapter {
     return {
       checkoutUrl: mockCheckoutUrl,
       providerRef: mockRef,
-      instructions: 'Paiement Orange Money : composez *144# ou validez sur l’application Orange Money.',
+      instructions:
+        'Paiement Orange Money : composez *144# ou validez sur l’application Orange Money.',
       raw: { mode: 'sandbox', simulated: true },
     };
   }
 
-  async verifyAndParseWebhook(_headers: Record<string, string | string[]>, body: any): Promise<WebhookResult> {
-    // Format typique Orange Money WebPay notification
-    // { status: 'SUCCESS' | 'FAILED', notif_token: '...', txnid: '...', order_id: '...' }
-    const statusStr = String(body?.status ?? '').toUpperCase();
+  async verifyAndParseWebhook(
+    _headers: Record<string, string | string[]>,
+    body: unknown,
+  ): Promise<WebhookResult> {
+    let payload: Record<string, unknown> | null = null;
+    if (typeof body === 'string') {
+      try {
+        payload = JSON.parse(body) as Record<string, unknown>;
+      } catch {
+        return { providerRef: '', status: PaymentStatus.FAILED, raw: null };
+      }
+    } else {
+      payload = (body as Record<string, unknown>) ?? null;
+    }
+    const statusStr = firstWebhookString(payload?.status).toUpperCase();
     let status: PaymentStatus = PaymentStatus.PENDING;
 
     if (statusStr === 'SUCCESS' || statusStr === 'SUCCEEDED' || statusStr === '200') {
@@ -108,13 +127,17 @@ export class OrangeMoneyAdapter implements PaymentAdapter {
       status = PaymentStatus.FAILED;
     }
 
-    const providerRef = String(body?.pay_token || body?.notif_token || body?.txnid || body?.ref || '');
+    const providerRef = firstWebhookString(
+      payload?.pay_token,
+      payload?.notif_token,
+      payload?.txnid,
+      payload?.ref,
+    );
     return {
       providerRef,
       status,
-      amountGnf: body?.amount ? BigInt(body.amount) : undefined,
-      raw: body,
+      amountGnf: parseWebhookAmount(payload?.amount),
+      raw: payload,
     };
   }
 }
-

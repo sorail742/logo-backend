@@ -59,7 +59,7 @@ export class PaymentsController {
   webhook(
     @Param('provider') provider: PaymentProvider,
     @Headers() headers: Record<string, string | string[]>,
-    @Body() body: any,
+    @Body() body: Record<string, unknown>,
   ) {
     return this.paymentsService.handleWebhook(provider, headers, body);
   }
@@ -72,4 +72,3 @@ export class PaymentsController {
     return this.paymentsService.simulatePayment(dto);
   }
 }
-

@@ -179,16 +179,20 @@ export class JobsService {
     const record = result as Record<string, Prisma.JsonValue>;
     if (Array.isArray(record.images)) {
       const images = await Promise.all(
-        (record.images as { assetId: string; storageKey: string; width: number; height: number }[]).map(
-          async ({ assetId, storageKey, width, height }) => {
-            const exists = await this.prisma.asset.count({ where: { id: assetId } });
-            return exists
-              ? { url: await this.storage.signedUrl(storageKey, { inline: true }), width, height }
-              : null;
-          },
-        ),
+        (
+          record.images as { assetId: string; storageKey: string; width: number; height: number }[]
+        ).map(async ({ assetId, storageKey, width, height }) => {
+          const exists = await this.prisma.asset.count({ where: { id: assetId } });
+          return exists
+            ? { url: await this.storage.signedUrl(storageKey, { inline: true }), width, height }
+            : null;
+        }),
       );
-      return { ...record, images: images.filter((i) => i !== null), expired: images.some((i) => !i) };
+      return {
+        ...record,
+        images: images.filter((i) => i !== null),
+        expired: images.some((i) => !i),
+      };
     }
     const { storageKey, assetId, ...rest } = record;
     if (typeof storageKey !== 'string' || typeof assetId !== 'string') return result;

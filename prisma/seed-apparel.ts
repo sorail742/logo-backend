@@ -1,8 +1,5 @@
 import { PrismaClient } from '@prisma/client';
-import {
-  DEFAULT_RULE_PRESETS,
-  DEFAULT_TEMPLATES,
-} from '../src/modules/apparel/apparel-defaults';
+import { DEFAULT_RULE_PRESETS, DEFAULT_TEMPLATES } from '../src/modules/apparel/apparel-defaults';
 
 const prisma = new PrismaClient();
 

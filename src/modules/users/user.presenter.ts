@@ -15,6 +15,9 @@ export const USER_SELECT = {
   createdAt: true,
 } satisfies Prisma.UserSelect;
 
-export function toUserDto({ totpSecret, ...user }: Prisma.UserGetPayload<{ select: typeof USER_SELECT }>) {
+export function toUserDto({
+  totpSecret,
+  ...user
+}: Prisma.UserGetPayload<{ select: typeof USER_SELECT }>) {
   return { ...user, totpEnabled: !!totpSecret };
 }

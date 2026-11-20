@@ -1,6 +1,11 @@
 import { Controller, Get, Inject } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
-import { HealthCheck, HealthCheckService, HealthIndicatorService } from '@nestjs/terminus';
+import {
+  HealthCheck,
+  HealthCheckService,
+  HealthIndicatorService,
+  MemoryHealthIndicator,
+} from '@nestjs/terminus';
 import Redis from 'ioredis';
 import { Public } from '../../common/decorators';
 import { PrismaService } from '../../common/prisma/prisma.service';
@@ -14,6 +19,7 @@ export class HealthController {
   constructor(
     private readonly health: HealthCheckService,
     private readonly indicator: HealthIndicatorService,
+    private readonly memory: MemoryHealthIndicator,
     private readonly prisma: PrismaService,
     @Inject(REDIS) private readonly redis: Redis,
   ) {}
@@ -24,13 +30,14 @@ export class HealthController {
     return { status: 'ok' };
   }
 
-  /** Disponibilité : base de données et Redis joignables. */
+  /** Disponibilité : base de données, Redis joignables et mémoire sous contrôle. */
   @Get('ready')
   @HealthCheck()
   ready() {
     return this.health.check([
       () => this.probe('database', () => this.prisma.$queryRaw`SELECT 1`),
       () => this.probe('redis', () => this.redis.ping()),
+      () => this.memory.checkHeap('memory_heap', 1536 * 1024 * 1024),
     ]);
   }
 

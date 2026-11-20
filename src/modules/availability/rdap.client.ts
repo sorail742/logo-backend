@@ -27,10 +27,13 @@ export class RdapClient {
     if (!server) return { status: 'UNKNOWN', reason: `Pas de serveur RDAP pour .${tld}` };
 
     try {
-      const res = await fetch(`${server.replace(/\/?$/, '/')}domain/${encodeURIComponent(domain)}`, {
-        headers: { Accept: 'application/rdap+json' },
-        signal: AbortSignal.timeout(LOOKUP_TIMEOUT_MS),
-      });
+      const res = await fetch(
+        `${server.replace(/\/?$/, '/')}domain/${encodeURIComponent(domain)}`,
+        {
+          headers: { Accept: 'application/rdap+json' },
+          signal: AbortSignal.timeout(LOOKUP_TIMEOUT_MS),
+        },
+      );
       if (res.status === 404) return { status: 'AVAILABLE', server };
       if (res.ok) return { status: 'TAKEN', server };
       return { status: 'UNKNOWN', reason: `Réponse ${res.status} du registre` };

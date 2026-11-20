@@ -30,8 +30,7 @@ export const PROJECT_ACTIONS = {
   'logos.export': () => 'a exporté un logo',
   'slogans.generate': (after) => `a lancé un lot de ${SLOGAN_BATCH[text(after.kind)] ?? 'slogans'}`,
   'slogans.choose': (after) => `a retenu « ${text(after.text)} »`,
-  'signatures.create': (after) =>
-    `a créé ${SIGNATURE_LABELS[text(after.kind)] ?? 'une signature'}`,
+  'signatures.create': (after) => `a créé ${SIGNATURE_LABELS[text(after.kind)] ?? 'une signature'}`,
   'signatures.update': (after) =>
     `a modifié ${SIGNATURE_LABELS[text(after.kind)] ?? 'une signature'}`,
   'signatures.batch': (after) => `a lancé ${text(after.count)} signatures e-mail en lot`,
@@ -44,8 +43,10 @@ export const PROJECT_ACTIONS = {
     after.enabled ? 'a activé le lien de partage du kit' : 'a désactivé le lien de partage du kit',
   'comments.create': (after) => `a commenté ${text(after.target) || 'le projet'}`,
   'studio.create': (after) => `a créé « ${text(after.name)} » dans le Studio`,
-  'studio.export': (after) => `a exporté une création du Studio (${text(after.format).toUpperCase()})`,
-  'apparel.production_export': () => 'a préparé le pack atelier d’une tenue (fichiers d’impression)',
+  'studio.export': (after) =>
+    `a exporté une création du Studio (${text(after.format).toUpperCase()})`,
+  'apparel.production_export': () =>
+    'a préparé le pack atelier d’une tenue (fichiers d’impression)',
   'studio.images': () => 'a généré des images dans le Studio',
   'studio.cutout': () => 'a détouré une photo dans le Studio (IA)',
   'site.create': () => 'a créé le site web',

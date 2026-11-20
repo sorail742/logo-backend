@@ -8,7 +8,7 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { ApparelDesignStatus, PrintTechnique, Prisma } from '@prisma/client';
+import { ApparelDesignStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { REFERENCE_SIZE, RULES_DISCLAIMER } from './apparel-defaults';
@@ -411,7 +411,10 @@ export class ApparelService {
       });
       return { revoked: true };
     }
-    if (design.status === ApparelDesignStatus.APPROVED || design.status === ApparelDesignStatus.IN_PRODUCTION) {
+    if (
+      design.status === ApparelDesignStatus.APPROVED ||
+      design.status === ApparelDesignStatus.IN_PRODUCTION
+    ) {
       throw new ConflictException('Cette tenue est déjà approuvée');
     }
     const report = await this.check(designId);

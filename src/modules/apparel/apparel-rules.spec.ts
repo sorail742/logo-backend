@@ -229,7 +229,9 @@ describe('zones et tailles (TEX-03)', () => {
 
   it('une zone fixe reste identique en adulte et se réduit pour un enfant', () => {
     expect(resolveZone(number, size('3XL'), size('M')).maxHeightMm).toBe(number.maxHeightMm);
-    expect(resolveZone(number, size('8 ANS'), size('M')).maxHeightMm).toBeLessThan(number.maxHeightMm);
+    expect(resolveZone(number, size('8 ANS'), size('M')).maxHeightMm).toBeLessThan(
+      number.maxHeightMm,
+    );
   });
 });
 

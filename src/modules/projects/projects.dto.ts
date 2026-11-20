@@ -26,7 +26,9 @@ export class CreateProjectDto {
   @Length(1, 120)
   title: string;
 
-  @ApiPropertyOptional({ description: 'Parcours « J’ai déjà un nom » (§2.2) : devient le nom retenu' })
+  @ApiPropertyOptional({
+    description: 'Parcours « J’ai déjà un nom » (§2.2) : devient le nom retenu',
+  })
   @IsOptional()
   @IsString()
   @MaxLength(40)

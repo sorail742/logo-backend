@@ -194,7 +194,9 @@ export async function buildExportEntries(
   const variants = LOGO_VARIANTS.filter((def) => source.kind === 'spec' || !def.layout);
   const title = source.kind === 'spec' ? source.spec.text : source.title;
 
-  const masters = variants.map((def) => optimizeSvg(renderVariant(source, def.variant, def.layout)));
+  const masters = variants.map((def) =>
+    optimizeSvg(renderVariant(source, def.variant, def.layout)),
+  );
   // PDF vectoriels produits en parallèle ; l'ordre des fichiers de l'archive ne change pas.
   const pdfs = options.formats.includes('pdf')
     ? await Promise.all(

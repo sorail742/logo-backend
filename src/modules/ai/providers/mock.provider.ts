@@ -27,14 +27,47 @@ const METAPHORS = ['Baobab', 'Horizon', 'Étoile', 'Source', 'Racine', 'Pont', '
 /** Gabarits de slogans par langue et par ton (même base que le simulateur du front). */
 const SLOGAN_TEMPLATES: Record<'fr' | 'en', Record<SloganGenerationInput['tone'], string[]>> = {
   fr: {
-    INSPIRING: ['Ensemble, faisons grandir {value}', "{Value}, aujourd'hui pour demain", "Semer {value}, récolter l'avenir", 'Chaque geste compte', 'Plus loin, ensemble'],
-    INSTITUTIONAL: ['Au service de {value}', "L'engagement au cœur de {sector}", 'La référence en {sector}', 'Agir avec rigueur et {value}', 'Votre partenaire de confiance'],
-    CATCHY: ['{Name}, et ça change tout', 'Simple. Rapide. {Name}.', 'Le {sector} autrement', 'Osez {value}', "{Name}, c'est maintenant"],
-    ENGAGED: ['Agir pour {value}, maintenant', 'Notre force : {value}', 'Pour une Guinée plus {value}', 'Debout pour {value}', 'Changer les choses, ensemble'],
+    INSPIRING: [
+      'Ensemble, faisons grandir {value}',
+      "{Value}, aujourd'hui pour demain",
+      "Semer {value}, récolter l'avenir",
+      'Chaque geste compte',
+      'Plus loin, ensemble',
+    ],
+    INSTITUTIONAL: [
+      'Au service de {value}',
+      "L'engagement au cœur de {sector}",
+      'La référence en {sector}',
+      'Agir avec rigueur et {value}',
+      'Votre partenaire de confiance',
+    ],
+    CATCHY: [
+      '{Name}, et ça change tout',
+      'Simple. Rapide. {Name}.',
+      'Le {sector} autrement',
+      'Osez {value}',
+      "{Name}, c'est maintenant",
+    ],
+    ENGAGED: [
+      'Agir pour {value}, maintenant',
+      'Notre force : {value}',
+      'Pour une Guinée plus {value}',
+      'Debout pour {value}',
+      'Changer les choses, ensemble',
+    ],
   },
   en: {
-    INSPIRING: ['Growing {value} together', '{Value} today, for tomorrow', 'Every step counts', 'Further, together'],
-    INSTITUTIONAL: ['Serving {value}', 'Trusted in {sector}', 'Commitment at the heart of {sector}'],
+    INSPIRING: [
+      'Growing {value} together',
+      '{Value} today, for tomorrow',
+      'Every step counts',
+      'Further, together',
+    ],
+    INSTITUTIONAL: [
+      'Serving {value}',
+      'Trusted in {sector}',
+      'Commitment at the heart of {sector}',
+    ],
     CATCHY: ['{Name}. That changes everything.', 'Simple. Fast. {Name}.', '{sector}, reinvented'],
     ENGAGED: ['Acting for {value}, now', 'Standing up for {value}', 'Change starts with us'],
   },
@@ -42,15 +75,7 @@ const SLOGAN_TEMPLATES: Record<'fr' | 'en', Record<SloganGenerationInput['tone']
 
 /** Polices de la bibliothèque associées à chaque style de logo (LOGO-02). */
 const STYLE_FONTS: Record<LogoStyle, string[]> = {
-  MINIMAL: [
-    'space-grotesk',
-    'inter',
-    'manrope',
-    'dm-sans',
-    'outfit',
-    'raleway',
-    'work-sans',
-  ],
+  MINIMAL: ['space-grotesk', 'inter', 'manrope', 'dm-sans', 'outfit', 'raleway', 'work-sans'],
   MODERN: [
     'poppins',
     'plus-jakarta-sans',
@@ -79,15 +104,7 @@ const STYLE_FONTS: Record<LogoStyle, string[]> = {
     'work-sans',
     'lora',
   ],
-  PLAYFUL: [
-    'nunito',
-    'righteous',
-    'comfortaa',
-    'quicksand',
-    'lobster',
-    'rubik',
-    'bebas-neue',
-  ],
+  PLAYFUL: ['nunito', 'righteous', 'comfortaa', 'quicksand', 'lobster', 'rubik', 'bebas-neue'],
   AFRICAN: [
     'oswald',
     'anton',
@@ -104,10 +121,14 @@ type Picker = <T>(arr: readonly T[]) => T;
 
 /** Icônes dont les étiquettes rejoignent le brief, complétées au hasard. */
 function briefIcons(input: LogoGenerationInput, pick: Picker, avoided: string | null | undefined) {
-  const terms = [...(input.brief?.values ?? []), input.brief?.sector ?? '', ...(input.brief?.mustInclude ?? [])];
-  const icons = [...new Set(terms.flatMap((t) => searchIcons(t.slice(0, 6)).map((i) => i.id)))].filter(
-    (id) => id !== avoided,
-  );
+  const terms = [
+    ...(input.brief?.values ?? []),
+    input.brief?.sector ?? '',
+    ...(input.brief?.mustInclude ?? []),
+  ];
+  const icons = [
+    ...new Set(terms.flatMap((t) => searchIcons(t.slice(0, 6)).map((i) => i.id))),
+  ].filter((id) => id !== avoided);
   while (icons.length < input.count) {
     const id = pick(ICONS).id;
     if (!icons.includes(id) && id !== avoided) icons.push(id);
@@ -116,9 +137,23 @@ function briefIcons(input: LogoGenerationInput, pick: Picker, avoided: string | 
 }
 
 /** Devises en trois termes tirés des valeurs du brief. */
-function mockDevises(input: SloganGenerationInput, pick: Picker, values: string[], exclude: Set<string>) {
+function mockDevises(
+  input: SloganGenerationInput,
+  pick: Picker,
+  values: string[],
+  exclude: Set<string>,
+) {
   const texts = new Set<string>();
-  const pool = [...values, 'Unité', 'Travail', 'Progrès', 'Solidarité', 'Justice', 'Engagement', 'Excellence'];
+  const pool = [
+    ...values,
+    'Unité',
+    'Travail',
+    'Progrès',
+    'Solidarité',
+    'Justice',
+    'Engagement',
+    'Excellence',
+  ];
   for (let guard = 0; texts.size < Math.min(input.count, 6) && guard < 200; guard++) {
     const terms = new Set<string>();
     while (terms.size < 3) terms.add(cap(pick(pool)));
@@ -130,7 +165,8 @@ function mockDevises(input: SloganGenerationInput, pick: Picker, values: string[
 
 /** Phrases de mission composées depuis le brief. */
 function mockMissions(input: SloganGenerationInput, values: string[], exclude: Set<string>) {
-  const mission = input.brief?.mission || `accompagner ${input.brief?.audience || 'notre communauté'}`;
+  const mission =
+    input.brief?.mission || `accompagner ${input.brief?.audience || 'notre communauté'}`;
   const audience = input.brief?.audience || 'celles et ceux';
   const candidates = [
     `${input.name} a pour mission de ${mission.charAt(0).toLowerCase()}${mission.slice(1).replace(/\.$/, '')}.`,
@@ -141,18 +177,27 @@ function mockMissions(input: SloganGenerationInput, values: string[], exclude: S
 }
 
 /** Slogans tirés des gabarits du ton demandé et d'un ton voisin. */
-function mockSlogans(input: SloganGenerationInput, pick: Picker, values: string[], exclude: Set<string>) {
+function mockSlogans(
+  input: SloganGenerationInput,
+  pick: Picker,
+  values: string[],
+  exclude: Set<string>,
+) {
   const texts = new Set<string>();
   const tones = Object.keys(SLOGAN_TEMPLATES[input.language]) as SloganGenerationInput['tone'][];
   for (let guard = 0; texts.size < input.count && guard < 300; guard++) {
-    const templates = [...SLOGAN_TEMPLATES[input.language][input.tone], ...SLOGAN_TEMPLATES[input.language][pick(tones)]];
+    const templates = [
+      ...SLOGAN_TEMPLATES[input.language][input.tone],
+      ...SLOGAN_TEMPLATES[input.language][pick(tones)],
+    ];
     const value = pick(values);
     const text = pick(templates)
       .replace('{value}', value.toLowerCase())
       .replace('{Value}', cap(value))
       .replace('{Name}', input.name)
       .replace('{sector}', (input.brief?.sector || 'service').toLowerCase());
-    if (text.split(/\s+/).length <= input.maxWords && !exclude.has(text.toLowerCase())) texts.add(text);
+    if (text.split(/\s+/).length <= input.maxWords && !exclude.has(text.toLowerCase()))
+      texts.add(text);
   }
   return texts;
 }
@@ -174,13 +219,20 @@ export class MockAiProvider extends AiProvider {
 
   generateNames(input: NameGenerationInput): Promise<AiCallResult> {
     const { brief } = input;
-    const words = [...brief.mustInclude, ...brief.values, brief.sector, ...brief.mission.split(/\s+/)]
+    const words = [
+      ...brief.mustInclude,
+      ...brief.values,
+      brief.sector,
+      ...brief.mission.split(/\s+/),
+    ]
       .map(clean)
       .filter((w) => w.length >= 3);
     const roots = [...new Set(words.map((w) => cap(w.slice(0, Math.min(5, w.length)))))];
     if (roots.length === 0) roots.push('Kalo');
 
-    const styles = brief.nameStyles.length ? brief.nameStyles : [NameStyle.INVENTED, NameStyle.COMPOUND];
+    const styles = brief.nameStyles.length
+      ? brief.nameStyles
+      : [NameStyle.INVENTED, NameStyle.COMPOUND];
     const seed = hash(JSON.stringify(input));
     const exclude = new Set(input.exclude.map((n) => n.toLowerCase()));
     const maxLen = brief.maxLength ?? (input.feedback?.includes('court') ? 7 : 14);
@@ -196,7 +248,12 @@ export class MockAiProvider extends AiProvider {
       names.push(candidate);
     }
 
-    return Promise.resolve({ raw: { names }, provider: this.name, promptVersion: 'mock-1', costUsdMicros: 0 });
+    return Promise.resolve({
+      raw: { names },
+      provider: this.name,
+      promptVersion: 'mock-1',
+      costUsdMicros: 0,
+    });
   }
 
   /** Port du simulateur du front : icônes liées au brief, polices et palettes selon le style. */
@@ -229,9 +286,15 @@ export class MockAiProvider extends AiProvider {
         iconId: iconFor(i),
         fontId: pick(fonts.length ? fonts : ['montserrat']),
         fontWeight: pick([600, 700, 800]),
-        letterSpacing: input.style === 'MINIMAL' || input.style === 'INSTITUTIONAL' ? 0.04 : pick([0, 0, 0.02, 0.08]),
+        letterSpacing:
+          input.style === 'MINIMAL' || input.style === 'INSTITUTIONAL'
+            ? 0.04
+            : pick([0, 0, 0.02, 0.08]),
         uppercase: input.style === 'INSTITUTIONAL' || input.style === 'AFRICAN' || random() > 0.7,
-        iconFrame: input.type === 'MONOGRAM' ? pick(['circle', 'rounded', 'hexagon'] as const) : pick(frames),
+        iconFrame:
+          input.type === 'MONOGRAM'
+            ? pick(['circle', 'rounded', 'hexagon'] as const)
+            : pick(frames),
         layout: mockLayout(input.type, i),
         colors,
         withTagline: !simpler && random() > 0.5,
@@ -239,14 +302,21 @@ export class MockAiProvider extends AiProvider {
       };
     });
 
-    return Promise.resolve({ raw: { compositions }, provider: this.name, promptVersion: 'mock-logos-1', costUsdMicros: 0 });
+    return Promise.resolve({
+      raw: { compositions },
+      provider: this.name,
+      promptVersion: 'mock-logos-1',
+      costUsdMicros: 0,
+    });
   }
 
   /** Port du simulateur du front : gabarits par ton, devises en trois termes, phrases de mission. */
   generateSlogans(input: SloganGenerationInput): Promise<AiCallResult> {
     const random = rng(hash(JSON.stringify(input)));
     const pick = <T>(arr: readonly T[]) => arr[Math.floor(random() * arr.length)];
-    const values = input.brief?.values.length ? input.brief.values : ['progrès', 'unité', 'travail'];
+    const values = input.brief?.values.length
+      ? input.brief.values
+      : ['progrès', 'unité', 'travail'];
     const exclude = new Set(input.exclude.map((t) => t.toLowerCase()));
     let texts: Set<string>;
     if (input.kind === 'DEVISE') texts = mockDevises(input, pick, values, exclude);
@@ -254,7 +324,12 @@ export class MockAiProvider extends AiProvider {
     else texts = mockSlogans(input, pick, values, exclude);
 
     const slogans = [...texts].map((text) => ({ text }));
-    return Promise.resolve({ raw: { slogans }, provider: this.name, promptVersion: 'mock-slogans-1', costUsdMicros: 0 });
+    return Promise.resolve({
+      raw: { slogans },
+      provider: this.name,
+      promptVersion: 'mock-slogans-1',
+      costUsdMicros: 0,
+    });
   }
 
   private build(
@@ -268,28 +343,61 @@ export class MockAiProvider extends AiProvider {
     switch (style) {
       case NameStyle.INVENTED: {
         const value = cap(root.slice(0, 4).toLowerCase() + pick(SUFFIXES));
-        return { value, meaning: `Nom inventé à partir de « ${root.toLowerCase()} »`, style, pronunciation: value.toLowerCase() };
+        return {
+          value,
+          meaning: `Nom inventé à partir de « ${root.toLowerCase()} »`,
+          style,
+          pronunciation: value.toLowerCase(),
+        };
       }
       case NameStyle.COMPOUND: {
         const value = `${pick(PREFIXES)}${root.toLowerCase()}`;
-        return { value, meaning: `Composé de « ${pick(PREFIXES)} » et « ${root.toLowerCase()} »`, style };
+        return {
+          value,
+          meaning: `Composé de « ${pick(PREFIXES)} » et « ${root.toLowerCase()} »`,
+          style,
+        };
       }
       case NameStyle.METAPHORICAL: {
         const value = pick(METAPHORS);
-        return { value: `${value} ${root}`, meaning: `Image de « ${value.toLowerCase()} » appliquée au projet`, style };
+        return {
+          value: `${value} ${root}`,
+          meaning: `Image de « ${value.toLowerCase()} » appliquée au projet`,
+          style,
+        };
       }
       case NameStyle.DESCRIPTIVE: {
         const sector = cap(clean(input.brief.sector)) || root;
-        return { value: `${sector} ${pick(['Plus', 'Action', 'Avenir', 'Solidaire', 'Connect'])}`, meaning: `Décrit directement l'activité : ${input.brief.sector}`, style };
+        return {
+          value: `${sector} ${pick(['Plus', 'Action', 'Avenir', 'Solidaire', 'Connect'])}`,
+          meaning: `Décrit directement l'activité : ${input.brief.sector}`,
+          style,
+        };
       }
       case NameStyle.ACRONYM: {
-        const words = [pick(['Association', 'Alliance', 'Collectif', 'Réseau']), 'pour', ...roots.slice(0, 3)];
-        const acronym = words.filter((w) => w.length > 3).map((w) => w[0].toUpperCase()).join('');
+        const words = [
+          pick(['Association', 'Alliance', 'Collectif', 'Réseau']),
+          'pour',
+          ...roots.slice(0, 3),
+        ];
+        const acronym = words
+          .filter((w) => w.length > 3)
+          .map((w) => w[0].toUpperCase())
+          .join('');
         if (acronym.length < 2) return null;
-        return { value: acronym, acronym, expandedForm: words.join(' '), meaning: `Sigle de « ${words.join(' ')} »`, style };
+        return {
+          value: acronym,
+          acronym,
+          expandedForm: words.join(' '),
+          meaning: `Sigle de « ${words.join(' ')} »`,
+          style,
+        };
       }
       case NameStyle.PROPER: {
-        const value = pick(['Maison', 'Atelier', 'Studio', 'Cercle']) + ' ' + pick(['Kadia', 'Fanta', 'Sékou', 'Mariama', 'Alpha']);
+        const value =
+          pick(['Maison', 'Atelier', 'Studio', 'Cercle']) +
+          ' ' +
+          pick(['Kadia', 'Fanta', 'Sékou', 'Mariama', 'Alpha']);
         return { value, meaning: 'Nom propre évocateur, chaleureux et personnel', style };
       }
       default:
@@ -310,15 +418,30 @@ export class MockAiProvider extends AiProvider {
       input.style === 'auto' ? (styleFromPrompt(input.prompt) ?? 'abstract') : input.style;
     const seed = hashSeed(`${input.prompt}|${input.style}|${input.palette.join()}`);
     const images = Array.from({ length: input.count }, (_, i) => {
-      const svg = renderArtwork({ style, palette: input.palette, width, height, seed: seed + i * 7919 });
+      const svg = renderArtwork({
+        style,
+        palette: input.palette,
+        width,
+        height,
+        seed: seed + i * 7919,
+      });
       return { data: svgToPng(svg, { size: Math.max(width, height) }), width, height };
     });
-    return Promise.resolve({ images, provider: this.name, promptVersion: 'artwork-v1', costUsdMicros: 0, demo: this.demo });
+    return Promise.resolve({
+      images,
+      provider: this.name,
+      promptVersion: 'artwork-v1',
+      costUsdMicros: 0,
+      demo: this.demo,
+    });
   }
 }
 
 function clean(w: string) {
-  return w.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-zA-Z]/g, '');
+  return w
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-zA-Z]/g, '');
 }
 
 function cap(w: string) {

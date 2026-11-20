@@ -81,30 +81,53 @@ export class AdminService {
   async stats() {
     const since = new Date(Date.now() - STATS_DAYS * 86_400_000);
     since.setUTCHours(0, 0, 0, 0);
-    const [users, signups, activeUsers, projects, jobsByKind, aiCost, revenue, workspaces, paying, jobsDaily, revenueDaily] =
-      await Promise.all([
-        this.prisma.user.count({ where: { deletedAt: null } }),
-        this.prisma.user.count({ where: { createdAt: { gte: since } } }),
-        // Actif : au moins une session ouverte ou renouvelée sur la période.
-        this.prisma.user.count({ where: { refreshTokens: { some: { createdAt: { gte: since } } } } }),
-        this.prisma.project.count({ where: { deletedAt: null } }),
-        this.prisma.generationJob.groupBy({ by: ['kind'], where: { createdAt: { gte: since } }, _count: true }),
-        this.prisma.generationJob.aggregate({ where: { createdAt: { gte: since } }, _sum: { costUsdMicros: true } }),
-        this.prisma.payment.aggregate({
-          where: { status: PaymentStatus.SUCCEEDED, createdAt: { gte: since } },
-          _sum: { amountGnf: true },
-        }),
-        this.prisma.workspace.count(),
-        this.prisma.payment.groupBy({ by: ['workspaceId'], where: { status: PaymentStatus.SUCCEEDED } }),
-        this.prisma.$queryRaw<{ day: Date; generations: bigint; cost: bigint | null }[]>`
+    const [
+      users,
+      signups,
+      activeUsers,
+      projects,
+      jobsByKind,
+      aiCost,
+      revenue,
+      workspaces,
+      paying,
+      jobsDaily,
+      revenueDaily,
+    ] = await Promise.all([
+      this.prisma.user.count({ where: { deletedAt: null } }),
+      this.prisma.user.count({ where: { createdAt: { gte: since } } }),
+      // Actif : au moins une session ouverte ou renouvelée sur la période.
+      this.prisma.user.count({ where: { refreshTokens: { some: { createdAt: { gte: since } } } } }),
+      this.prisma.project.count({ where: { deletedAt: null } }),
+      this.prisma.generationJob.groupBy({
+        by: ['kind'],
+        where: { createdAt: { gte: since } },
+        _count: true,
+      }),
+      this.prisma.generationJob.aggregate({
+        where: { createdAt: { gte: since } },
+        _sum: { costUsdMicros: true },
+      }),
+      this.prisma.payment.aggregate({
+        where: { status: PaymentStatus.SUCCEEDED, createdAt: { gte: since } },
+        _sum: { amountGnf: true },
+      }),
+      this.prisma.workspace.count(),
+      this.prisma.payment.groupBy({
+        by: ['workspaceId'],
+        where: { status: PaymentStatus.SUCCEEDED },
+      }),
+      this.prisma.$queryRaw<{ day: Date; generations: bigint; cost: bigint | null }[]>`
           SELECT date_trunc('day', "createdAt") AS day, count(*) AS generations, sum("costUsdMicros") AS cost
           FROM "GenerationJob" WHERE "createdAt" >= ${since} GROUP BY 1`,
-        this.prisma.$queryRaw<{ day: Date; amount: bigint | null }[]>`
+      this.prisma.$queryRaw<{ day: Date; amount: bigint | null }[]>`
           SELECT date_trunc('day', "createdAt") AS day, sum("amountGnf") AS amount
           FROM "Payment" WHERE status = 'SUCCEEDED' AND "createdAt" >= ${since} GROUP BY 1`,
-      ]);
+    ]);
 
-    const generations = Object.fromEntries(Object.values(JobKind).map((kind) => [kind, 0])) as Record<JobKind, number>;
+    const generations = Object.fromEntries(
+      Object.values(JobKind).map((kind) => [kind, 0]),
+    ) as Record<JobKind, number>;
     for (const g of jobsByKind) generations[g.kind] = g._count;
 
     const key = (d: Date) => d.toISOString().slice(0, 10);
@@ -162,7 +185,12 @@ export class AdminService {
       where: { id: userId },
       select: {
         ...USER_SELECT,
-        memberships: { select: { role: true, workspace: { select: { id: true, name: true, creditBalance: true } } } },
+        memberships: {
+          select: {
+            role: true,
+            workspace: { select: { id: true, name: true, creditBalance: true } },
+          },
+        },
       },
     });
   }
@@ -175,7 +203,10 @@ export class AdminService {
       throw new ForbiddenException('Action impossible sur votre propre compte');
     }
 
-    const before = await this.prisma.user.findUniqueOrThrow({ where: { id: userId }, select: USER_SELECT });
+    const before = await this.prisma.user.findUniqueOrThrow({
+      where: { id: userId },
+      select: USER_SELECT,
+    });
     // Hiérarchie : on n'agit que sur un rôle inférieur au sien (le super admin agit sur tous).
     if (
       userId !== actor.id &&
@@ -192,7 +223,11 @@ export class AdminService {
     }
     if (dto.role !== undefined) data.role = dto.role;
 
-    const after = await this.prisma.user.update({ where: { id: userId }, data, select: USER_SELECT });
+    const after = await this.prisma.user.update({
+      where: { id: userId },
+      data,
+      select: USER_SELECT,
+    });
     if (dto.suspended || dto.resetTwoFactor) await this.sessions.revokeAll(userId);
 
     await this.audit.log({
@@ -205,7 +240,10 @@ export class AdminService {
       ip,
     });
     return toAdminUser(
-      await this.prisma.user.findUniqueOrThrow({ where: { id: userId }, select: ADMIN_USER_SELECT }),
+      await this.prisma.user.findUniqueOrThrow({
+        where: { id: userId },
+        select: ADMIN_USER_SELECT,
+      }),
     );
   }
 
@@ -246,9 +284,17 @@ export class AdminService {
   // ─── Ajustements proposés par le support (§3 : « avec validation ») ───
 
   async requestCreditAdjustment(actor: AuthUser, dto: AdjustCreditsDto, ip: string) {
-    await this.prisma.workspace.findUniqueOrThrow({ where: { id: dto.workspaceId }, select: { id: true } });
+    await this.prisma.workspace.findUniqueOrThrow({
+      where: { id: dto.workspaceId },
+      select: { id: true },
+    });
     const request = await this.prisma.creditAdjustmentRequest.create({
-      data: { workspaceId: dto.workspaceId, delta: dto.delta, reason: dto.reason, requestedById: actor.id },
+      data: {
+        workspaceId: dto.workspaceId,
+        delta: dto.delta,
+        reason: dto.reason,
+        requestedById: actor.id,
+      },
     });
     await this.audit.log({
       actorId: actor.id,
@@ -272,16 +318,28 @@ export class AdminService {
   }
 
   /** Décision d'un admin, distinct du demandeur (double regard) ; une demande ne se décide qu'une fois. */
-  async decideCreditRequest(actor: AuthUser, id: string, dto: CreditRequestDecisionDto, ip: string) {
+  async decideCreditRequest(
+    actor: AuthUser,
+    id: string,
+    dto: CreditRequestDecisionDto,
+    ip: string,
+  ) {
     const request = await this.prisma.creditAdjustmentRequest.findUniqueOrThrow({ where: { id } });
-    if (request.status !== 'PENDING') throw new ConflictException('Cette demande a déjà été traitée');
+    if (request.status !== 'PENDING')
+      throw new ConflictException('Cette demande a déjà été traitée');
     if (request.requestedById === actor.id) {
-      throw new ForbiddenException('Une demande est validée par un autre administrateur que son auteur');
+      throw new ForbiddenException(
+        'Une demande est validée par un autre administrateur que son auteur',
+      );
     }
     if (dto.approve) {
       await this.adjustCredits(
         actor,
-        { workspaceId: request.workspaceId, delta: request.delta, reason: `Demande du support validée : ${request.reason}` },
+        {
+          workspaceId: request.workspaceId,
+          delta: request.delta,
+          reason: `Demande du support validée : ${request.reason}`,
+        },
         ip,
       );
     }
@@ -343,7 +401,10 @@ export class AdminService {
     });
     const page = toPage(rows, q.limit);
     // Type AuditEntry du front : nom de l'auteur à plat, détails avant / après conservés.
-    return { ...page, items: page.items.map((row) => ({ ...row, actorName: row.actor?.fullName ?? 'Système' })) };
+    return {
+      ...page,
+      items: page.items.map((row) => ({ ...row, actorName: row.actor?.fullName ?? 'Système' })),
+    };
   }
 
   // ─── Liste noire (ADM-12) ───
@@ -355,14 +416,28 @@ export class AdminService {
   async addBlockedTerm(actor: AuthUser, dto: BlockedTermDto, ip: string) {
     const term = await this.prisma.blockedTerm.create({ data: dto });
     this.moderation.invalidate();
-    await this.audit.log({ actorId: actor.id, action: 'blocked-term.create', entityType: 'BlockedTerm', entityId: term.id, after: term, ip });
+    await this.audit.log({
+      actorId: actor.id,
+      action: 'blocked-term.create',
+      entityType: 'BlockedTerm',
+      entityId: term.id,
+      after: term,
+      ip,
+    });
     return term;
   }
 
   async removeBlockedTerm(actor: AuthUser, id: string, ip: string) {
     const term = await this.prisma.blockedTerm.delete({ where: { id } });
     this.moderation.invalidate();
-    await this.audit.log({ actorId: actor.id, action: 'blocked-term.delete', entityType: 'BlockedTerm', entityId: id, before: term, ip });
+    await this.audit.log({
+      actorId: actor.id,
+      action: 'blocked-term.delete',
+      entityType: 'BlockedTerm',
+      entityId: id,
+      before: term,
+      ip,
+    });
   }
 
   // ─── Modération des cachets (§6.4) ───
@@ -384,13 +459,15 @@ export class AdminService {
           id: signature.id,
           kind: 'STAMP' as const,
           title: stamp.ringText,
-          reason: terms.length ? `Termes officiels : ${terms.join(', ')}` : 'Validation manuelle demandée',
+          reason: terms.length
+            ? `Termes officiels : ${terms.join(', ')}`
+            : 'Validation manuelle demandée',
           workspaceName: signature.project.workspace.name,
           createdAt: signature.createdAt,
           // Le fichier rendu (logo compris) quand il existe, sinon un rendu à la volée.
           previewSvg: signature.fileKey
-            ? (await this.storage.get(signature.fileKey).catch(() => null))?.toString('utf8') ??
-              renderStampSvg(stamp)
+            ? ((await this.storage.get(signature.fileKey).catch(() => null))?.toString('utf8') ??
+              renderStampSvg(stamp))
             : renderStampSvg(stamp),
         };
       }),

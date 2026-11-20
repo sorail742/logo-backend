@@ -18,4 +18,3 @@ import { PaymentsService } from './payments.service';
   exports: [PaymentsService, InvoicePdfService],
 })
 export class PaymentsModule {}
-

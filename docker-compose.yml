@@ -6,16 +6,16 @@ services:
       POSTGRES_USER: logo
       POSTGRES_PASSWORD: logo
       POSTGRES_DB: logo
-    ports: ["${POSTGRES_PORT:-5432}:5432"]
+    ports: ['${POSTGRES_PORT:-5432}:5432']
     volumes: [pgdata:/var/lib/postgresql/data]
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U logo"]
+      test: ['CMD-SHELL', 'pg_isready -U logo']
       interval: 5s
       retries: 10
 
   redis:
     image: redis:7-alpine
-    ports: ["${REDIS_PORT:-6379}:6379"]
+    ports: ['${REDIS_PORT:-6379}:6379']
 
   # Stockage compatible S3. MinIO ne publie plus d'images communautaires : RustFS (Apache 2.0).
   s3:
@@ -23,13 +23,13 @@ services:
     environment:
       RUSTFS_ACCESS_KEY: minio
       RUSTFS_SECRET_KEY: minio12345
-      RUSTFS_CONSOLE_ENABLE: "true"
-    ports: ["${S3_PORT:-9000}:9000", "9001:9001"]
+      RUSTFS_CONSOLE_ENABLE: 'true'
+    ports: ['${S3_PORT:-9000}:9000', '9001:9001']
     volumes: [s3data:/data]
 
   mailpit:
     image: axllent/mailpit:latest
-    ports: ["1025:1025", "8025:8025"]
+    ports: ['1025:1025', '8025:8025']
 
 volumes:
   pgdata:

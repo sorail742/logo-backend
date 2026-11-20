@@ -36,10 +36,7 @@ export async function generateDtfWhiteUnderbase(
   }
 
   // Obtenir les pixels RGBA bruts
-  const { data } = await image
-    .ensureAlpha()
-    .raw()
-    .toBuffer({ resolveWithObject: true });
+  const { data } = await image.ensureAlpha().raw().toBuffer({ resolveWithObject: true });
 
   // 1. Extraire et binariser le canal alpha
   const alpha = new Uint8Array(width * height);
@@ -116,10 +113,7 @@ export async function generateScreenPrintSeparation(
     throw new Error('Image invalide');
   }
 
-  const { data } = await image
-    .ensureAlpha()
-    .raw()
-    .toBuffer({ resolveWithObject: true });
+  const { data } = await image.ensureAlpha().raw().toBuffer({ resolveWithObject: true });
 
   const [tRed, tGreen, tBlue] = hexToRgb(targetHex);
   const tolSq = tolerance * tolerance;
@@ -171,7 +165,12 @@ function hexToRgb(hex: string): [number, number, number] {
 }
 
 /** Table de référence Pantone Solid Coated standard pour textile & sérigraphie */
-const PANTONE_SOLID_COATED: Array<{ code: string; name: string; hex: string; rgb: [number, number, number] }> = [
+const PANTONE_SOLID_COATED: Array<{
+  code: string;
+  name: string;
+  hex: string;
+  rgb: [number, number, number];
+}> = [
   { code: 'Black C', name: 'Process Black', hex: '#2D2926', rgb: [45, 41, 38] },
   { code: 'White C', name: 'Bright White', hex: '#FFFFFF', rgb: [255, 255, 255] },
   { code: '186 C', name: 'Classic Red', hex: '#C8102E', rgb: [200, 16, 46] },

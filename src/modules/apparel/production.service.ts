@@ -1,12 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import {
-  AssetKind,
-  JobKind,
-  JobStatus,
-  PrintTechnique,
-  Prisma,
-} from '@prisma/client';
+import { AssetKind, JobKind, JobStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { StorageService } from '../../common/storage/storage.service';
 import { slugify } from '../../common/utils/slug.util';
@@ -155,7 +149,10 @@ export class ProductionService {
         },
         zones: templateZones.map((z) => ({
           ...z,
-          label: (z as unknown as { label?: string; name?: string }).label ?? (z as unknown as { label?: string; name?: string }).name ?? z.key,
+          label:
+            (z as unknown as { label?: string; name?: string }).label ??
+            (z as unknown as { label?: string; name?: string }).name ??
+            z.key,
         })),
         sizes: templateSizes,
         referenceSize: REFERENCE_SIZE,

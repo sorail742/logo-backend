@@ -15,9 +15,27 @@ describe('visuels génératifs du Studio', () => {
   });
 
   it('est déterministe : même graine, même image ; autre graine, autre image', () => {
-    const a = renderArtwork({ style: 'wax', palette, width: 200, height: 200, seed: hashSeed('fête') });
-    const b = renderArtwork({ style: 'wax', palette, width: 200, height: 200, seed: hashSeed('fête') });
-    const c = renderArtwork({ style: 'wax', palette, width: 200, height: 200, seed: hashSeed('fêtes') });
+    const a = renderArtwork({
+      style: 'wax',
+      palette,
+      width: 200,
+      height: 200,
+      seed: hashSeed('fête'),
+    });
+    const b = renderArtwork({
+      style: 'wax',
+      palette,
+      width: 200,
+      height: 200,
+      seed: hashSeed('fête'),
+    });
+    const c = renderArtwork({
+      style: 'wax',
+      palette,
+      width: 200,
+      height: 200,
+      seed: hashSeed('fêtes'),
+    });
     expect(a).toBe(b);
     expect(a).not.toBe(c);
   });

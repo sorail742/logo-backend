@@ -12,10 +12,10 @@ Rendu : opentype.js (texte en tracés) · SVGO · resvg (PNG) · pdfkit + svg-to
 
 Un seul code source, deux points d'entrée :
 
-| Processus | Entrée | Rôle |
-| --- | --- | --- |
-| API | `src/main.ts` | REST sous `/api/v1`, Swagger à `/api/docs` |
-| Worker | `src/worker.ts` | Consommateurs BullMQ : générations, e-mails, maintenance nocturne |
+| Processus | Entrée          | Rôle                                                              |
+| --------- | --------------- | ----------------------------------------------------------------- |
+| API       | `src/main.ts`   | REST sous `/api/v1`, Swagger à `/api/docs`                        |
+| Worker    | `src/worker.ts` | Consommateurs BullMQ : générations, e-mails, maintenance nocturne |
 
 > Le cahier des charges (§11.2) prévoit un monorepo pnpm/Turborepo (`apps/api`, `apps/worker`, `packages/*`). Ce dépôt contient la partie backend ; il pourra être déplacé dans `apps/api` sans modification de code.
 
@@ -35,11 +35,11 @@ E-mails de développement : http://localhost:8025 (Mailpit).
 
 Sous Windows, Hyper-V réserve souvent des plages de ports (`netsh interface ipv4 show excludedportrange protocol=tcp`). Si 6379 ou 5432 est refusé, définissez `REDIS_PORT` / `POSTGRES_PORT` dans `.env` (par ex. `REDIS_PORT=16379` et `REDIS_URL=redis://localhost:16379`).
 
-Test de bout en bout, API et worker lancés : `npm run test:smoke` (inscription, rotation de session, brief, génération + SSE, disponibilité, vote, choix du nom, quota gratuit, droits, logos : génération, édition, variantes, export, import nettoyé ; historique, espaces et invitations, 2FA et codes de secours, textile, Studio : créations, exports, avis épinglés, images générées, banque de photos ; corbeille, essai public). Il lit la base (`DATABASE_URL`) pour poser un abonnement, les paiements n'existant pas encore. Il ne contacte que les hôtes de test listés dans `TRUSTED_HOSTS` (localhost par défaut) : pour viser une autre API (`API=http://hote/api/v1`), ajoutez son hôte à cette liste.
+Test de bout en bout, API et worker lancés : `npm run test:smoke` (inscription, rotation de session, brief, génération + SSE, disponibilité, vote, choix du nom, quota gratuit, droits, logos : génération, édition, variantes, export, import nettoyé ; historique, espaces et invitations, 2FA et codes de secours, textile, Studio : créations, exports, avis épinglés, images générées, banque de photos ; corbeille, essai public). Il lit la base (`DATABASE_URL`) pour poser un abonnement. Il ne contacte que les hôtes de test listés dans `TRUSTED_HOSTS` (localhost par défaut) : pour viser une autre API (`API=http://hote/api/v1`), ajoutez son hôte à cette liste.
 
 Banque de photos du Studio : facultative, activée par une clé gratuite [Pexels](https://www.pexels.com/api/) dans `PEXELS_API_KEY`.
 
-Détourage par IA dans l'atelier photo du Studio : facultatif, activé par une clé [remove.bg](https://www.remove.bg/api) dans `REMOVE_BG_API_KEY` (1 crédit par photo, rendu si le service échoue). Sans clé, l'atelier garde le détourage local : fond uni, baguette magique et pinceaux.
+Détourage dans l'atelier photo du Studio : traitement local via Sharp (fond uni, baguette magique et pinceaux), facturé 1 crédit et remboursé en cas d'échec. `REMOVE_BG_API_KEY` reste documenté pour une intégration future ; il n'est pas utilisé par l'implémentation actuelle.
 
 Fichiers générés : par défaut sur disque (`STORAGE_DIR`, servis par URL signée `/api/v1/files`) ; `STORAGE_DRIVER=s3` utilise le stockage S3 de docker-compose (RustFS, console sur http://localhost:9001) ou tout stockage S3 (URL présignées).
 
@@ -124,16 +124,16 @@ Matrice complète, route par route : [docs/permissions.md](docs/permissions.md).
 
 ## Avancement par rapport au planning (§15, §16.13)
 
-| Phase | Statut |
-| --- | --- |
-| 1. Socle technique : auth, espaces, projets, back-office minimal | Fait |
-| 2. Générateur de noms : brief, génération, vérifications, favoris, choix | Fait (fournisseur IA factice) |
-| 3. Logos (moteur SVG, éditeur, exports) | Fait pour le moteur A (fournisseur IA factice) ; moteur B (image + vectorisation) à faire |
-| 4. Signatures (slogans, e-mail, paraphe, cachet) | Fait (fournisseur IA factice) ; contrôle IA des slogans connus à faire |
-| 5. Kit de marque, partage, commentaires | Fait : versions, charte PDF, archive, supports imprimables, partage, commentaires et mentions, notifications par e-mail |
-| 6. Paiements (Orange Money, abonnements, factures) | À faire |
-| 8a. Textile : gabarits, éditeur, maquettes, BAT | Partiel : supports, zones, tailles, préréglages, éléments, contrôle, BAT, ateliers, admin. Propositions IA et maquettes 2D à faire |
-| 8b. Textile : numéros, effectifs, pack atelier | Partiel : import et contrôle d'effectif, ajustement des noms. Polices de numéros et exports par technique à faire |
+| Phase                                                                    | Statut                                                                                                                             |
+| ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Socle technique : auth, espaces, projets, back-office minimal         | Fait                                                                                                                               |
+| 2. Générateur de noms : brief, génération, vérifications, favoris, choix | Fait (fournisseur IA factice)                                                                                                      |
+| 3. Logos (moteur SVG, éditeur, exports)                                  | Fait pour le moteur A (fournisseur IA factice) ; moteur B (image + vectorisation) à faire                                          |
+| 4. Signatures (slogans, e-mail, paraphe, cachet)                         | Fait (fournisseur IA factice) ; contrôle IA des slogans connus à faire                                                             |
+| 5. Kit de marque, partage, commentaires                                  | Fait : versions, charte PDF, archive, supports imprimables, partage, commentaires et mentions, notifications par e-mail            |
+| 6. Paiements (Orange Money, cartes, agrégateur, abonnements, factures)   | Implémenté avec des adaptateurs réels derrière des identifiants configurables ; bac à sable automatique sans identifiants          |
+| 8a. Textile : gabarits, éditeur, maquettes, BAT                          | Partiel : supports, zones, tailles, préréglages, éléments, contrôle, BAT, ateliers, admin. Propositions IA et maquettes 2D à faire |
+| 8b. Textile : numéros, effectifs, pack atelier                           | Partiel : import et contrôle d'effectif, ajustement des noms. Polices de numéros et exports par technique à faire                  |
 
 ## Module 2 — logos (§5)
 
@@ -217,8 +217,8 @@ produit les fichiers définitifs.
   détourage (`cutout`, PNG), contour (`outline`) et lueur (`glow`), modes de fusion complets.
   Chaque réglage devient une primitive de filtre SVG : l'aperçu du navigateur et l'export
   (resvg, PDF tramé à 300 dpi) donnent la même image. `POST /projects/:pid/studio-cutout`
-  (`Idempotency-Key`) renvoie le masque du sujet détouré par remove.bg (1 crédit, rendu en cas
-  d'échec ; 501 sans `REMOVE_BG_API_KEY`).
+  (`Idempotency-Key`) renvoie le masque du sujet détouré localement via Sharp (1 crédit, rendu en cas
+  d'échec).
 
 ## Module 5 — décoration textile (§16)
 
@@ -232,17 +232,17 @@ Points en attente d'une décision (§15.4) : fournisseur IA réel (texte et imag
 
 ## Scripts
 
-| Commande | Effet |
-| --- | --- |
-| `npm run dev` / `npm run dev:worker` | API / worker en mode watch |
-| `npm run build` | Compilation dans `dist/` |
-| `npm test` / `npm run test:cov` | Tests unitaires / couverture |
-| `npm run test:smoke` | Parcours complet contre une API locale |
-| `npm run test:permissions` | Matrice des droits, rôle par rôle, contre une API locale |
-| `npm run lint` / `npm run typecheck` | ESLint / TypeScript |
-| `npm run prisma:migrate` | Nouvelle migration |
-| `npm run prisma:deploy` | Migrations en production |
-| `npm run fonts:fetch` | Régénère `assets/fonts` (polices de la bibliothèque) |
+| Commande                             | Effet                                                    |
+| ------------------------------------ | -------------------------------------------------------- |
+| `npm run dev` / `npm run dev:worker` | API / worker en mode watch                               |
+| `npm run build`                      | Compilation dans `dist/`                                 |
+| `npm test` / `npm run test:cov`      | Tests unitaires / couverture                             |
+| `npm run test:smoke`                 | Parcours complet contre une API locale                   |
+| `npm run test:permissions`           | Matrice des droits, rôle par rôle, contre une API locale |
+| `npm run lint` / `npm run typecheck` | ESLint / TypeScript                                      |
+| `npm run prisma:migrate`             | Nouvelle migration                                       |
+| `npm run prisma:deploy`              | Migrations en production                                 |
+| `npm run fonts:fetch`                | Régénère `assets/fonts` (polices de la bibliothèque)     |
 
 ## Docker
 

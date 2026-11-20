@@ -1,6 +1,6 @@
 import {
   BadRequestException,
-  ConflictException,
+  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
@@ -13,9 +13,9 @@ import {
   Prisma,
   SubscriptionStatus,
 } from '@prisma/client';
-import { randomBytes, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { cursorArgs, CursorPaginationDto, toPage } from '../../common/dto/pagination.dto';
-import { PrismaService, Tx } from '../../common/prisma/prisma.service';
+import { PrismaService } from '../../common/prisma/prisma.service';
 import { StorageService } from '../../common/storage/storage.service';
 import { CreditsService } from '../../modules/credits/credits.service';
 import { NotificationsService } from '../../modules/notifications/notifications.service';
@@ -40,7 +40,7 @@ const PRICE_PER_CREDIT_GNF = 1_500n;
 /** Codes promotionnels de réduction (§8.4, PAY-06). */
 const PROMO_CODES: Record<string, number> = {
   BIENVENUE10: 10, // -10%
-  STARTUP20: 20,   // -20%
+  STARTUP20: 20, // -20%
 };
 
 @Injectable()
@@ -90,44 +90,18 @@ export class PaymentsService {
       };
     }
 
-    const [workspace, user] = await Promise.all([
+    const [, user] = await Promise.all([
       this.prisma.workspace.findUniqueOrThrow({ where: { id: workspaceId } }),
       this.prisma.user.findUniqueOrThrow({ where: { id: actorId } }),
     ]);
 
-    let amountGnf = 0n;
-    let description = '';
-    let creditsToGrant: number | null = null;
-    let planCode: string | null = null;
-
-    if (dto.planCode) {
-      const plan = await this.prisma.plan.findUnique({
-        where: { code: dto.planCode, isActive: true },
-      });
-      if (!plan) throw new NotFoundException(`Offre ${dto.planCode} introuvable ou inactive`);
-
-      // Vérification du justificatif obligatoire pour l'offre ASSOCIATION (§8.2, ADM-07)
-      if (plan.code === 'ASSOCIATION') {
-        const proof = await this.prisma.associationProof.findFirst({
-          where: { workspaceId, status: 'APPROVED' },
-        });
-        if (!proof) {
-          throw new BadRequestException(
-            'L’offre Association requiert un justificatif d’agrément validé par l’administration.',
-          );
-        }
-      }
-
-      planCode = plan.code;
-      amountGnf = plan.priceGnf > 0n ? plan.priceGnf : (DEFAULT_PLAN_PRICES[plan.code] ?? 250_000n);
-      description = `Souscription à l’offre ${plan.name}`;
-    } else if (dto.creditPack) {
-      creditsToGrant = dto.creditPack;
-      amountGnf = BigInt(creditsToGrant) * PRICE_PER_CREDIT_GNF;
-      description = `Recharge de ${creditsToGrant} crédits`;
-    } else {
-      throw new BadRequestException('Veuillez spécifier une offre (planCode) ou un nombre de crédits (creditPack).');
-    }
+    const purchase = await this.resolveCheckoutDetails(
+      workspaceId,
+      dto,
+    );
+    let amountGnf = purchase.amountGnf;
+    let description = purchase.description;
+    const { creditsToGrant, planCode } = purchase;
 
     // Application éventuelle d'un code promo (PAY-06)
     if (dto.promoCode) {
@@ -152,7 +126,8 @@ export class PaymentsService {
     });
 
     const adapter = this.adapters.get(dto.provider);
-    if (!adapter) throw new BadRequestException(`Fournisseur de paiement ${dto.provider} non pris en charge.`);
+    if (!adapter)
+      throw new BadRequestException(`Fournisseur de paiement ${dto.provider} non pris en charge.`);
 
     const checkout = await adapter.initiateCheckout({
       paymentId: payment.id,
@@ -185,31 +160,70 @@ export class PaymentsService {
     };
   }
 
+  private async resolveCheckoutDetails(workspaceId: string, dto: CreateCheckoutDto) {
+    let amountGnf: bigint;
+    let description: string;
+    let creditsToGrant: number | null = null;
+    let planCode: string | null = null;
+
+    if (dto.planCode) {
+      const plan = await this.prisma.plan.findUnique({
+        where: { code: dto.planCode, isActive: true },
+      });
+      if (!plan) throw new NotFoundException(`Offre ${dto.planCode} introuvable ou inactive`);
+
+      // Vérification du justificatif obligatoire pour l'offre ASSOCIATION (§8.2, ADM-07)
+      if (plan.code === 'ASSOCIATION') {
+        const proof = await this.prisma.associationProof.findFirst({
+          where: { workspaceId, status: 'APPROVED' },
+        });
+        if (!proof) {
+          throw new BadRequestException(
+            'L’offre Association requiert un justificatif d’agrément validé par l’administration.',
+          );
+        }
+      }
+
+      planCode = plan.code;
+      amountGnf = plan.priceGnf > 0n ? plan.priceGnf : (DEFAULT_PLAN_PRICES[plan.code] ?? 250_000n);
+      description = `Souscription à l’offre ${plan.name}`;
+    } else if (dto.creditPack) {
+      creditsToGrant = dto.creditPack;
+      amountGnf = BigInt(creditsToGrant) * PRICE_PER_CREDIT_GNF;
+      description = `Recharge de ${creditsToGrant} crédits`;
+    } else {
+      throw new BadRequestException(
+        'Veuillez spécifier une offre (planCode) ou un nombre de crédits (creditPack).',
+      );
+    }
+
+    return { amountGnf, description, creditsToGrant, planCode };
+  }
+
   // ─── Traitement des Webhooks des opérateurs (PAY-03) ───
 
   async handleWebhook(
     provider: PaymentProvider,
     headers: Record<string, string | string[]>,
-    body: any,
+    body: Record<string, unknown>,
   ) {
     const adapter = this.adapters.get(provider);
     if (!adapter) throw new BadRequestException(`Adaptateur inconnu pour ${provider}`);
 
     const event = await adapter.verifyAndParseWebhook(headers, body);
-    if (!event.providerRef && !body?.order_id && !body?.paymentId) {
+    const paymentId = [body.order_id, body.paymentId].find(
+      (value): value is string => typeof value === 'string' && value.length > 0,
+    );
+    if (!event.providerRef && !paymentId) {
       this.logger.warn(`Webhook ${provider} reçu sans référence de transaction.`);
       return { received: true, ignored: true };
     }
 
     const ref = event.providerRef;
-    const paymentId = body?.order_id || body?.paymentId;
-
     const payment = await this.prisma.payment.findFirst({
       where: {
-        OR: [
-          ...(ref ? [{ providerRef: ref }] : []),
-          ...(paymentId ? [{ id: paymentId }] : []),
-        ],
+        provider,
+        OR: [...(ref ? [{ providerRef: ref }] : []), ...(paymentId ? [{ id: paymentId }] : [])],
       },
       include: {
         workspace: {
@@ -221,7 +235,9 @@ export class PaymentsService {
     });
 
     if (!payment) {
-      this.logger.warn(`Paiement non trouvé pour le webhook ${provider} (ref: ${ref}, order_id: ${paymentId})`);
+      this.logger.warn(
+        `Paiement non trouvé pour le webhook ${provider} (ref: ${ref}, order_id: ${paymentId})`,
+      );
       return { received: true, notFound: true };
     }
 
@@ -239,6 +255,12 @@ export class PaymentsService {
     }
 
     if (event.status === PaymentStatus.SUCCEEDED) {
+      if (event.amountGnf !== undefined && event.amountGnf !== payment.amountGnf) {
+        this.logger.warn(
+          `Montant incohérent pour le paiement ${payment.id} (${event.amountGnf} au lieu de ${payment.amountGnf} GNF).`,
+        );
+        return { received: true, ignored: true, amountMismatch: true };
+      }
       return this.confirmPayment(payment.id, event.raw);
     }
 
@@ -276,63 +298,7 @@ export class PaymentsService {
       const owner = payment.workspace.members[0]?.user;
       const ownerId = owner?.id;
 
-      // 2. Traitement selon la nature de l'achat :
-      // Cas A : Achat de crédits unitaires
-      if (payment.creditsGranted && payment.creditsGranted > 0) {
-        await this.credits.credit(tx, {
-          workspaceId: payment.workspaceId,
-          delta: payment.creditsGranted,
-          reason: LedgerReason.PURCHASE,
-          paymentId: payment.id,
-          actorId: ownerId,
-          note: `Achat confirmé de ${payment.creditsGranted} crédits`,
-        });
-      }
-
-      // Cas B : Souscription ou renouvellement d'une offre (Plan)
-      if (payment.planCode) {
-        const plan = await tx.plan.findUniqueOrThrow({ where: { code: payment.planCode } });
-
-        // Calcul de la période : 1 mois pour mensuel, 1 an pour annuel, 100 ans pour un pack unique
-        const currentPeriodEnd = new Date();
-        if (plan.interval === 'year') {
-          currentPeriodEnd.setFullYear(currentPeriodEnd.getFullYear() + 1);
-        } else if (plan.interval === 'month') {
-          currentPeriodEnd.setMonth(currentPeriodEnd.getMonth() + 1);
-        } else {
-          currentPeriodEnd.setFullYear(currentPeriodEnd.getFullYear() + 100);
-        }
-
-        await tx.subscription.upsert({
-          where: { workspaceId: payment.workspaceId },
-          create: {
-            workspaceId: payment.workspaceId,
-            planId: plan.id,
-            status: SubscriptionStatus.ACTIVE,
-            currentPeriodEnd,
-          },
-          update: {
-            planId: plan.id,
-            status: SubscriptionStatus.ACTIVE,
-            currentPeriodEnd,
-            cancelAtPeriodEnd: false,
-          },
-        });
-
-        // Crédits inclus dans l'offre (crédits récurrents ou one-time du Pack)
-        const features = plan.features as { oneTimeCredits?: number } | null;
-        const creditsToAdd = plan.monthlyCredits > 0 ? plan.monthlyCredits : (features?.oneTimeCredits ?? 0);
-        if (creditsToAdd > 0) {
-          await this.credits.credit(tx, {
-            workspaceId: payment.workspaceId,
-            delta: creditsToAdd,
-            reason: plan.monthlyCredits > 0 ? LedgerReason.SUBSCRIPTION_GRANT : LedgerReason.PURCHASE,
-            paymentId: payment.id,
-            actorId: ownerId,
-            note: `Crédits inclus : offre ${plan.name}`,
-          });
-        }
-      }
+      await this.applyPaymentEntitlements(tx, payment, ownerId);
 
       // 3. Génération automatique de la facture PDF
       const invoice = await this.invoicePdf.generateInvoice(tx, payment.id, {
@@ -359,9 +325,76 @@ export class PaymentsService {
     });
   }
 
+  private async applyPaymentEntitlements(
+    tx: Prisma.TransactionClient,
+    payment: {
+      id: string;
+      workspaceId: string;
+      creditsGranted: number | null;
+      planCode: string | null;
+    },
+    ownerId?: string,
+  ) {
+    if (payment.creditsGranted && payment.creditsGranted > 0) {
+      await this.credits.credit(tx, {
+        workspaceId: payment.workspaceId,
+        delta: payment.creditsGranted,
+        reason: LedgerReason.PURCHASE,
+        paymentId: payment.id,
+        actorId: ownerId,
+        note: `Achat confirmé de ${payment.creditsGranted} crédits`,
+      });
+    }
+
+    if (!payment.planCode) return;
+
+    const plan = await tx.plan.findUniqueOrThrow({ where: { code: payment.planCode } });
+    const currentPeriodEnd = new Date();
+    if (plan.interval === 'year') {
+      currentPeriodEnd.setFullYear(currentPeriodEnd.getFullYear() + 1);
+    } else if (plan.interval === 'month') {
+      currentPeriodEnd.setMonth(currentPeriodEnd.getMonth() + 1);
+    } else {
+      currentPeriodEnd.setFullYear(currentPeriodEnd.getFullYear() + 100);
+    }
+
+    await tx.subscription.upsert({
+      where: { workspaceId: payment.workspaceId },
+      create: {
+        workspaceId: payment.workspaceId,
+        planId: plan.id,
+        status: SubscriptionStatus.ACTIVE,
+        currentPeriodEnd,
+      },
+      update: {
+        planId: plan.id,
+        status: SubscriptionStatus.ACTIVE,
+        currentPeriodEnd,
+        cancelAtPeriodEnd: false,
+      },
+    });
+
+    const features = plan.features as { oneTimeCredits?: number } | null;
+    const creditsToAdd =
+      plan.monthlyCredits > 0 ? plan.monthlyCredits : (features?.oneTimeCredits ?? 0);
+    if (creditsToAdd > 0) {
+      await this.credits.credit(tx, {
+        workspaceId: payment.workspaceId,
+        delta: creditsToAdd,
+        reason: plan.monthlyCredits > 0 ? LedgerReason.SUBSCRIPTION_GRANT : LedgerReason.PURCHASE,
+        paymentId: payment.id,
+        actorId: ownerId,
+        note: `Crédits inclus : offre ${plan.name}`,
+      });
+    }
+  }
+
   // ─── Simulation sandbox pour tests E2E et recette ───
 
   async simulatePayment(dto: SimulatePaymentDto) {
+    if (this.config.get('NODE_ENV') === 'production') {
+      throw new ForbiddenException('La simulation de paiement est désactivée en production.');
+    }
     const payment = await this.prisma.payment.findUniqueOrThrow({ where: { id: dto.paymentId } });
     if (dto.fail) {
       await this.prisma.payment.update({
@@ -385,7 +418,13 @@ export class PaymentsService {
     const serialized = rows.map((p) => ({
       ...p,
       amountGnf: p.amountGnf.toString(),
-      invoice: p.invoice ? { ...p.invoice, amountGnf: p.invoice.amountGnf.toString(), taxGnf: p.invoice.taxGnf.toString() } : null,
+      invoice: p.invoice
+        ? {
+            ...p.invoice,
+            amountGnf: p.invoice.amountGnf.toString(),
+            taxGnf: p.invoice.taxGnf.toString(),
+          }
+        : null,
     }));
     return toPage(serialized, q.limit);
   }
@@ -403,4 +442,3 @@ export class PaymentsService {
     };
   }
 }
-

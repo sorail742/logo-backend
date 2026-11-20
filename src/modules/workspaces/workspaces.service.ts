@@ -116,7 +116,10 @@ export class WorkspacesService {
     }
     const now = new Date();
     await this.prisma.$transaction([
-      this.prisma.project.updateMany({ where: { workspaceId, deletedAt: null }, data: { deletedAt: now } }),
+      this.prisma.project.updateMany({
+        where: { workspaceId, deletedAt: null },
+        data: { deletedAt: now },
+      }),
       this.prisma.invitation.deleteMany({ where: { workspaceId, acceptedAt: null } }),
       this.prisma.workspace.update({ where: { id: workspaceId }, data: { deletedAt: now } }),
     ]);
@@ -164,7 +167,10 @@ export class WorkspacesService {
     if (member.role === WorkspaceRole.OWNER && role !== WorkspaceRole.OWNER) {
       await this.assertAnotherOwner(workspaceId);
     }
-    const updated = await this.prisma.membership.update({ where: { id: member.id }, data: { role } });
+    const updated = await this.prisma.membership.update({
+      where: { id: member.id },
+      data: { role },
+    });
     await this.audit.log({
       actorId,
       action: 'workspace.member.update',

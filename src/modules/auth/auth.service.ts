@@ -70,7 +70,10 @@ export class AuthService {
       return created;
     });
 
-    await this.mail.sendEmailVerification(email, await this.actionToken(user, 'verify-email', '2d'));
+    await this.mail.sendEmailVerification(
+      email,
+      await this.actionToken(user, 'verify-email', '2d'),
+    );
     return this.sessions.issue(user, false, meta);
   }
 
@@ -91,11 +94,9 @@ export class AuthService {
     const clientId = this.config.get<string>('GOOGLE_CLIENT_ID');
     if (!clientId) throw new BadRequestException('Connexion Google non configurée');
 
-    const ticket = await this.google
-      .verifyIdToken({ idToken, audience: clientId })
-      .catch(() => {
-        throw new UnauthorizedException('Jeton Google invalide');
-      });
+    const ticket = await this.google.verifyIdToken({ idToken, audience: clientId }).catch(() => {
+      throw new UnauthorizedException('Jeton Google invalide');
+    });
     const p = ticket.getPayload();
     if (!p?.sub || !p.email || !p.email_verified) {
       throw new UnauthorizedException('Adresse Google non vérifiée');
@@ -166,7 +167,10 @@ export class AuthService {
     const user = await this.prisma.user.findUnique({ where: { email: email.toLowerCase() } });
     // Réponse identique que le compte existe ou non (pas d'énumération des comptes).
     if (!user || user.deletedAt || !user.email) return;
-    await this.mail.sendPasswordReset(user.email, await this.actionToken(user, 'reset-password', '30m'));
+    await this.mail.sendPasswordReset(
+      user.email,
+      await this.actionToken(user, 'reset-password', '30m'),
+    );
   }
 
   async resetPassword(token: string, password: string) {
@@ -235,7 +239,10 @@ export class AuthService {
     });
     const user = await this.prisma.user.update({
       where: { id: userId },
-      data: { totpSecret: encrypt(secret, this.totpKey()), totpBackupCodes: backupCodes.map(sha256) },
+      data: {
+        totpSecret: encrypt(secret, this.totpKey()),
+        totpBackupCodes: backupCodes.map(sha256),
+      },
     });
     await this.redis.del(`totp-pending:${userId}`);
     // Nouvelle session marquée mfa pour accéder immédiatement aux routes protégées.
@@ -259,13 +266,19 @@ export class AuthService {
     if (authenticator.verify({ token: code.replace(/\s/g, ''), secret })) return true;
 
     // Retrait atomique : un code de secours ne sert qu'une fois, même en cas de requêtes simultanées.
-    const normalized = code.trim().toLowerCase().replace(/^([0-9a-z]{4})-?([0-9a-z]{4})$/, '$1-$2');
+    const normalized = code
+      .trim()
+      .toLowerCase()
+      .replace(/^([0-9a-z]{4})-?([0-9a-z]{4})$/, '$1-$2');
     const hash = sha256(normalized);
     const consumed = await this.prisma.$executeRaw`
       UPDATE "User" SET "totpBackupCodes" = array_remove("totpBackupCodes", ${hash})
       WHERE id = ${user.id} AND ${hash} = ANY("totpBackupCodes")`;
     if (consumed === 1) return true;
-    throw new UnauthorizedException({ message: 'Code de double authentification incorrect', code: 'MFA_INVALID' });
+    throw new UnauthorizedException({
+      message: 'Code de double authentification incorrect',
+      code: 'MFA_INVALID',
+    });
   }
 
   private totpKey() {

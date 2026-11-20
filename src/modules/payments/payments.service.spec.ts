@@ -1,23 +1,38 @@
-import { BadRequestException } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { PaymentProvider, PaymentStatus, SubscriptionStatus } from '@prisma/client';
-import { AggregatorPaymentAdapter } from './adapters/aggregator.adapter';
-import { CardPaymentAdapter } from './adapters/card.adapter';
-import { OrangeMoneyAdapter } from './adapters/orange-money.adapter';
-import { InvoicePdfService } from './invoice-pdf.service';
+import { BadRequestException, ForbiddenException } from '@nestjs/common';
+import { PaymentProvider, PaymentStatus } from '@prisma/client';
 import { PaymentsService } from './payments.service';
 
 describe('PaymentsService', () => {
   let service: PaymentsService;
-  let prisma: any;
-  let credits: any;
-  let notifications: any;
-  let invoicePdf: any;
-  let storage: any;
-  let config: any;
-  let orangeMoney: any;
-  let card: any;
-  let aggregator: any;
+  let prisma: {
+    payment: Record<string, jest.Mock>;
+    workspace: Record<string, jest.Mock>;
+    user: Record<string, jest.Mock>;
+    plan: Record<string, jest.Mock>;
+    associationProof: Record<string, jest.Mock>;
+    subscription: Record<string, jest.Mock>;
+    $transaction: jest.Mock;
+  };
+  let credits: { credit: jest.Mock };
+  let notifications: { write: jest.Mock };
+  let invoicePdf: { generateInvoice: jest.Mock };
+  let storage: { signedUrl: jest.Mock };
+  let config: { get: jest.Mock };
+  let orangeMoney: {
+    provider: PaymentProvider;
+    initiateCheckout: jest.Mock;
+    verifyAndParseWebhook: jest.Mock;
+  };
+  let card: {
+    provider: PaymentProvider;
+    initiateCheckout: jest.Mock;
+    verifyAndParseWebhook: jest.Mock;
+  };
+  let aggregator: {
+    provider: PaymentProvider;
+    initiateCheckout: jest.Mock;
+    verifyAndParseWebhook: jest.Mock;
+  };
 
   beforeEach(() => {
     prisma = {
@@ -101,16 +116,69 @@ describe('PaymentsService', () => {
     };
 
     service = new PaymentsService(
-      prisma,
-      credits,
-      notifications,
-      invoicePdf,
-      storage,
-      config,
-      orangeMoney,
-      card,
-      aggregator,
+      prisma as never,
+      credits as never,
+      notifications as never,
+      invoicePdf as never,
+      storage as never,
+      config as never,
+      orangeMoney as never,
+      card as never,
+      aggregator as never,
     );
+  });
+
+  describe('handleWebhook', () => {
+    it('limite la recherche au fournisseur du webhook', async () => {
+      orangeMoney.verifyAndParseWebhook.mockResolvedValue({
+        providerRef: 'CARD-REF-1234',
+        status: PaymentStatus.SUCCEEDED,
+      });
+      prisma.payment.findFirst.mockResolvedValue(null);
+
+      const result = await service.handleWebhook(PaymentProvider.ORANGE_MONEY, {}, {});
+
+      expect(result).toEqual({ received: true, notFound: true });
+      expect(prisma.payment.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            provider: PaymentProvider.ORANGE_MONEY,
+            OR: [{ providerRef: 'CARD-REF-1234' }],
+          },
+        }),
+      );
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('ignore un webhook réussi dont le montant diffère du paiement', async () => {
+      orangeMoney.verifyAndParseWebhook.mockResolvedValue({
+        providerRef: 'OM-REF-1234',
+        status: PaymentStatus.SUCCEEDED,
+        amountGnf: 90000n,
+      });
+      prisma.payment.findFirst.mockResolvedValue({
+        id: 'pay-1',
+        amountGnf: 100000n,
+        status: PaymentStatus.PENDING,
+      });
+
+      const result = await service.handleWebhook(PaymentProvider.ORANGE_MONEY, {}, {});
+
+      expect(result).toEqual({ received: true, ignored: true, amountMismatch: true });
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('ignore un identifiant de paiement qui n’est pas une chaîne', async () => {
+      orangeMoney.verifyAndParseWebhook.mockResolvedValue({
+        providerRef: '',
+        status: PaymentStatus.PENDING,
+      });
+
+      const result = await service.handleWebhook(PaymentProvider.ORANGE_MONEY, {}, { order_id: 123 });
+
+      expect(result).toEqual({ received: true, ignored: true });
+      expect(prisma.payment.findFirst).not.toHaveBeenCalled();
+    });
   });
 
   describe('createCheckout', () => {
@@ -194,7 +262,9 @@ describe('PaymentsService', () => {
         priceGnf: 450000n,
         isActive: true,
       });
-      prisma.payment.create.mockImplementation(({ data }: any) => Promise.resolve({ id: 'pay-promo', ...data }));
+      prisma.payment.create.mockImplementation(({ data }: { data: Record<string, unknown> }) =>
+        Promise.resolve({ id: 'pay-promo', ...data }),
+      );
 
       const res = await service.createCheckout('ws-1', 'usr-1', {
         provider: PaymentProvider.CARD,
@@ -217,7 +287,9 @@ describe('PaymentsService', () => {
         planCode: 'PACK',
         creditsGranted: null,
         workspace: {
-          members: [{ user: { id: 'usr-owner', fullName: 'Propriétaire', email: 'owner@test.com' } }],
+          members: [
+            { user: { id: 'usr-owner', fullName: 'Propriétaire', email: 'owner@test.com' } },
+          ],
         },
       });
 
@@ -238,10 +310,13 @@ describe('PaymentsService', () => {
         data: { status: PaymentStatus.SUCCEEDED, raw: undefined },
       });
       expect(prisma.subscription.upsert).toHaveBeenCalled();
-      expect(credits.credit).toHaveBeenCalledWith(prisma, expect.objectContaining({
-        workspaceId: 'ws-1',
-        delta: 100,
-      }));
+      expect(credits.credit).toHaveBeenCalledWith(
+        prisma,
+        expect.objectContaining({
+          workspaceId: 'ws-1',
+          delta: 100,
+        }),
+      );
       expect(invoicePdf.generateInvoice).toHaveBeenCalled();
       expect(notifications.write).toHaveBeenCalled();
     });
@@ -259,5 +334,28 @@ describe('PaymentsService', () => {
       expect(invoicePdf.generateInvoice).not.toHaveBeenCalled();
     });
   });
-});
 
+  describe('simulatePayment', () => {
+    it('bloque la simulation si NODE_ENV est production', async () => {
+      config.get.mockImplementation((k: string) => (k === 'NODE_ENV' ? 'production' : undefined));
+      await expect(service.simulatePayment({ paymentId: 'pay-1' })).rejects.toThrow(
+        ForbiddenException,
+      );
+    });
+
+    it('permet la simulation en dehors de production', async () => {
+      config.get.mockImplementation((k: string) => (k === 'NODE_ENV' ? 'test' : undefined));
+      prisma.payment.findUniqueOrThrow.mockResolvedValue({
+        id: 'pay-1',
+        status: PaymentStatus.PENDING,
+        workspaceId: 'ws-1',
+        amountGnf: 100000n,
+        planCode: null,
+        workspace: { members: [] },
+      });
+
+      const res = await service.simulatePayment({ paymentId: 'pay-1' });
+      expect(res.success).toBe(true);
+    });
+  });
+});

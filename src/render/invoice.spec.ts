@@ -34,4 +34,3 @@ describe('renderInvoicePdf', () => {
     expect(pdf.subarray(0, 5).toString('ascii')).toBe('%PDF-');
   });
 });
-

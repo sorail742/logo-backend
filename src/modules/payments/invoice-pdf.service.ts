@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Invoice, Payment } from '@prisma/client';
+import { Invoice } from '@prisma/client';
 import { PrismaService, Tx } from '../../common/prisma/prisma.service';
 import { StorageService } from '../../common/storage/storage.service';
 import { InvoiceItem, renderInvoicePdf } from '../../render/invoice';
@@ -103,8 +103,9 @@ export class InvoicePdfService {
       },
     });
 
-    this.logger.log(`Facture ${invoiceNumber} générée avec succès pour l'espace ${payment.workspaceId}`);
+    this.logger.log(
+      `Facture ${invoiceNumber} générée avec succès pour l'espace ${payment.workspaceId}`,
+    );
     return invoice;
   }
 }
-

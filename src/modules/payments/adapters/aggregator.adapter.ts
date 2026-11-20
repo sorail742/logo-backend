@@ -2,7 +2,13 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PaymentProvider, PaymentStatus } from '@prisma/client';
 import { randomBytes } from 'node:crypto';
-import type { CheckoutResult, InitiateCheckoutParams, PaymentAdapter, WebhookResult } from './payment-adapter.interface';
+import type {
+  CheckoutResult,
+  InitiateCheckoutParams,
+  PaymentAdapter,
+  WebhookResult,
+} from './payment-adapter.interface';
+import { firstWebhookString, parseWebhookAmount } from './webhook.util';
 
 /**
  * Adaptateur Agrégateur Mobile Money multi-opérateurs (PAY-01).
@@ -28,25 +34,42 @@ export class AggregatorPaymentAdapter implements PaymentAdapter {
     };
   }
 
-  async verifyAndParseWebhook(_headers: Record<string, string | string[]>, body: any): Promise<WebhookResult> {
-    const event = typeof body === 'string' ? JSON.parse(body) : body;
-    const statusStr = String(event?.status || event?.state || '').toUpperCase();
+  async verifyAndParseWebhook(
+    _headers: Record<string, string | string[]>,
+    body: unknown,
+  ): Promise<WebhookResult> {
+    let event: Record<string, unknown> | null = null;
+    if (typeof body === 'string') {
+      try {
+        event = JSON.parse(body) as Record<string, unknown>;
+      } catch {
+        return { providerRef: '', status: PaymentStatus.FAILED, raw: null };
+      }
+    } else {
+      event = (body as Record<string, unknown>) ?? null;
+    }
+
+    const statusStr = firstWebhookString(event?.status, event?.state).toUpperCase();
 
     let status: PaymentStatus = PaymentStatus.PENDING;
-    if (statusStr === 'ACCEPTED' || statusStr === 'SUCCEEDED' || statusStr === 'SUCCESS' || statusStr === 'COMPLETED') {
+    if (
+      statusStr === 'ACCEPTED' ||
+      statusStr === 'SUCCEEDED' ||
+      statusStr === 'SUCCESS' ||
+      statusStr === 'COMPLETED'
+    ) {
       status = PaymentStatus.SUCCEEDED;
     } else if (statusStr === 'REFUSED' || statusStr === 'FAILED' || statusStr === 'CANCELED') {
       status = PaymentStatus.FAILED;
     }
 
-    const providerRef = String(event?.transaction_id || event?.cpm_trans_id || event?.ref || '');
+    const providerRef = firstWebhookString(event?.transaction_id, event?.cpm_trans_id, event?.ref);
 
     return {
       providerRef,
       status,
-      amountGnf: event?.amount ? BigInt(event.amount) : undefined,
+      amountGnf: parseWebhookAmount(event?.amount),
       raw: event,
     };
   }
 }
-

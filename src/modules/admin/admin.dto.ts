@@ -128,7 +128,9 @@ export class ReviewSignatureDto {
   @IsIn(['APPROVE', 'REJECT'])
   decision: 'APPROVE' | 'REJECT';
 
-  @ApiPropertyOptional({ description: 'Motif transmis à l’espace (obligatoire en pratique pour un refus)' })
+  @ApiPropertyOptional({
+    description: 'Motif transmis à l’espace (obligatoire en pratique pour un refus)',
+  })
   @IsOptional()
   @IsString()
   @MaxLength(500)

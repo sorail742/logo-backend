@@ -14,7 +14,13 @@ import {
 import { ApiBearerAuth, ApiHeader, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import type { AuthUser, WorkspaceContext } from '../../common/auth-user';
-import { ClientIp, CurrentUser, CurrentWorkspace, Public, WorkspaceAccess } from '../../common/decorators';
+import {
+  ClientIp,
+  CurrentUser,
+  CurrentWorkspace,
+  Public,
+  WorkspaceAccess,
+} from '../../common/decorators';
 import { AuditService } from '../audit/audit.service';
 import { AvailabilityService } from '../availability/availability.service';
 import { projectEvent } from '../projects/project-activity';
@@ -61,13 +67,21 @@ export class NamesController {
 
   @Get('projects/:pid/names')
   @WorkspaceAccess('VIEWER')
-  list(@Param('pid', ParseUUIDPipe) pid: string, @Query() q: ListNamesDto, @CurrentUser() user: AuthUser) {
+  list(
+    @Param('pid', ParseUUIDPipe) pid: string,
+    @Query() q: ListNamesDto,
+    @CurrentUser() user: AuthUser,
+  ) {
     return this.names.list(pid, user.id, q);
   }
 
   @Patch('names/:nid')
   @WorkspaceAccess('EDITOR')
-  update(@Param('nid', ParseUUIDPipe) nid: string, @Body() dto: UpdateNameDto, @CurrentUser() user: AuthUser) {
+  update(
+    @Param('nid', ParseUUIDPipe) nid: string,
+    @Body() dto: UpdateNameDto,
+    @CurrentUser() user: AuthUser,
+  ) {
     return this.names.update(nid, user.id, dto);
   }
 
@@ -81,16 +95,26 @@ export class NamesController {
   @Post('names/:nid/votes')
   @WorkspaceAccess('VIEWER', { staff: undefined })
   @HttpCode(HttpStatus.OK)
-  vote(@Param('nid', ParseUUIDPipe) nid: string, @CurrentUser() user: AuthUser, @Body() dto: VoteDto) {
+  vote(
+    @Param('nid', ParseUUIDPipe) nid: string,
+    @CurrentUser() user: AuthUser,
+    @Body() dto: VoteDto,
+  ) {
     return this.names.vote(nid, user.id, dto.value);
   }
 
   @Post('projects/:pid/chosen-name')
   @WorkspaceAccess('EDITOR')
   @HttpCode(HttpStatus.OK)
-  async choose(@Param('pid', ParseUUIDPipe) pid: string, @Body() dto: ChooseNameDto, @CurrentUser() user: AuthUser) {
+  async choose(
+    @Param('pid', ParseUUIDPipe) pid: string,
+    @Body() dto: ChooseNameDto,
+    @CurrentUser() user: AuthUser,
+  ) {
     const project = await this.names.choose(pid, dto.nameId, user.id);
-    await this.audit.log(projectEvent(pid, user.id, 'names.choose', { value: project.chosenName?.value }));
+    await this.audit.log(
+      projectEvent(pid, user.id, 'names.choose', { value: project.chosenName?.value }),
+    );
     return project;
   }
 

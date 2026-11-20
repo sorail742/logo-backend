@@ -1,11 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import {
-  ApparelDesignStatus,
-  DesignElementKind,
-  GarmentCategory,
-  GarmentView,
-  PrintTechnique,
-} from '@prisma/client';
+import { DesignElementKind, GarmentCategory, GarmentView, PrintTechnique } from '@prisma/client';
 import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
@@ -231,7 +225,9 @@ export class AdminZoneDto {
   @ApiProperty() @IsInt() @Min(0) @Max(2000) offsetYMm: number;
   @ApiProperty() @IsInt() @Min(5) @Max(2000) maxWidthMm: number;
   @ApiProperty() @IsInt() @Min(5) @Max(2000) maxHeightMm: number;
-  @ApiProperty({ enum: ['FIXED', 'PROPORTIONAL'] }) @IsIn(['FIXED', 'PROPORTIONAL']) scaling: string;
+  @ApiProperty({ enum: ['FIXED', 'PROPORTIONAL'] })
+  @IsIn(['FIXED', 'PROPORTIONAL'])
+  scaling: string;
   @ApiPropertyOptional() @IsOptional() @IsObject() rules?: Record<string, unknown>;
 }
 

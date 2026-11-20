@@ -44,7 +44,9 @@ export const generatedNameSchema = z.object({
   style: z.nativeEnum(NameStyle),
   pronunciation: z.string().trim().max(80).nullish(),
 });
-export const generatedNamesSchema = z.object({ names: z.array(generatedNameSchema).min(1).max(30) });
+export const generatedNamesSchema = z.object({
+  names: z.array(generatedNameSchema).min(1).max(30),
+});
 export type GeneratedName = z.infer<typeof generatedNameSchema>;
 
 /** Entrée de composition de logos, moteur A (§5.1), figée dans GenerationJob.input. */
@@ -120,7 +122,10 @@ export const sloganGenerationInputSchema = z.object({
 export type SloganGenerationInput = z.infer<typeof sloganGenerationInputSchema>;
 
 export const generatedSlogansSchema = z.object({
-  slogans: z.array(z.object({ text: z.string().trim().min(2).max(300) })).min(1).max(30),
+  slogans: z
+    .array(z.object({ text: z.string().trim().min(2).max(300) }))
+    .min(1)
+    .max(30),
 });
 
 // ─── Images du Studio ───

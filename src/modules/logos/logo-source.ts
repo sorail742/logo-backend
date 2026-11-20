@@ -22,10 +22,9 @@ type VersionRow = { number: number; svg?: string };
  * recompose l'aperçu depuis la spec ; seul un logo importé non retravaillé (version 1) a
  * besoin de son SVG d'origine, sauf dans le détail (`withSvg`).
  */
-export function toLogoDto<T extends { engine: LogoEngine; versions: VersionRow[]; phash?: string | null }>(
-  logo: T,
-  withSvg = false,
-) {
+export function toLogoDto<
+  T extends { engine: LogoEngine; versions: VersionRow[]; phash?: string | null },
+>(logo: T, withSvg = false) {
   const { versions } = logo;
   const rest = omit(logo, ['versions', 'phash']);
   const version = versions[0] ?? null;

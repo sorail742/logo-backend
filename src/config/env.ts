@@ -41,7 +41,11 @@ const envSchema = z.object({
     .trim()
     .optional()
     .transform((v) => (v === '' ? undefined : v)),
-
+  REMOVE_BG_API_KEY: z
+    .string()
+    .trim()
+    .optional()
+    .transform((v) => (v === '' ? undefined : v)),
 
   // Stockage des fichiers générés (§11.1) : disque local en développement, S3/MinIO sinon.
   STORAGE_DRIVER: z.enum(['local', 's3']).default('local'),
@@ -62,7 +66,9 @@ export type Env = z.infer<typeof envSchema>;
 export function validateEnv(raw: Record<string, unknown>): Env {
   const parsed = envSchema.safeParse(raw);
   if (!parsed.success) {
-    const issues = parsed.error.issues.map((i) => `  - ${i.path.join('.')}: ${i.message}`).join('\n');
+    const issues = parsed.error.issues
+      .map((i) => `  - ${i.path.join('.')}: ${i.message}`)
+      .join('\n');
     throw new Error(`Configuration invalide :\n${issues}`);
   }
   return parsed.data;

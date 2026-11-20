@@ -234,7 +234,8 @@ describe('variantes et exports (§5.4)', () => {
 
   it('livre la version blanche sans fond pour le Studio', () => {
     const white = (transparent: boolean) =>
-      renderVariants({ kind: 'spec', spec: spec() }, transparent).find((v) => v.id === 'white')!.svg;
+      renderVariants({ kind: 'spec', spec: spec() }, transparent).find((v) => v.id === 'white')!
+        .svg;
     // Fond plein de la taille du logo (rectangle, ou tracé une fois optimisé par SVGO).
     const background = /<rect[^>]*fill="#1{3,6}"|<path fill="#1{3,6}" d="M0 0h[\d.]+v[\d.]+H0z"/i;
     expect(white(false)).toMatch(background);

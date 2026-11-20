@@ -11,12 +11,17 @@ export const workspaceSelect = (userId: string) =>
     creditBalance: true,
     viewerDownloads: true,
     members: { where: { userId }, select: { role: true } },
-    subscription: { select: { status: true, currentPeriodEnd: true, plan: { select: { code: true } } } },
+    subscription: {
+      select: { status: true, currentPeriodEnd: true, plan: { select: { code: true } } },
+    },
   }) satisfies Prisma.WorkspaceSelect;
 
 type WorkspaceRow = Prisma.WorkspaceGetPayload<{ select: ReturnType<typeof workspaceSelect> }>;
 
-export function toWorkspaceDto({ members, subscription, ...ws }: WorkspaceRow, role?: WorkspaceRole | null) {
+export function toWorkspaceDto(
+  { members, subscription, ...ws }: WorkspaceRow,
+  role?: WorkspaceRole | null,
+) {
   return {
     ...ws,
     role: role ?? members[0]?.role ?? null,

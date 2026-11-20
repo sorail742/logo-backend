@@ -308,11 +308,7 @@ export const DEFAULT_TEMPLATES: {
     description: 'Polo classique à patte de boutonnage 3 boutons',
     material: '100% Coton piqué 220g',
     sizes: DEFAULT_SIZES.filter((s) => ['S', 'M', 'L', 'XL', '2XL', '3XL'].includes(s.label)),
-    zones: [
-      Z.left_chest,
-      Z.back_top,
-      Z.sleeve_right,
-    ],
+    zones: [Z.left_chest, Z.back_top, Z.sleeve_right],
   },
   {
     category: 'FOOTBALL_JERSEY',
@@ -338,12 +334,7 @@ export const DEFAULT_TEMPLATES: {
     description: 'Chasuble / maillot sans manches basketball',
     material: '100% Polyester mesh aéré 160g',
     sizes: DEFAULT_SIZES.filter((s) => ['M', 'L', 'XL', '2XL', '3XL'].includes(s.label)),
-    zones: [
-      Z.team_name_front,
-      Z.front_number,
-      Z.back_name,
-      Z.back_number,
-    ],
+    zones: [Z.team_name_front, Z.front_number, Z.back_name, Z.back_number],
   },
   {
     category: 'SHORTS',
@@ -351,10 +342,7 @@ export const DEFAULT_TEMPLATES: {
     description: 'Short d’entraînement et de match avec cordon de serrage',
     material: '100% Polyester 130g',
     sizes: DEFAULT_SIZES.filter((s) => ['S', 'M', 'L', 'XL'].includes(s.label)),
-    zones: [
-      Z.shorts_crest,
-      Z.shorts_number,
-    ],
+    zones: [Z.shorts_crest, Z.shorts_number],
   },
 ];
 

@@ -18,7 +18,12 @@ import type { Notification } from '@prisma/client';
 /** Notification (type AppNotification du front) : titre, texte et lien tirés de la charge utile. */
 function toNotificationDto({ payload, userId: _userId, ...notification }: Notification) {
   const data = (payload ?? {}) as { title?: string; body?: string; href?: string };
-  return { ...notification, title: data.title ?? '', body: data.body ?? '', href: data.href ?? null };
+  return {
+    ...notification,
+    title: data.title ?? '',
+    body: data.body ?? '',
+    href: data.href ?? null,
+  };
 }
 
 @ApiTags('notifications')

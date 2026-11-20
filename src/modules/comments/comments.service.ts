@@ -114,7 +114,11 @@ export class CommentsService {
         body,
         parentId: threadId,
         anchor: dto.anchor
-          ? ({ pageId: dto.anchor.pageId, x: dto.anchor.x, y: dto.anchor.y } as Prisma.InputJsonValue)
+          ? ({
+              pageId: dto.anchor.pageId,
+              x: dto.anchor.x,
+              y: dto.anchor.y,
+            } as Prisma.InputJsonValue)
           : undefined,
       },
       include: { author: { select: { fullName: true } } },
@@ -147,7 +151,9 @@ export class CommentsService {
     const author = comment.author.fullName;
     const excerpt = body.length > EXCERPT_LENGTH ? `${body.slice(0, EXCERPT_LENGTH - 1)}…` : body;
     const href =
-      dto.targetType === 'DESIGN' ? `${target.href}?commentaire=${threadId ?? comment.id}` : target.href;
+      dto.targetType === 'DESIGN'
+        ? `${target.href}?commentaire=${threadId ?? comment.id}`
+        : target.href;
     await this.notifications.notify(
       mentioned,
       {
@@ -162,7 +168,9 @@ export class CommentsService {
       participants.map((p) => p.authorId).filter((id) => memberIds.has(id)),
       {
         type: 'COMMENT',
-        title: threadId ? `${author} a répondu sur ${target.label}` : `${author} a commenté ${target.label}`,
+        title: threadId
+          ? `${author} a répondu sur ${target.label}`
+          : `${author} a commenté ${target.label}`,
         body: excerpt,
         href,
       },
@@ -179,8 +187,13 @@ export class CommentsService {
     dto: UpdateCommentDto,
   ) {
     const comment = await this.prisma.comment.findUniqueOrThrow({ where: { id: commentId } });
-    if (comment.parentId) throw new BadRequestException('Seul le premier message d’un fil se résout');
-    if (comment.authorId !== userId && role !== WorkspaceRole.OWNER && role !== WorkspaceRole.EDITOR) {
+    if (comment.parentId)
+      throw new BadRequestException('Seul le premier message d’un fil se résout');
+    if (
+      comment.authorId !== userId &&
+      role !== WorkspaceRole.OWNER &&
+      role !== WorkspaceRole.EDITOR
+    ) {
       throw new ForbiddenException('Vous ne pouvez pas résoudre ce fil');
     }
     const updated = await this.prisma.comment.update({

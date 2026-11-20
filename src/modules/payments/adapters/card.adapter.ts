@@ -1,8 +1,14 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PaymentProvider, PaymentStatus } from '@prisma/client';
-import { createHmac, randomBytes } from 'node:crypto';
-import type { CheckoutResult, InitiateCheckoutParams, PaymentAdapter, WebhookResult } from './payment-adapter.interface';
+import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+import type {
+  CheckoutResult,
+  InitiateCheckoutParams,
+  PaymentAdapter,
+  WebhookResult,
+} from './payment-adapter.interface';
+import { firstWebhookString, parseWebhookAmount } from './webhook.util';
 
 /**
  * Adaptateur de paiement par Carte Bancaire (PAY-02).
@@ -38,36 +44,68 @@ export class CardPaymentAdapter implements PaymentAdapter {
     };
   }
 
-  async verifyAndParseWebhook(headers: Record<string, string | string[]>, body: any): Promise<WebhookResult> {
+  async verifyAndParseWebhook(
+    headers: Record<string, string | string[]>,
+    body: unknown,
+  ): Promise<WebhookResult> {
     const webhookSecret = this.config.get<string>('PAYMENT_WEBHOOK_SECRET');
-    if (webhookSecret) {
-      const sigHeader = headers['stripe-signature'] || headers['x-paystack-signature'] || headers['x-signature'];
-      if (sigHeader && typeof body === 'string') {
-        const expected = createHmac('sha256', webhookSecret).update(body).digest('hex');
-        if (sigHeader !== expected) {
-          throw new Error('Signature webhook invalide');
-        }
-      }
-    }
+    if (webhookSecret) this.verifyWebhookSignature(webhookSecret, headers, body);
 
-    const event = typeof body === 'string' ? JSON.parse(body) : body;
-    const statusStr = String(event?.status || event?.event || '').toUpperCase();
+    const event = this.parseWebhookBody(body);
+
+    const statusStr = firstWebhookString(event?.status, event?.event).toUpperCase();
 
     let status: PaymentStatus = PaymentStatus.PENDING;
-    if (statusStr.includes('SUCCESS') || statusStr.includes('CHARGE.SUCCESS') || statusStr === 'PAID') {
+    if (
+      statusStr.includes('SUCCESS') ||
+      statusStr.includes('CHARGE.SUCCESS') ||
+      statusStr === 'PAID'
+    ) {
       status = PaymentStatus.SUCCEEDED;
     } else if (statusStr.includes('FAIL') || statusStr.includes('CHARGE.FAILED')) {
       status = PaymentStatus.FAILED;
     }
 
-    const providerRef = String(event?.id || event?.data?.id || event?.ref || '');
+    const dataObj = event?.data as Record<string, unknown> | undefined;
+    const providerRef = firstWebhookString(event?.id, dataObj?.id, event?.ref);
 
     return {
       providerRef,
       status,
-      amountGnf: event?.amount ? BigInt(event.amount) : undefined,
+      amountGnf: parseWebhookAmount(event?.amount),
       raw: event,
     };
   }
-}
 
+  private verifyWebhookSignature(
+    secret: string,
+    headers: Record<string, string | string[]>,
+    body: unknown,
+  ) {
+    const rawSig =
+      headers['stripe-signature'] || headers['x-paystack-signature'] || headers['x-signature'];
+    const signature = Array.isArray(rawSig) ? rawSig[0] : rawSig;
+    if (!signature) return;
+
+    const rawPayload = typeof body === 'string' ? body : JSON.stringify(body);
+    const expected = createHmac('sha256', secret).update(rawPayload).digest('hex');
+    const signatureBuffer = Buffer.from(signature);
+    const expectedBuffer = Buffer.from(expected);
+    if (
+      signatureBuffer.length !== expectedBuffer.length ||
+      !timingSafeEqual(signatureBuffer, expectedBuffer)
+    ) {
+      throw new UnauthorizedException('Signature webhook invalide');
+    }
+  }
+
+  private parseWebhookBody(body: unknown): Record<string, unknown> | null {
+    if (typeof body !== 'string') return (body as Record<string, unknown>) ?? null;
+
+    try {
+      return JSON.parse(body) as Record<string, unknown>;
+    } catch {
+      throw new UnauthorizedException('Format JSON du webhook invalide');
+    }
+  }
+}

@@ -85,9 +85,7 @@ describe('sharp-dtf local image processing', () => {
     const sepRed = await generateScreenPrintSeparation(testPng, '#FF0000');
     expect(sepRed).toBeInstanceOf(Buffer);
 
-    const { data } = await sharp(sepRed)
-      .raw()
-      .toBuffer({ resolveWithObject: true });
+    const { data } = await sharp(sepRed).raw().toBuffer({ resolveWithObject: true });
 
     // La première moitié (pixels rouges) doit être noir opaque (#000000, alpha 255)
     expect(data[0]).toBe(0); // R

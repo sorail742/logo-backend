@@ -163,7 +163,10 @@ export class AuthController {
       path: REFRESH_COOKIE_PATH,
       expires: session.refreshExpiresAt,
     });
-    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: session.userId }, select: USER_SELECT });
+    const user = await this.prisma.user.findUniqueOrThrow({
+      where: { id: session.userId },
+      select: USER_SELECT,
+    });
     return { accessToken: session.accessToken, tokenType: 'Bearer', user: toUserDto(user) };
   }
 }

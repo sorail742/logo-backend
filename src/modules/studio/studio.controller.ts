@@ -86,7 +86,7 @@ export class StudioController {
     return job;
   }
 
-  /** Détourage d'une photo par IA (1 crédit, remboursé en cas d'échec du fournisseur). */
+  /** Détourage local d'une photo (1 crédit, remboursé en cas d'échec du traitement). */
   @Post('projects/:pid/studio-cutout')
   @WorkspaceAccess('EDITOR')
   @HttpCode(HttpStatus.OK)

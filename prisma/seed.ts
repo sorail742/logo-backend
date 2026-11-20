@@ -151,8 +151,18 @@ const BLOCKED_TERMS: { term: string; language: string; scope: string }[] = [
 
 /** Modèles de signature e-mail (SIG-12) et de cachet (SIG-22), mêmes clés que le front. */
 const TEMPLATES = [
-  { key: 'classic', kind: 'EMAIL_SIGNATURE', name: 'Classique', content: { layout: 'logo-left', divider: true } },
-  { key: 'sidebar', kind: 'EMAIL_SIGNATURE', name: 'Barre latérale', content: { layout: 'photo-left' } },
+  {
+    key: 'classic',
+    kind: 'EMAIL_SIGNATURE',
+    name: 'Classique',
+    content: { layout: 'logo-left', divider: true },
+  },
+  {
+    key: 'sidebar',
+    kind: 'EMAIL_SIGNATURE',
+    name: 'Barre latérale',
+    content: { layout: 'photo-left' },
+  },
   { key: 'compact', kind: 'EMAIL_SIGNATURE', name: 'Compacte', content: { layout: 'inline' } },
   { key: 'centered', kind: 'EMAIL_SIGNATURE', name: 'Centrée', content: { layout: 'logo-top' } },
   { key: 'banner', kind: 'EMAIL_SIGNATURE', name: 'Bandeau', content: { layout: 'banner' } },
@@ -164,14 +174,20 @@ const TEMPLATES = [
 
 async function main() {
   await Promise.all(
-    PLANS.map((plan) => prisma.plan.upsert({ where: { code: plan.code }, create: plan, update: plan })),
+    PLANS.map((plan) =>
+      prisma.plan.upsert({ where: { code: plan.code }, create: plan, update: plan }),
+    ),
   );
 
   await prisma.blockedTerm.createMany({ data: BLOCKED_TERMS, skipDuplicates: true });
 
   await Promise.all(
     TEMPLATES.map((t) =>
-      prisma.template.upsert({ where: { key: t.key }, create: t, update: { name: t.name, isActive: true } }),
+      prisma.template.upsert({
+        where: { key: t.key },
+        create: t,
+        update: { name: t.name, isActive: true },
+      }),
     ),
   );
   // Anciens modèles sans clé (premier seed) : retirés de la bibliothèque.
@@ -190,9 +206,14 @@ async function main() {
       }),
     ),
   );
-  const existingApparel = await prisma.apparelTemplate.findMany({ select: { category: true, name: true } });
+  const existingApparel = await prisma.apparelTemplate.findMany({
+    select: { category: true, name: true },
+  });
   const missingApparel = DEFAULT_TEMPLATES.filter(
-    (t) => !existingApparel.some((e: { category: string; name: string }) => e.category === t.category && e.name === t.name),
+    (t) =>
+      !existingApparel.some(
+        (e: { category: string; name: string }) => e.category === t.category && e.name === t.name,
+      ),
   );
   await Promise.all(
     missingApparel.map((t) =>

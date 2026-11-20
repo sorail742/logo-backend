@@ -238,7 +238,9 @@ describe('archive du kit (KIT-03)', () => {
     expect(
       paths.filter((p) => p.startsWith('logo/')).every((p) => /^logo\/png\/.+-512\.png$/.test(p)),
     ).toBe(true);
-    expect(paths.some((p) => /icones-app|reseaux-sociaux|mises-en-situation|supports|charte/.test(p))).toBe(false);
+    expect(
+      paths.some((p) => /icones-app|reseaux-sociaux|mises-en-situation|supports|charte/.test(p)),
+    ).toBe(false);
     expect(String(entries.find((e) => e.path.endsWith('LISEZMOI.txt'))!.data)).toContain(
       'Offre gratuite',
     );
